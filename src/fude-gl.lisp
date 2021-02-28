@@ -105,6 +105,33 @@
                                           (class-name c)))
                  nil))))))
 
+(defun pprint-defshader (stream exp)
+  (setf stream (or stream *standard-output*))
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint-logical-block.
+                      "~W~^ ~1I~@_" ; operator.
+                      "~W~^ ~@_" ; name.
+                      "~W~^ ~@_" ; version.
+                      (list "~:<" ; superclasses
+                            "~@{~W~^ ~:_~}" ; each class.
+                            "~:>~^ ~:_")
+                      (list "~@{" ; shaders
+                            (list "~:<" ; each clause.
+                                  "~W~^ ~1I~@_" ; key
+                                  (list "~:<" ; out lambda list.
+                                        "~@{~W~^ ~@_~}" ; out lambda var.
+                                        "~:>~^ ~_")
+                                  "~@{~W~^ ~_~}" ; clause body.
+                                  "~:>~^ ~_")
+                            "~}")
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
+
 ;;;; UTILITIES
 ;;; WITH-GL-ARRAY
 
