@@ -38,18 +38,19 @@
 ;;;; CONSTRUCTOR
 
 (defmethod make-instance :around ((c vector-class) &rest args)
-  (loop :for slot :in (c2mop:class-slots (c2mop:ensure-finalized c))
-        :collect (or (getf args
-                           (intern
-                             (format nil "~A"
-                                     (c2mop:slot-definition-name slot))
-                             :keyword))
-                     (error "~S is required." slot))
-          :into result
-        :finally (return
-                  (make-array (length result)
-                              :initial-contents result
-                              :element-type 'single-float))))
+  (let ((values
+         (uiop:while-collecting (acc)
+           (dolist (c (nreverse (class-list c)))
+             (dolist (slot (c2mop:class-direct-slots c))
+               (acc
+                (or (getf args
+                          (intern
+                            (format nil "~A" (c2mop:slot-definition-name slot))
+                            :keyword))
+                    (error "~S is required." slot))))))))
+    (make-array (length values)
+                :initial-contents values
+                :element-type 'single-float)))
 
 ;;;; GENERIC-FUNCTIONS
 
