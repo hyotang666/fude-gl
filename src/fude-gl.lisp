@@ -71,9 +71,12 @@
   (assert (every (lambda (s) (find (car s) '(:vertex :fragment))) shader*))
   ;; binds
   (let ((format
-         #.(concatenate 'string "#version ~A~%" "~{in vec~D ~A;~%~}~&"
-                        "~{out ~A ~A;~%~}~&" "~@[~{uniform ~A ~A;~%~}~]~&"
-                        "void main () {~%~A~%}")))
+         #.(concatenate 'string "#version ~A~%" ; version
+                        "~{in ~A ~A;~%~}~&" ; in
+                        "~{out ~A ~A;~%~}~&" ; out
+                        "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
+                        "void main () {~%~{~A~^~%~}~%}" ; the body.
+                        )))
     (flet ((defs (list)
              (loop :for (name type) :in list
                    :collect (symbol-munger:lisp->camel-case type)
@@ -87,7 +90,7 @@
                          (body (car shaders) (cdr shaders) in acc)))
                    (body (shader rest in acc)
                      (destructuring-bind
-                         (type out main)
+                         (type out &rest main)
                          shader
                        (let* ((&uniform
                                (position-if
@@ -102,9 +105,11 @@
                                                :fude-gl)))
                                   `(defmethod ,method ((type (eql ',name)))
                                      ,(if (typep main
-                                                 '(cons (eql quote)
-                                                        (cons symbol null)))
-                                          `(,method ',(cadr main))
+                                                 '(cons
+                                                    (cons (eql quote)
+                                                          (cons symbol null))
+                                                    null))
+                                          `(,method ',(cadar main))
                                           `(format nil (formatter ,format)
                                                    ',version ,in ',vars
                                                    ',(and &uniform
@@ -112,7 +117,7 @@
                                                             (subseq out
                                                                     (1+
                                                                       &uniform))))
-                                                   ,main))))
+                                                   ',main))))
                                 acc))))))
             (rec shader*
                  `(loop :for c :in (class-list (find-class type))
