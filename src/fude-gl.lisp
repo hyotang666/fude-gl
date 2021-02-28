@@ -316,6 +316,27 @@
           ,@body)
        (gl:delete-textures (list ,@(mapcar #'car bind*))))))
 
+(defun pprint-with-textures (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint-logical-block
+                      "~W~^ ~1I~@_" ; operator.
+                      (list "~:<" ; binds
+                            "~@{" ; iterate binds.
+                            (list "~:<" ; each bind
+                                  "~W~^ ~:I~:_" ; var
+                                  "~@{~W~^ ~W~^ ~_~}" ; k-v options.
+                                  "~:>~^ ~_")
+                            "~}" ; end of iterate.
+                            "~:>~^ ~:@_")
+                      "~@{~W~^ ~_~}" ; the body.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
+
 ;;; WITH-SHADER
 
 (defmacro with-shader ((&rest binds) &body body)
