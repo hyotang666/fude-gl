@@ -92,17 +92,22 @@
                               (vars (and out (defs (subseq out 0 &uniform)))))
                          (rec rest vars
                               (cons
-                                `(defmethod ,(intern
-                                               (format nil "~A-SHADER" type)
-                                               :fude-gl)
-                                            ((type (eql ',name)))
-                                   (format nil (formatter ,format) ',version
-                                           ,in ',vars
-                                           ',(and &uniform
-                                                  (defs
-                                                    (subseq out
-                                                            (1+ &uniform))))
-                                           ,main))
+                                (let ((method
+                                       (intern (format nil "~A-SHADER" type)
+                                               :fude-gl)))
+                                  `(defmethod ,method ((type (eql ',name)))
+                                     ,(if (typep main
+                                                 '(cons (eql quote)
+                                                        (cons symbol null)))
+                                          `(,method ',(cadr main))
+                                          `(format nil (formatter ,format)
+                                                   ',version ,in ',vars
+                                                   ',(and &uniform
+                                                          (defs
+                                                            (subseq out
+                                                                    (1+
+                                                                      &uniform))))
+                                                   ,main))))
                                 acc))))))
             (rec shader*
                  `(loop :for c :in (class-list (find-class type))
