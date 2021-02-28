@@ -88,7 +88,11 @@
                      (destructuring-bind
                          (type out main)
                          shader
-                       (let* ((&uniform (position '&uniform out))
+                       (let* ((&uniform
+                               (position-if
+                                 (lambda (x)
+                                   (and (symbolp x) (string= '&uniform x)))
+                                 out))
                               (vars (and out (defs (subseq out 0 &uniform)))))
                          (rec rest vars
                               (cons
