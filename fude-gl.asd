@@ -2,9 +2,15 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "0.0.0"
+  "0.1.0"
   :depends-on
-  nil
+  (
+   "cl-opengl" ; FFI for opengl.
+   "closer-mop" ; Wrapper for metaobject protocols.
+   "uiop" ; Utilities.
+   "alexandria" ; Public domain utilities.
+   "symbol-munger" ; Convert lisp case to camel case.
+   )
   :pathname
   "src/"
   :components
