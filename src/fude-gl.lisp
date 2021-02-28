@@ -86,7 +86,8 @@
                          (rec rest vars
                               (cons
                                 `(defmethod ,(intern
-                                               (format nil "~A-SHADER" type))
+                                               (format nil "~A-SHADER" type)
+                                               :fude-gl)
                                             ((type (eql ',name)))
                                    (format nil (formatter ,format) ',version
                                            ,in ',vars
