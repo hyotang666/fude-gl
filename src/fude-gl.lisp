@@ -70,8 +70,8 @@
   (assert (every (lambda (s) (find (car s) '(:vertex :fragment))) shader*))
   ;; binds
   (let ((format
-         #.(concatenate 'string "#version ~A~%" "~{in vec~D ~A;~}~%"
-                        "~{out ~A ~A;~}~%" "~@[~{uniform ~A ~A;~}~]~%"
+         #.(concatenate 'string "#version ~A~%" "~{in vec~D ~A;~%~}~&"
+                        "~{out ~A ~A;~%~}~&" "~@[~{uniform ~A ~A;~%~}~]~&"
                         "void main () {~%~A~%}")))
     (flet ((defs (list)
              (loop :for (name type) :in list
