@@ -118,7 +118,7 @@
                  `(loop :for c :in (class-list (find-class type))
                         :for slots = (c2mop:class-direct-slots c)
                         :when slots
-                          :collect (length slots)
+                          :collect (format nil "vec~D" (length slots))
                           :and :collect (symbol-munger:lisp->camel-case
                                           (class-name c)))
                  nil))))))
