@@ -72,7 +72,7 @@
   (assert (every (lambda (s) (find (car s) '(:vertex :fragment))) shader*))
   ;; binds
   (let ((format
-         #.(concatenate 'string "#version ~A~%" ; version
+         #.(concatenate 'string "#version ~A core~%" ; version
                         "~{in ~A ~A;~%~}~&" ; in
                         "~{out ~A ~A;~%~}~&" ; out
                         "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
