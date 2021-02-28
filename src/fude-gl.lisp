@@ -211,9 +211,7 @@
 
 (defmacro with-prog ((var vertex-shader fragment-shader) &body body)
   (let ((vs (gensym "VERTEX-SHADER")) (fs (gensym "FRAGMENT-SHADER")))
-    `(let ((,vs (gl:create-shader :vertex-shader))
-           (,fs (gl:create-shader :fragment-shader))
-           (,var (gl:create-program)))
+    `(let ((,var (gl:create-program)))
        (labels ((s-compile (id source)
                   (gl:shader-source id source)
                   (gl:compile-shader id)
@@ -223,17 +221,18 @@
                   (unless (equal "" log)
                     (warn log))))
          (unwind-protect
-             (progn
-              (s-compile ,vs ,vertex-shader)
-              (s-compile ,fs ,fragment-shader)
-              (gl:link-program ,var)
-              (may-warn (gl:get-program-info-log ,var))
-              (gl:use-program ,var)
-              ,@body)
-           (gl:detach-shader ,var ,fs)
-           (gl:detach-shader ,var ,vs)
-           (gl:delete-shader ,fs)
-           (gl:delete-shader ,vs)
+             (let ((,vs (gl:create-shader :vertex-shader))
+                   (,fs (gl:create-shader :fragment-shader)))
+               (unwind-protect
+                   (progn
+                    (s-compile ,vs ,vertex-shader)
+                    (s-compile ,fs ,fragment-shader)
+                    (gl:link-program ,var)
+                    (may-warn (gl:get-program-info-log ,var))
+                    (gl:use-program ,var))
+                 (gl:delete-shader ,fs)
+                 (gl:delete-shader ,vs))
+               ,@body)
            (gl:delete-program ,var))))))
 
 ;;; LINK-ATTRIBUTES
