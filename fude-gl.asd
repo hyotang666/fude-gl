@@ -3,6 +3,10 @@
 (defsystem "fude-gl"
   :version
   "1.0.10"
+  :description
+  "Fundamental Utility Definitions Especially for openGL."
+  :license "MIT"
+  :author "SATO Shinichi"
   :depends-on
   (
    "cl-opengl" ; FFI for opengl.
