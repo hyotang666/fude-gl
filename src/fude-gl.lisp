@@ -227,6 +227,7 @@
 ;;; LINK-ATTRIBUTES
 
 (defun class-list (class)
+  "Return class list specified to abstract oder, superclasses are reverse order."
   (uiop:while-collecting (acc)
     (labels ((rec (c)
                (unless (eq 'standard-object (class-name c))
