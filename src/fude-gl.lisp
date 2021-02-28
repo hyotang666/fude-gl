@@ -95,7 +95,7 @@
                                    (and (symbolp x) (string= '&uniform x)))
                                  out))
                               (vars (and out (defs (subseq out 0 &uniform)))))
-                         (rec rest vars
+                         (rec rest `',vars
                               (cons
                                 (let ((method
                                        (intern (format nil "~A-SHADER" type)
