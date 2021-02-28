@@ -2,7 +2,14 @@
 
 (defpackage :fude-gl
   (:use :cl)
-  (:export))
+  (:export ;;;; MAIN API.
+           #:defshader
+           ;;;; FUNDAMENTAL-CLASSES
+           #:vertex
+           #:color
+           #:coord
+           ;;;; UTILITIES
+           #:with-shader))
 
 (in-package :fude-gl)
 
