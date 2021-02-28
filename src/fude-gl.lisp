@@ -243,14 +243,13 @@
                          :for l :in total-length
                          :do (funcall f total l offset)
                          :sum l :into offset))
-                 (rec (cdr class-list)
-                      (let ((slots
-                             (length
-                               (c2mop:class-direct-slots (car class-list)))))
-                        (if (zerop slots)
-                            total-length
-                            (cons (the (integer 1 4) slots) total-length)))
-                      (cons (processer (car class-list)) funs))))
+                 (let ((slots
+                        (length (c2mop:class-direct-slots (car class-list)))))
+                   (if (zerop slots)
+                       (rec (cdr class-list) total-length funs)
+                       (rec (cdr class-list)
+                            (cons (the (integer 1 4) slots) total-length)
+                            (cons (processer (car class-list)) funs))))))
            (processer (class)
              (lambda (total-length length offset)
                (let* ((location
