@@ -30,3 +30,31 @@
             (:idle ()
               (sdl2:gl-swap-window win)
               (gl:draw-arrays :triangles 0 3))))))))
+
+;;;; UNIFORM-DEMO
+
+(fude-gl:defshader uniform-demo 330 (fude-gl:vertex)
+  ;; Re-use vertex-shader of HELLO-TRIANGLE.
+  (:vertex () 'hello-triangle)
+  (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
+    "outColor = vec4(triangleColor, 1.0);"))
+
+(defun uniform-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((uniform-demo *triangle*))
+          (let ((uniform-color
+                 (gl:get-uniform-location uniform-demo "triangleColor")))
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (sdl2:gl-swap-window win)
+                (gl:uniformf uniform-color
+                             (/ (+ 1.0 (sin (get-universal-time))) 2) 0.0 0.0)
+                (gl:draw-arrays :triangles 0 3)))))))))
