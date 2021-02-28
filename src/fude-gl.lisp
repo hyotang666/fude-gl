@@ -9,7 +9,8 @@
            #:color
            #:coord
            ;;;; UTILITIES
-           #:with-shader))
+           #:with-shader
+           #:with-gl-array))
 
 (in-package :fude-gl)
 
