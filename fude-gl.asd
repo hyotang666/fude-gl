@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.0.3"
+  "1.0.4"
   :depends-on
   (
    "cl-opengl" ; FFI for opengl.
