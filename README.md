@@ -1,5 +1,6 @@
-# FUDE-GL 0.0.0
+# FUDE-GL 1.0.10
 ## What is this?
+Fundamental Utility Definitions Especially for openGL.
 
 ### Current lisp world
 
@@ -14,8 +15,10 @@
 ### Product's goal
 
 ### License
+MIT
 
 ### Developed with
+SBCL/2.0.10
 
 ### Tested with
 
