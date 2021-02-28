@@ -80,7 +80,7 @@
                         )))
     (flet ((defs (list)
              (loop :for (name type) :in list
-                   :collect (symbol-munger:lisp->camel-case type)
+                   :collect (change-case:camel-case (symbol-name type))
                    :collect (symbol-name name))))
       ;; The body.
       `(progn
@@ -125,8 +125,8 @@
                         :for slots = (c2mop:class-direct-slots c)
                         :when slots
                           :collect (format nil "vec~D" (length slots))
-                          :and :collect (symbol-munger:lisp->camel-case
-                                          (class-name c)))
+                          :and :collect (change-case:camel-case
+                                          (symbol-name (class-name c))))
                  nil))))))
 
 (defun pprint-defshader (stream exp)
@@ -261,8 +261,9 @@
              (lambda (total-length length offset)
                (let* ((location
                        (gl:get-attrib-location program
-                                               (symbol-munger:lisp->camel-case
-                                                 (class-name class))))
+                                               (change-case:camel-case
+                                                 (symbol-name
+                                                   (class-name class)))))
                       (slots
                        (c2mop:class-direct-slots
                          (c2mop:ensure-finalized class)))
@@ -272,7 +273,8 @@
                       (size (cffi:foreign-type-size type)))
                  (when (minusp location)
                    (error "Variable ~S is not active in program ~S"
-                          (symbol-munger:lisp->camel-case (class-name class))
+                          (change-case:camel-case
+                            (symbol-name (class-name class)))
                           program))
                  (gl:vertex-attrib-pointer location length type nil ; As
                                                                     ; normalized-p

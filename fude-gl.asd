@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.1.0"
+  "1.1.1"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -13,7 +13,7 @@
    "closer-mop" ; Wrapper for metaobject protocols.
    "uiop" ; Utilities.
    "alexandria" ; Public domain utilities.
-   "symbol-munger" ; Convert lisp case to camel case.
+   "cl-change-case" ; Convert lisp case to camel case.
    )
   :pathname
   "src/"
