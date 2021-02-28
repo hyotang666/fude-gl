@@ -186,6 +186,8 @@
 
 ;;; WITH-BUFFER
 
+(deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
+
 (defmacro with-buffer ((&rest bind*) &body body)
   `(destructuring-bind
        ,(mapcar #'car bind*)
@@ -199,7 +201,8 @@
                      &key (target :array-buffer) (usage :static-draw))
                     bind
                   `((gl:bind-buffer ,target ,var)
-                    (gl:buffer-data ,target ,usage ,array))))
+                    (gl:buffer-data ,target (the buffer-usage ,usage)
+                                    ,array))))
               bind*)
           ,@body)
        (gl:delete-buffers (list ,@(mapcar #'car bind*))))))
