@@ -214,26 +214,125 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((texture-demo *quad*))
-          (fude-gl:with-textures ((tex :type :texture-2d
-                                       :min :linear
-                                       :mag :linear))
+          (fude-gl:with-textures ((tex (gl:tex-image-2d :texture-2d ; texture-type
+                                                        0 ; mipmap depth
+                                                        :rgb ; texture element
+                                                             ; type
+                                                        (array-dimension *png*
+                                                                         0) ; width
+                                                        (array-dimension *png*
+                                                                         1) ; height
+                                                        0 ; legacy
+                                                        (ecase
+                                                            (array-dimension
+                                                              *png* 2)
+                                                          (3 :rgb)
+                                                          (4 :rgba))
+                                                        (fude-gl:foreign-type
+                                                          (array-element-type
+                                                            *png*))
+                                                        (make-array
+                                                          (array-total-size
+                                                            *png*)
+                                                          :element-type '(unsigned-byte
+                                                                          8)
+                                                          :displaced-to *png*))))
             (fude-gl:with-gl-array ((elements
                                      (coerce '(0 1 2 2 3 0)
                                              '(array (unsigned-byte 8) (*)))))
-              (gl:tex-image-2d :texture-2d ; texture-type
-                               0 ; mipmap depth
-                               :rgb ; texture element type
-                               (array-dimension *png* 0) ; width
-                               (array-dimension *png* 1) ; height
-                               0 ; legacy
-                               (ecase (array-dimension *png* 2)
-                                 (3 :rgb)
-                                 (4 :rgba))
-                               (fude-gl:foreign-type (array-element-type *png*))
-                               (make-array
-                                 (array-total-size *png*)
-                                 :element-type '(unsigned-byte 8)
-                                 :displaced-to *png*))
+              (sdl2:with-event-loop (:method :poll)
+                (:quit ()
+                  t)
+                (:idle ()
+                  (sdl2:gl-swap-window win)
+                  (gl:draw-elements :triangles elements))))))))))
+
+;;;; MIX
+
+(fude-gl:defshader mix-demo 330 (fude-gl:vertex fude-gl:coord)
+  (:vertex ((|texcoord| :vec2))
+    "texcoord = coord;"
+    "gl_Position = vec4(vertex, 0.0, 1.0);")
+  (:fragment ((|outColor| :vec4) &uniform (|tex1| :|sampler2D|) (|tex2|
+                                                                 :|sampler2D|))
+    "outColor = mix(texture(tex1, texcoord),
+                     texture(tex2, texcoord),
+                     0.5);"))
+
+(defparameter *mix-demo*
+  (concatenate '(array single-float (*))
+               (make-instance 'mix-demo :x -0.5 :y 0.5 :u 0.0 :v 0.0)
+               (make-instance 'mix-demo :x 0.5 :y 0.5 :u 1.0 :v 0.0)
+               (make-instance 'mix-demo :x 0.5 :y -0.5 :u 1.0 :v 1.0)
+               (make-instance 'mix-demo :x -0.5 :y -0.5 :u 0.0 :v 1.0)))
+
+(defparameter *logo*
+  (opticl:read-png-file
+    (probe-file
+      (merge-pathnames "examples/lisplogo_warning2_128.png"
+                       (asdf:system-source-directory
+                         (asdf:find-system :fude-gl-examples))))))
+
+(defun mix-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((mix-demo *mix-demo*))
+          (fude-gl:with-gl-array ((elements
+                                   (coerce '(0 1 2 2 3 0)
+                                           '(array (unsigned-byte 8) (*)))))
+            (fude-gl:with-textures ((tex1 (gl:tex-image-2d :texture-2d ; texture-type
+                                                           0 ; mipmap depth
+                                                           :rgb ; texture
+                                                                ; element type
+                                                           (array-dimension
+                                                             *png* 0) ; width
+                                                           (array-dimension
+                                                             *png* 1) ; height
+                                                           0 ; legacy
+                                                           (ecase
+                                                               (array-dimension
+                                                                 *png* 2)
+                                                             (3 :rgb)
+                                                             (4 :rgba))
+                                                           (fude-gl:foreign-type
+                                                             (array-element-type
+                                                               *png*))
+                                                           (make-array
+                                                             (array-total-size
+                                                               *png*)
+                                                             :element-type '(unsigned-byte
+                                                                             8)
+                                                             :displaced-to *png*)))
+                                    (tex2 (gl:tex-image-2d :texture-2d ; texture-type
+                                                           0 ; mipmap depth
+                                                           :rgb ; texture
+                                                                ; element type
+                                                           (array-dimension
+                                                             *logo* 0) ; width
+                                                           (array-dimension
+                                                             *logo* 1) ; height
+                                                           0 ; legacy
+                                                           (ecase
+                                                               (array-dimension
+                                                                 *logo* 2)
+                                                             (3 :rgb)
+                                                             (4 :rgba))
+                                                           (fude-gl:foreign-type
+                                                             (array-element-type
+                                                               *logo*))
+                                                           (make-array
+                                                             (array-total-size
+                                                               *logo*)
+                                                             :element-type '(unsigned-byte
+                                                                             8)
+                                                             :displaced-to *logo*))))
+              (gl:uniformi (gl:get-uniform-location mix-demo "tex1") 0)
+              (gl:uniformi (gl:get-uniform-location mix-demo "tex2") 1)
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
                   t)

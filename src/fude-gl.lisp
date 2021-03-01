@@ -331,7 +331,7 @@
               (mapcan
                 (lambda (bind)
                   (destructuring-bind
-                      (var
+                      (var form
                        &key (type :texture-2d) (min :linear) (mag :linear)
                        (wrap-s :repeat) (wrap-t :repeat))
                       bind
@@ -340,7 +340,7 @@
                       (gl:tex-parameter ,type :texture-min-filter ,min)
                       (gl:tex-parameter ,type :texture-mag-filter ,mag)
                       (gl:tex-parameter ,type :texture-wrap-s ,wrap-s)
-                      (gl:tex-parameter ,type :texture-wrap-t ,wrap-t))))
+                      (gl:tex-parameter ,type :texture-wrap-t ,wrap-t) ,form)))
                 bind*))
           ,@body)
        (gl:delete-textures (list ,@(mapcar #'car bind*))))))
