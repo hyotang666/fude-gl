@@ -214,29 +214,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((texture-demo *quad*))
-          (fude-gl:with-textures ((tex (gl:tex-image-2d :texture-2d ; texture-type
-                                                        0 ; mipmap depth
-                                                        :rgb ; texture element
-                                                             ; type
-                                                        (array-dimension *png*
-                                                                         0) ; width
-                                                        (array-dimension *png*
-                                                                         1) ; height
-                                                        0 ; legacy
-                                                        (ecase
-                                                            (array-dimension
-                                                              *png* 2)
-                                                          (3 :rgb)
-                                                          (4 :rgba))
-                                                        (fude-gl:foreign-type
-                                                          (array-element-type
-                                                            *png*))
-                                                        (make-array
-                                                          (array-total-size
-                                                            *png*)
-                                                          :element-type '(unsigned-byte
-                                                                          8)
-                                                          :displaced-to *png*))))
+          (fude-gl:with-2d-textures ((tex *png*))
             (fude-gl:with-gl-array ((elements
                                      (coerce '(0 1 2 2 3 0)
                                              '(array (unsigned-byte 8) (*)))))

@@ -12,6 +12,7 @@
            #:with-shader
            #:with-gl-array
            #:with-textures
+           #:with-2d-textures
            #:foreign-type))
 
 (in-package :fude-gl)
@@ -386,3 +387,36 @@
                                                      ,(caar binds))))
                                 ,@(rec (cdr binds))))))))
              (rec binds))))))
+
+;;;; WITH-2D-TEXTURES
+
+(defmacro with-2d-textures ((&rest binds) &body body)
+  `(with-textures ,(mapcar
+                     (lambda (bind)
+                       (let ((a (gensym "ARRAY"))
+                             (tc (gensym "TEXTURE-COMPONENTS")))
+                         (destructuring-bind
+                             (var array &rest options)
+                             bind
+                           `(,var
+                             (let ((,a ,array))
+                               (flet ((,tc (array)
+                                        (ecase (array-dimension array 2)
+                                          (3 :rgb)
+                                          (4 :rgba))))
+                                 (gl:tex-image-2d :texture-2d 0 ; mipmap depth
+                                                  (,tc ,a)
+                                                  (array-dimension ,a 0) ; width
+                                                  (array-dimension ,a 1) ; height
+                                                  0 ; legacy
+                                                  (,tc ,a)
+                                                  (foreign-type
+                                                    (array-element-type ,a))
+                                                  (make-array
+                                                    (array-total-size ,a)
+                                                    :element-type (array-element-type
+                                                                    ,a)
+                                                    :displaced-to ,a))))
+                             ,@options))))
+                     binds)
+     ,@body))
