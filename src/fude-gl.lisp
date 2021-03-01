@@ -159,9 +159,24 @@
 ;;;; UTILITIES
 ;;; WITH-GL-ARRAY
 
-(defun gl-type (cl-type)
-  (cond ((subtypep cl-type 'single-float) :float)
-        ((subtypep cl-type 'unsigned-byte) :unsigned-int)
+(defun foreign-type (cl-type &key cffi)
+  (cond ((and cffi (subtypep cl-type 'single-float)) :float)
+        ((and cffi (subtypep cl-type 'double-float)) :double)
+        ((subtypep cl-type 'float) :float)
+        ((subtypep cl-type '(unsigned-byte 8))
+         (if cffi
+             :unsigned-char
+             :unsigned-byte))
+        ((subtypep cl-type '(signed-byte 8))
+         (if cffi
+             :char
+             :byte))
+        ((subtypep cl-type '(unsigned-byte 16)) :unsigned-short)
+        ((subtypep cl-type '(signed-byte 16)) :short)
+        ((subtypep cl-type '(unsigned-byte 32)) :unsigned-int)
+        ((subtypep cl-type '(signed-byte 32)) :int)
+        ((and cffi (subtypep cl-type '(unsigned-byte 64))) :unsigned-long)
+        ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
         (t (error "Not supported type. ~S" cl-type))))
 
 (defun make-gl-array (initial-contents &key (element-type :float))
@@ -179,7 +194,9 @@
                (let ((v (gensym "VECTOR")) (type (gensym "TYPE")))
                  `(,var
                    (let* ((,v ,vector) (,type (array-element-type ,v)))
-                     (make-gl-array ,v :element-type (gl-type ,type)))))))
+                     (make-gl-array ,v
+                                    :element-type (foreign-type ,type
+                                                                :cffi t)))))))
            bind*)
      (unwind-protect (progn ,@body)
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
