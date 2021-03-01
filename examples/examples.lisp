@@ -151,3 +151,92 @@
               (:idle ()
                 (sdl2:gl-swap-window win)
                 (gl:draw-elements :triangles elements)))))))))
+
+;;;; TEXTURE
+
+(fude-gl:defshader texture-demo 330 (fude-gl:vertex fude-gl:color
+                                     fude-gl:coord)
+  (:vertex ((|Color| :vec3) (|texcoord| :vec2))
+    "texcoord = coord;"
+    "Color = color;"
+    "gl_Position = vec4(vertex, 0.0, 1.0);")
+  (:fragment ((|outColor| :vec4) &uniform (|tex| :|sampler2D|))
+    "outColor = texture(tex, texcoord) * vec4(Color, 1.0);"))
+
+(defparameter *quad*
+  (concatenate '(array single-float (*))
+               (make-instance 'texture-demo ; Top left
+                              :x -0.5
+                              :y 0.5
+                              :r 1.0
+                              :g 0.0
+                              :b 0.0
+                              :u 0.0
+                              :v 0.0)
+               (make-instance 'texture-demo ; Top right
+                              :x 0.5
+                              :y 0.5
+                              :r 0.0
+                              :g 1.0
+                              :b 0.0
+                              :u 1.0
+                              :v 0.0)
+               (make-instance 'texture-demo ; Bottom right
+                              :x 0.5
+                              :y -0.5
+                              :r 0.0
+                              :g 0.0
+                              :b 1.0
+                              :u 1.0
+                              :v 1.0)
+               (make-instance 'texture-demo ; Bottom left
+                              :x -0.5
+                              :y -0.5
+                              :r 1.0
+                              :g 1.0
+                              :b 1.0
+                              :u 0.0
+                              :v 1.0)))
+
+(defparameter *png*
+  (opticl:read-png-file
+    (probe-file
+      (merge-pathnames "examples/lisplogo_alien_128.png"
+                       (asdf:system-source-directory
+                         (asdf:find-system :fude-gl-examples))))))
+
+(defun texture-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((texture-demo *quad*))
+          (fude-gl:with-textures ((tex :type :texture-2d
+                                       :min :linear
+                                       :mag :linear))
+            (fude-gl:with-gl-array ((elements
+                                     (coerce '(0 1 2 2 3 0)
+                                             '(array (unsigned-byte 8) (*)))))
+              (gl:tex-image-2d :texture-2d ; texture-type
+                               0 ; mipmap depth
+                               :rgb ; texture element type
+                               (array-dimension *png* 0) ; width
+                               (array-dimension *png* 1) ; height
+                               0 ; legacy
+                               (ecase (array-dimension *png* 2)
+                                 (3 :rgb)
+                                 (4 :rgba))
+                               (fude-gl::foreign-type (array-element-type *png*))
+                               (make-array
+                                 (array-total-size *png*)
+                                 :element-type '(unsigned-byte 8)
+                                 :displaced-to *png*))
+              (sdl2:with-event-loop (:method :poll)
+                (:quit ()
+                  t)
+                (:idle ()
+                  (sdl2:gl-swap-window win)
+                  (gl:draw-elements :triangles elements))))))))))
