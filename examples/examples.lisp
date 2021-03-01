@@ -229,7 +229,7 @@
                                (ecase (array-dimension *png* 2)
                                  (3 :rgb)
                                  (4 :rgba))
-                               (fude-gl::foreign-type (array-element-type *png*))
+                               (fude-gl:foreign-type (array-element-type *png*))
                                (make-array
                                  (array-total-size *png*)
                                  :element-type '(unsigned-byte 8)

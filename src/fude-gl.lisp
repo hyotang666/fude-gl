@@ -10,7 +10,9 @@
            #:coord
            ;;;; UTILITIES
            #:with-shader
-           #:with-gl-array))
+           #:with-gl-array
+           #:with-textures
+           #:foreign-type))
 
 (in-package :fude-gl)
 
