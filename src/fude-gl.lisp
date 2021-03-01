@@ -325,15 +325,21 @@
        (gl:gen-textures ,(length bind*))
      (unwind-protect
          (progn
-          ,@(mapcan
-              (lambda (bind)
-                (destructuring-bind
-                    (var &key (type :texture-2d) (min :linear) (mag :linear))
-                    bind
-                  `((gl:bind-texture ,type ,var)
-                    (gl:tex-parameter ,type :texture-min-filter ,min)
-                    (gl:tex-parameter ,type :texture-mag-filter ,mag))))
-              bind*)
+          ,@(let ((active -1))
+              (mapcan
+                (lambda (bind)
+                  (destructuring-bind
+                      (var
+                       &key (type :texture-2d) (min :linear) (mag :linear)
+                       (wrap-s :repeat) (wrap-t :repeat))
+                      bind
+                    `((gl:active-texture ,(incf active))
+                      (gl:bind-texture ,type ,var)
+                      (gl:tex-parameter ,type :texture-min-filter ,min)
+                      (gl:tex-parameter ,type :texture-mag-filter ,mag)
+                      (gl:tex-parameter ,type :texture-wrap-s ,wrap-s)
+                      (gl:tex-parameter ,type :texture-wrap-t ,wrap-t))))
+                bind*))
           ,@body)
        (gl:delete-textures (list ,@(mapcar #'car bind*))))))
 
