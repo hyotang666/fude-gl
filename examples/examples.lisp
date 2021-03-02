@@ -228,8 +228,8 @@
   (:vertex ((texcoord :vec2))
     "texcoord = st;"
     "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|) (tex2
-                                                               :|sampler2D|))
+  (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|)
+              (tex2 :|sampler2D|))
     "outColor = mix(texture(tex1, texcoord),
                      texture(tex2, texcoord),
                      0.5);"))

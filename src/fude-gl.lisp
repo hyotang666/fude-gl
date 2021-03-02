@@ -164,7 +164,7 @@
                             (list "~:<" ; each clause.
                                   "~W~^ ~1I~@_" ; key
                                   (list "~:<" ; out lambda list.
-                                        "~@{~W~^ ~@_~}" ; out lambda var.
+                                        "~@{~W~^ ~:_~}" ; out lambda var.
                                         "~:>~^ ~_")
                                   "~@{~W~^ ~_~}" ; clause body.
                                   "~:>~^ ~_")
