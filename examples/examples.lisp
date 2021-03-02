@@ -1,7 +1,16 @@
 (defpackage :fude-gl-examples
-  (:use :cl))
+  (:use :cl)
+  (:export #:demos))
 
 (in-package :fude-gl-examples)
+
+;;;; INTERFACE
+
+(defun demos ()
+  (restart-case (mapc #'funcall
+                      '(hello-triangle uniform-demo colored-triangle
+                                       element-buffer texture-demo mix-demo))
+    (quit ())))
 
 ;;;; HELLO-TRIANGLE
 
