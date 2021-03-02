@@ -62,10 +62,8 @@
 ;;;; COLORED-TRIANGLE
 
 (fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
-  (:vertex ((|Color| :vec3))
-    "Color = rgb;"
-    "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4)) "outColor = vec4(Color, 1.0);"))
+  (:vertex ((color :vec3)) "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);")
+  (:fragment ((|outColor| :vec4)) "outColor = vec4(color, 1.0);"))
 
 (defparameter *colored-triangle*
   (concatenate '(array single-float (*))
@@ -155,12 +153,12 @@
 ;;;; TEXTURE
 
 (fude-gl:defshader texture-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:st)
-  (:vertex ((|Color| :vec3) (|texcoord| :vec2))
+  (:vertex ((color :vec3) (texcoord :vec2))
     "texcoord = st;"
-    "Color = rgb;"
+    "color = rgb;"
     "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4) &uniform (|tex| :|sampler2D|))
-    "outColor = texture(tex, texcoord) * vec4(Color, 1.0);"))
+  (:fragment ((|outColor| :vec4) &uniform (tex :|sampler2D|))
+    "outColor = texture(tex, texcoord) * vec4(color, 1.0);"))
 
 (defparameter *quad*
   (concatenate '(array single-float (*))
@@ -227,11 +225,11 @@
 ;;;; MIX
 
 (fude-gl:defshader mix-demo 330 (fude-gl:xy fude-gl:st)
-  (:vertex ((|texcoord| :vec2))
+  (:vertex ((texcoord :vec2))
     "texcoord = st;"
     "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4) &uniform (|tex1| :|sampler2D|) (|tex2|
-                                                                 :|sampler2D|))
+  (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|) (tex2
+                                                               :|sampler2D|))
     "outColor = mix(texture(tex1, texcoord),
                      texture(tex2, texcoord),
                      0.5);"))

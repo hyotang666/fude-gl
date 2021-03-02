@@ -99,7 +99,7 @@
     (flet ((defs (list)
              (loop :for (name type) :in list
                    :collect (change-case:camel-case (symbol-name type))
-                   :collect (symbol-name name))))
+                   :collect (change-case:camel-case (symbol-name name)))))
       ;; The body.
       `(progn
         (defclass ,name ,superclasses () (:metaclass vector-class))
