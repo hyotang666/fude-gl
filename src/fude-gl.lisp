@@ -96,56 +96,54 @@
                         "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
                         "void main () {~%~{~A~^~%~}~%}" ; the body.
                         )))
-    (flet ((defs (list)
-             (loop :for (name type) :in list
-                   :collect (change-case:camel-case (symbol-name type))
-                   :collect (change-case:camel-case (symbol-name name)))))
+    (labels ((defs (list)
+               (loop :for (name type) :in list
+                     :collect (change-case:camel-case (symbol-name type))
+                     :collect (change-case:camel-case (symbol-name name))))
+             (rec (shaders in acc)
+               (if (endp shaders)
+                   (nreverse acc)
+                   (body (car shaders) (cdr shaders) in acc)))
+             (body (shader rest in acc)
+               (destructuring-bind
+                   (type out &rest main)
+                   shader
+                 (let* ((&uniform
+                         (position-if
+                           (lambda (x) (and (symbolp x) (string= '&uniform x)))
+                           out))
+                        (vars (and out (defs (subseq out 0 &uniform)))))
+                   (rec rest `',vars
+                        (cons
+                          (let ((method
+                                 (intern (format nil "~A-SHADER" type)
+                                         :fude-gl)))
+                            `(defmethod ,method ((type (eql ',name)))
+                               ,(if (typep main
+                                           '(cons
+                                              (cons (eql quote)
+                                                    (cons symbol null))
+                                              null))
+                                    `(,method ',(cadar main))
+                                    `(format nil (formatter ,format) ',version
+                                             ,in ',vars
+                                             ',(and &uniform
+                                                    (defs
+                                                      (subseq out
+                                                              (1+ &uniform))))
+                                             ',main))))
+                          acc))))))
       ;; The body.
       `(progn
         (defclass ,name ,superclasses () (:metaclass vector-class))
-        ,@(labels ((rec (shaders in acc)
-                     (if (endp shaders)
-                         (nreverse acc)
-                         (body (car shaders) (cdr shaders) in acc)))
-                   (body (shader rest in acc)
-                     (destructuring-bind
-                         (type out &rest main)
-                         shader
-                       (let* ((&uniform
-                               (position-if
-                                 (lambda (x)
-                                   (and (symbolp x) (string= '&uniform x)))
-                                 out))
-                              (vars (and out (defs (subseq out 0 &uniform)))))
-                         (rec rest `',vars
-                              (cons
-                                (let ((method
-                                       (intern (format nil "~A-SHADER" type)
-                                               :fude-gl)))
-                                  `(defmethod ,method ((type (eql ',name)))
-                                     ,(if (typep main
-                                                 '(cons
-                                                    (cons (eql quote)
-                                                          (cons symbol null))
-                                                    null))
-                                          `(,method ',(cadar main))
-                                          `(format nil (formatter ,format)
-                                                   ',version ,in ',vars
-                                                   ',(and &uniform
-                                                          (defs
-                                                            (subseq out
-                                                                    (1+
-                                                                      &uniform))))
-                                                   ',main))))
-                                acc))))))
-            (rec shader*
-                 `(loop :for c :in (class-list (find-class type))
-                        :for slots = (c2mop:class-direct-slots c)
-                        :when slots
-                          :collect (format nil "vec~D" (length slots))
-                          :and :collect (change-case:camel-case
-                                          (symbol-name (class-name c))))
-                 nil))))))
+        ,@(rec shader*
+               `(loop :for c :in (class-list (find-class type))
+                      :for slots = (c2mop:class-direct-slots c)
+                      :when slots
+                        :collect (format nil "vec~D" (length slots))
+                        :and :collect (change-case:camel-case
+                                        (symbol-name (class-name c))))
+               nil)))))
 
 (defun pprint-defshader (stream exp)
   (setf stream (or stream *standard-output*))
