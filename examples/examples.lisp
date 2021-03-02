@@ -5,15 +5,15 @@
 
 ;;;; HELLO-TRIANGLE
 
-(fude-gl:defshader hello-triangle 330 (fude-gl:vertex)
-  (:vertex () "gl_Position = vec4(vertex, 0.0, 1.0);")
+(fude-gl:defshader hello-triangle 330 (fude-gl:xy)
+  (:vertex () "gl_Position = vec4(xy, 0.0, 1.0);")
   (:fragment ((|outColor| :vec4)) "outColor = vec4(1.0, 1.0, 1.0, 1.0);"))
 
 (defparameter *triangle*
   (concatenate '(array single-float (*))
-               (make-instance 'fude-gl:vertex :x 0.0 :y 0.5)
-               (make-instance 'fude-gl:vertex :x 0.5 :y -0.5)
-               (make-instance 'fude-gl:vertex :x -0.5 :y -0.5)))
+               (make-instance 'fude-gl:xy :x 0.0 :y 0.5)
+               (make-instance 'fude-gl:xy :x 0.5 :y -0.5)
+               (make-instance 'fude-gl:xy :x -0.5 :y -0.5)))
 
 (defun hello-triangle ()
   (sdl2:with-init (:everything)
@@ -33,7 +33,7 @@
 
 ;;;; UNIFORM-DEMO
 
-(fude-gl:defshader uniform-demo 330 (fude-gl:vertex)
+(fude-gl:defshader uniform-demo 330 (fude-gl:xy)
   ;; Re-use vertex-shader of HELLO-TRIANGLE.
   (:vertex () 'hello-triangle)
   (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
@@ -61,10 +61,10 @@
 
 ;;;; COLORED-TRIANGLE
 
-(fude-gl:defshader colored-triangle 330 (fude-gl:vertex fude-gl:color)
+(fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
   (:vertex ((|Color| :vec3))
-    "Color = color;"
-    "gl_Position = vec4(vertex, 0.0, 1.0);")
+    "Color = rgb;"
+    "gl_Position = vec4(xy, 0.0, 1.0);")
   (:fragment ((|outColor| :vec4)) "outColor = vec4(Color, 1.0);"))
 
 (defparameter *colored-triangle*
@@ -154,12 +154,11 @@
 
 ;;;; TEXTURE
 
-(fude-gl:defshader texture-demo 330 (fude-gl:vertex fude-gl:color
-                                     fude-gl:coord)
+(fude-gl:defshader texture-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:st)
   (:vertex ((|Color| :vec3) (|texcoord| :vec2))
-    "texcoord = coord;"
-    "Color = color;"
-    "gl_Position = vec4(vertex, 0.0, 1.0);")
+    "texcoord = st;"
+    "Color = rgb;"
+    "gl_Position = vec4(xy, 0.0, 1.0);")
   (:fragment ((|outColor| :vec4) &uniform (|tex| :|sampler2D|))
     "outColor = texture(tex, texcoord) * vec4(Color, 1.0);"))
 
@@ -171,32 +170,32 @@
                               :r 1.0
                               :g 0.0
                               :b 0.0
-                              :u 0.0
-                              :v 0.0)
+                              :s 0.0
+                              :t 0.0)
                (make-instance 'texture-demo ; Top right
                               :x 0.5
                               :y 0.5
                               :r 0.0
                               :g 1.0
                               :b 0.0
-                              :u 1.0
-                              :v 0.0)
+                              :s 1.0
+                              :t 0.0)
                (make-instance 'texture-demo ; Bottom right
                               :x 0.5
                               :y -0.5
                               :r 0.0
                               :g 0.0
                               :b 1.0
-                              :u 1.0
-                              :v 1.0)
+                              :s 1.0
+                              :t 1.0)
                (make-instance 'texture-demo ; Bottom left
                               :x -0.5
                               :y -0.5
                               :r 1.0
                               :g 1.0
                               :b 1.0
-                              :u 0.0
-                              :v 1.0)))
+                              :s 0.0
+                              :t 1.0)))
 
 (defparameter *png*
   (opticl:read-png-file
@@ -227,10 +226,10 @@
 
 ;;;; MIX
 
-(fude-gl:defshader mix-demo 330 (fude-gl:vertex fude-gl:coord)
+(fude-gl:defshader mix-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((|texcoord| :vec2))
-    "texcoord = coord;"
-    "gl_Position = vec4(vertex, 0.0, 1.0);")
+    "texcoord = st;"
+    "gl_Position = vec4(xy, 0.0, 1.0);")
   (:fragment ((|outColor| :vec4) &uniform (|tex1| :|sampler2D|) (|tex2|
                                                                  :|sampler2D|))
     "outColor = mix(texture(tex1, texcoord),
@@ -239,10 +238,10 @@
 
 (defparameter *mix-demo*
   (concatenate '(array single-float (*))
-               (make-instance 'mix-demo :x -0.5 :y 0.5 :u 0.0 :v 0.0)
-               (make-instance 'mix-demo :x 0.5 :y 0.5 :u 1.0 :v 0.0)
-               (make-instance 'mix-demo :x 0.5 :y -0.5 :u 1.0 :v 1.0)
-               (make-instance 'mix-demo :x -0.5 :y -0.5 :u 0.0 :v 1.0)))
+               (make-instance 'mix-demo :x -0.5 :y 0.5 :s 0.0 :t 0.0)
+               (make-instance 'mix-demo :x 0.5 :y 0.5 :s 1.0 :t 0.0)
+               (make-instance 'mix-demo :x 0.5 :y -0.5 :s 1.0 :t 1.0)
+               (make-instance 'mix-demo :x -0.5 :y -0.5 :s 0.0 :t 1.0)))
 
 (defparameter *logo*
   (opticl:read-png-file
@@ -263,52 +262,7 @@
           (fude-gl:with-gl-array ((elements
                                    (coerce '(0 1 2 2 3 0)
                                            '(array (unsigned-byte 8) (*)))))
-            (fude-gl:with-textures ((tex1 (gl:tex-image-2d :texture-2d ; texture-type
-                                                           0 ; mipmap depth
-                                                           :rgb ; texture
-                                                                ; element type
-                                                           (array-dimension
-                                                             *png* 0) ; width
-                                                           (array-dimension
-                                                             *png* 1) ; height
-                                                           0 ; legacy
-                                                           (ecase
-                                                               (array-dimension
-                                                                 *png* 2)
-                                                             (3 :rgb)
-                                                             (4 :rgba))
-                                                           (fude-gl:foreign-type
-                                                             (array-element-type
-                                                               *png*))
-                                                           (make-array
-                                                             (array-total-size
-                                                               *png*)
-                                                             :element-type '(unsigned-byte
-                                                                             8)
-                                                             :displaced-to *png*)))
-                                    (tex2 (gl:tex-image-2d :texture-2d ; texture-type
-                                                           0 ; mipmap depth
-                                                           :rgb ; texture
-                                                                ; element type
-                                                           (array-dimension
-                                                             *logo* 0) ; width
-                                                           (array-dimension
-                                                             *logo* 1) ; height
-                                                           0 ; legacy
-                                                           (ecase
-                                                               (array-dimension
-                                                                 *logo* 2)
-                                                             (3 :rgb)
-                                                             (4 :rgba))
-                                                           (fude-gl:foreign-type
-                                                             (array-element-type
-                                                               *logo*))
-                                                           (make-array
-                                                             (array-total-size
-                                                               *logo*)
-                                                             :element-type '(unsigned-byte
-                                                                             8)
-                                                             :displaced-to *logo*))))
+            (fude-gl:with-2d-textures ((tex1 *png*) (tex2 *logo*))
               (gl:uniformi (gl:get-uniform-location mix-demo "tex1") 0)
               (gl:uniformi (gl:get-uniform-location mix-demo "tex2") 1)
               (sdl2:with-event-loop (:method :poll)

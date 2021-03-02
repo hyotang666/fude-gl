@@ -5,9 +5,9 @@
   (:export ;;;; MAIN API.
            #:defshader
            ;;;; FUNDAMENTAL-CLASSES
-           #:vertex
-           #:color
-           #:coord
+           #:xy
+           #:st
+           #:rgb
            ;;;; UTILITIES
            #:with-shader
            #:with-gl-array
@@ -24,34 +24,49 @@
 (defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
 
 ;;;; CLASSES
+#| NOTE:
+ | T is constant.
+ | We could not name a slot with constant (at least in sbcl).
+ | So we decide to use prefix % for every slot name.
+ | We choice having single rule rather than having corner case.
+ |#
 
-(defclass vertex ()
-  ((x :initarg :x :type single-float) (y :initarg :y :type single-float))
+(defclass xy ()
+  ((%x :initarg :x :type single-float) (%y :initarg :y :type single-float))
   (:metaclass vector-class))
 
-(defclass color ()
-  ((r :initarg :r :type single-float)
-   (g :initarg :g :type single-float)
-   (b :initarg :b :type single-float))
+(defclass st ()
+  ((%s :initarg :s :type single-float) (%t :initarg :t :type single-float))
   (:metaclass vector-class))
 
-(defclass coord ()
-  ((u :initarg :u :type single-float) (v :initarg :v :type single-float))
+(defclass rgb ()
+  ((%r :initarg :r :type single-float)
+   (%g :initarg :g :type single-float)
+   (%b :initarg :b :type single-float))
   (:metaclass vector-class))
 
 ;;;; CONSTRUCTOR
 
+(defun class-list (class)
+  "Return class list specified to abstract oder, superclasses are reverse order."
+  (uiop:while-collecting (acc)
+    (labels ((rec (c)
+               (unless (eq 'standard-object (class-name c))
+                 (acc c)
+                 (mapc #'rec (reverse (c2mop:class-direct-superclasses c))))))
+      (rec class))))
+
+(defun class-initargs (class)
+  (uiop:while-collecting (acc)
+    (dolist (c (nreverse (class-list class)))
+      (dolist (s (c2mop:class-direct-slots c))
+        (acc (car (c2mop:slot-definition-initargs s)))))))
+
 (defmethod make-instance :around ((c vector-class) &rest args)
   (let ((values
-         (uiop:while-collecting (acc)
-           (dolist (c (nreverse (class-list c)))
-             (dolist (slot (c2mop:class-direct-slots c))
-               (acc
-                (or (getf args
-                          (intern
-                            (format nil "~A" (c2mop:slot-definition-name slot))
-                            :keyword))
-                    (error "~S is required." slot))))))))
+         (loop :for initarg :in (class-initargs c)
+               :collect (or (getf args initarg)
+                            (error "~S is required." initarg)))))
     (make-array (length values)
                 :initial-contents values
                 :element-type 'single-float)))
@@ -256,15 +271,6 @@
            (gl:delete-program ,var))))))
 
 ;;; LINK-ATTRIBUTES
-
-(defun class-list (class)
-  "Return class list specified to abstract oder, superclasses are reverse order."
-  (uiop:while-collecting (acc)
-    (labels ((rec (c)
-               (unless (eq 'standard-object (class-name c))
-                 (acc c)
-                 (mapc #'rec (reverse (c2mop:class-direct-superclasses c))))))
-      (rec class))))
 
 (defun link-attributes (class program)
   (labels ((rec (class-list total-length funs)
