@@ -278,3 +278,35 @@
                 (:idle ()
                   (sdl2:gl-swap-window win)
                   (gl:draw-elements :triangles elements))))))))))
+
+;;;; HELLO from glut-examples.
+
+(fude-gl:defshader hello 330 (fude-gl:xy)
+  (:vertex () "gl_Position = vec4(xy,0.0,1.0);")
+  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);"))
+
+(defparameter *hello-quad*
+  (concatenate '(array single-float (*)) (make-instance 'hello :x -0.5 :y 0.5) ; top-left
+               (make-instance 'hello :x 0.5 :y 0.5) ; top-right
+               (make-instance 'hello :x -0.5 :y -0.5) ; bottom-left
+               (make-instance 'hello :x 0.5 :y -0.5))) ; bottom-right
+
+(defun hello ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 250
+                           :h 250
+                           :title "hello")
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((hello *hello-quad*))
+          (fude-gl:with-gl-array ((elements
+                                   (coerce '(0 1 2 2 3 1)
+                                           '(array (unsigned-byte 8) (*)))))
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (sdl2:gl-swap-window win)
+                (gl:draw-elements :triangles elements)))))))))
