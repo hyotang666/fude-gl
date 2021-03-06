@@ -326,8 +326,6 @@
                (make-instance 'double :x -0.5 :y -0.5 :z 0.0) ; bottom-left
                (make-instance 'double :x 0.5 :y -0.5 :z 0.0))) ; bottom-right
 
-(defun radians (degrees) (* degrees (/ pi 180)))
-
 (defun double ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl)
@@ -352,7 +350,7 @@
                                        (vector
                                          (sb-cga:rotate* 0.0 0.0
                                                          (coerce
-                                                           (radians
+                                                           (fude-gl:radians
                                                              (get-internal-real-time))
                                                            'single-float))))
                     (gl:draw-elements :triangles elements)))))))))))

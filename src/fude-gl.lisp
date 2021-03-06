@@ -9,6 +9,7 @@
            #:st
            #:rgb
            ;;;; UTILITIES
+           #:radians
            #:with-shader
            #:with-gl-array
            #:with-textures
@@ -17,6 +18,8 @@
            #:foreign-type))
 
 (in-package :fude-gl)
+
+(defun radians (degrees) (* degrees (/ pi 180)))
 
 ;;;; METACLASS
 
