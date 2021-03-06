@@ -228,6 +228,15 @@
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
 
+(deftype buffer-target ()
+  '(member :array-buffer :element-array-buffer
+           :copy-read-buffer :copy-write-buffer
+           :pixel-unpack-buffer :pixel-pack-buffer
+           :query-buffer :texture-buffer
+           :transform-feedback-buffer :uniform-buffer
+           :draw-indirect-buffer :atomic-counter-buffer
+           :dispatch-indirect-buffer :shader-storage-buffer))
+
 (defmacro with-buffer ((&rest bind*) &body body)
   `(destructuring-bind
        ,(mapcar #'car bind*)
@@ -240,9 +249,9 @@
                     (var array
                      &key (target :array-buffer) (usage :static-draw))
                     bind
-                  `((gl:bind-buffer ,target ,var)
-                    (gl:buffer-data ,target (the buffer-usage ,usage)
-                                    ,array))))
+                  `((gl:bind-buffer (the buffer-target ,target) ,var)
+                    (gl:buffer-data (the buffer-target ,target)
+                                    (the buffer-usage ,usage) ,array))))
               bind*)
           ,@body)
        (gl:delete-buffers (list ,@(mapcar #'car bind*))))))
