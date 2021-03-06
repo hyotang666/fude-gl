@@ -36,6 +36,12 @@
   ((%x :initarg :x :type single-float) (%y :initarg :y :type single-float))
   (:metaclass vector-class))
 
+(defclass xyz ()
+  ((%x :initarg :x :type single-float)
+   (%y :initarg :y :type single-float)
+   (%z :initarg :z :type single-float))
+  (:metaclass vector-class))
+
 (defclass st ()
   ((%s :initarg :s :type single-float) (%t :initarg :t :type single-float))
   (:metaclass vector-class))
