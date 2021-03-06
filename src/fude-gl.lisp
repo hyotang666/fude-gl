@@ -408,7 +408,28 @@
                                                    (link-attributes
                                                      ',(caar binds)
                                                      ,(caar binds))))
-                                ,@(rec (cdr binds))))))))
+                                ,@(let ((uniforms (getf (car binds) :uniform)))
+                                    (if uniforms
+                                        `((let ,(mapcar
+                                                  (lambda (uniform)
+                                                    (destructuring-bind
+                                                        (var . original)
+                                                        (uiop:ensure-list
+                                                          uniform)
+                                                      `(,var
+                                                        (gl:get-uniform-location
+                                                          ,(caar binds)
+                                                          ,(if original
+                                                               (change-case:camel-case
+                                                                 (symbol-name
+                                                                   (car
+                                                                     original)))
+                                                               (change-case:camel-case
+                                                                 (symbol-name
+                                                                   var)))))))
+                                                  uniforms)
+                                            ,@(rec (cdr binds))))
+                                        (rec (cdr binds))))))))))
              (rec binds))))))
 
 ;;;; WITH-2D-TEXTURES
