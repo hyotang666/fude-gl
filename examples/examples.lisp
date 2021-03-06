@@ -311,3 +311,48 @@
               (:idle ()
                 (sdl2:gl-swap-window win)
                 (gl:draw-elements :triangles elements)))))))))
+
+;;;; DOUBLE from glut-examples.
+
+(fude-gl:defshader double 330 (fude-gl::xyz)
+  (:vertex ((|texCoord| :vec2) &uniform (transform :mat4))
+    "gl_Position = transform * vec4(xyz, 1.0);")
+  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);"))
+
+(defparameter *double-quad*
+  (concatenate '(array single-float (*))
+               (make-instance 'double :x -0.5 :y 0.5 :z 0.0) ; top-left
+               (make-instance 'double :x 0.5 :y 0.5 :z 0.0) ; top-right
+               (make-instance 'double :x -0.5 :y -0.5 :z 0.0) ; bottom-left
+               (make-instance 'double :x 0.5 :y -0.5 :z 0.0))) ; bottom-right
+
+(defun radians (degrees) (* degrees (/ pi 180)))
+
+(defun double ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 250
+                           :h 250
+                           :title "double")
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((double *double-quad*))
+          (fude-gl:with-gl-array ((elements
+                                   (coerce '(0 1 2 2 3 1)
+                                           '(array (unsigned-byte 8) (*)))))
+            (let ((uniform (gl:get-uniform-location double "transform")))
+              (sdl2:with-event-loop (:method :poll)
+                (:quit ()
+                  t)
+                (:idle ()
+                  (fude-gl::with-clear (win (:color-buffer-bit) :color
+                                        '(0.2 0.3 0.3 1.0))
+                    (gl:uniform-matrix uniform 4
+                                       (vector
+                                         (sb-cga:rotate* 0.0 0.0
+                                                         (coerce
+                                                           (radians
+                                                             (get-internal-real-time))
+                                                           'single-float))))
+                    (gl:draw-elements :triangles elements)))))))))))

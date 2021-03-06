@@ -8,6 +8,7 @@
    "fude-gl"
    "sdl2" ; window manager.
    "opticl" ; image loader.
+   "sb-cga" ; Matrix operations.
    )
   :pathname
   "examples/"
