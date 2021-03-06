@@ -65,7 +65,8 @@
               (:idle ()
                 (sdl2:gl-swap-window win)
                 (gl:uniformf uniform-color
-                             (/ (+ 1.0 (sin (get-universal-time))) 2) 0.0 0.0)
+                             (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0
+                             0.0)
                 (gl:draw-arrays :triangles 0 3)))))))))
 
 ;;;; COLORED-TRIANGLE
