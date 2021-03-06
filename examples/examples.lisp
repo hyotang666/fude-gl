@@ -56,18 +56,17 @@
                            :w 800
                            :h 600)
       (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ((uniform-demo *triangle*))
-          (let ((uniform-color
-                 (gl:get-uniform-location uniform-demo "triangleColor")))
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                (sdl2:gl-swap-window win)
-                (gl:uniformf uniform-color
-                             (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0
-                             0.0)
-                (gl:draw-arrays :triangles 0 3)))))))))
+        (fude-gl:with-shader ((uniform-demo *triangle*
+                                            :uniform (|triangleColor|)))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (sdl2:gl-swap-window win)
+              (gl:uniformf |triangleColor|
+                           (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0
+                           0.0)
+              (gl:draw-arrays :triangles 0 3))))))))
 
 ;;;; COLORED-TRIANGLE
 
@@ -266,13 +265,15 @@
                            :w 800
                            :h 600)
       (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ((mix-demo *mix-demo*))
+        (fude-gl:with-shader ((mix-demo *mix-demo*
+                                        :uniform ((tex1-loc tex1)
+                                                  (tex2-loc tex2))))
           (fude-gl:with-gl-array ((elements
                                    (coerce '(0 1 2 2 3 0)
                                            '(array (unsigned-byte 8) (*)))))
             (fude-gl:with-2d-textures ((tex1 *png*) (tex2 *logo*))
-              (gl:uniformi (gl:get-uniform-location mix-demo "tex1") 0)
-              (gl:uniformi (gl:get-uniform-location mix-demo "tex2") 1)
+              (gl:uniformi tex1-loc 0)
+              (gl:uniformi tex2-loc 1)
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
                   t)
