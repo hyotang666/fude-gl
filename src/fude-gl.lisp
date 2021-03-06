@@ -13,6 +13,7 @@
            #:with-gl-array
            #:with-textures
            #:with-2d-textures
+           #:with-clear
            #:foreign-type))
 
 (in-package :fude-gl)
@@ -424,3 +425,13 @@
                              ,@options))))
                      binds)
      ,@body))
+
+;;;; WITH-CLEAR
+
+(defmacro with-clear
+          ((var-win (&rest bufs) &key (color ''(1.0 1.0 1.0 1.0))) &body body)
+  `(progn
+    (apply #'gl:clear-color ,color)
+    (gl:clear ,@bufs)
+    ,@body
+    (sdl2:gl-swap-window ,var-win)))
