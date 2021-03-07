@@ -11,7 +11,7 @@
            ;;;; UTILITIES
            #:radians
            #:with-shader
-           #:with-gl-array
+           #:with-gl-vector
            #:with-textures
            #:with-2d-textures
            #:with-clear
@@ -205,7 +205,7 @@
         ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
         (t (error "Not supported type. ~S" cl-type))))
 
-(defun make-gl-array (initial-contents)
+(defun make-gl-vector (initial-contents)
   (let* ((length (length initial-contents))
          (a
           (gl:alloc-gl-array
@@ -213,14 +213,14 @@
             length)))
     (dotimes (i length a) (setf (gl:glaref a i) (aref initial-contents i)))))
 
-(defmacro with-gl-array ((&rest bind*) &body body)
+(defmacro with-gl-vector ((&rest bind*) &body body)
   `(let ,(mapcar
            (lambda (bind)
              (check-type bind (cons symbol (cons t null)))
              (destructuring-bind
                  (var vector)
                  bind
-               `(,var (make-gl-array ,vector))))
+               `(,var (make-gl-vector ,vector))))
            bind*)
      (unwind-protect (progn ,@body)
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
@@ -394,7 +394,7 @@
   (let* ((length (length binds))
          (array-vars (alexandria:make-gensym-list length))
          (buf-vars (alexandria:make-gensym-list length)))
-    `(with-gl-array ,(mapcar (lambda (b g) `(,g ,(cadr b))) binds array-vars)
+    `(with-gl-vector ,(mapcar (lambda (b g) `(,g ,(cadr b))) binds array-vars)
        (with-buffer ,(mapcar #'list buf-vars array-vars)
          ,@(labels ((rec (binds)
                       (if (endp binds)

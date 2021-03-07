@@ -149,9 +149,9 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((colored-triangle *element-buffer-example*))
-          (fude-gl:with-gl-array ((elements
-                                   (coerce '(0 1 2 2 3 0)
-                                           '(array (unsigned-byte 8) (*)))))
+          (fude-gl:with-gl-vector ((elements
+                                    (coerce '(0 1 2 2 3 0)
+                                            '(array (unsigned-byte 8) (*)))))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
@@ -221,9 +221,9 @@
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((texture-demo *quad*))
           (fude-gl:with-2d-textures ((tex *png*))
-            (fude-gl:with-gl-array ((elements
-                                     (coerce '(0 1 2 2 3 0)
-                                             '(array (unsigned-byte 8) (*)))))
+            (fude-gl:with-gl-vector ((elements
+                                      (coerce '(0 1 2 2 3 0)
+                                              '(array (unsigned-byte 8) (*)))))
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
                   t)
@@ -268,9 +268,9 @@
         (fude-gl:with-shader ((mix-demo *mix-demo*
                                         :uniform ((tex1-loc tex1)
                                                   (tex2-loc tex2))))
-          (fude-gl:with-gl-array ((elements
-                                   (coerce '(0 1 2 2 3 0)
-                                           '(array (unsigned-byte 8) (*)))))
+          (fude-gl:with-gl-vector ((elements
+                                    (coerce '(0 1 2 2 3 0)
+                                            '(array (unsigned-byte 8) (*)))))
             (fude-gl:with-2d-textures ((tex1 *png*) (tex2 *logo*))
               (gl:uniformi tex1-loc 0)
               (gl:uniformi tex2-loc 1)
@@ -303,9 +303,9 @@
                            :title "hello")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((hello *hello-quad*))
-          (fude-gl:with-gl-array ((elements
-                                   (coerce '(0 1 2 2 3 1)
-                                           '(array (unsigned-byte 8) (*)))))
+          (fude-gl:with-gl-vector ((elements
+                                    (coerce '(0 1 2 2 3 1)
+                                            '(array (unsigned-byte 8) (*)))))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
@@ -337,9 +337,9 @@
                            :title "double")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((double *double-quad*))
-          (fude-gl:with-gl-array ((elements
-                                   (coerce '(0 1 2 2 3 1)
-                                           '(array (unsigned-byte 8) (*)))))
+          (fude-gl:with-gl-vector ((elements
+                                    (coerce '(0 1 2 2 3 1)
+                                            '(array (unsigned-byte 8) (*)))))
             (let ((uniform (gl:get-uniform-location double "transform")))
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
