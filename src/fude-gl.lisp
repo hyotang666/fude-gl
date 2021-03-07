@@ -465,10 +465,13 @@
 
 ;;;; WITH-CLEAR
 
+(deftype buffer-bit ()
+  '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
+
 (defmacro with-clear
           ((var-win (&rest bufs) &key (color ''(1.0 1.0 1.0 1.0))) &body body)
   `(progn
     (apply #'gl:clear-color ,color)
-    (gl:clear ,@bufs)
+    (gl:clear ,@(mapcar (lambda (buf) `(the buffer-bit ,buf)) bufs))
     ,@body
     (sdl2:gl-swap-window ,var-win)))
