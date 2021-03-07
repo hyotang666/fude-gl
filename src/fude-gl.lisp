@@ -205,9 +205,12 @@
         ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
         (t (error "Not supported type. ~S" cl-type))))
 
-(defun make-gl-array (initial-contents &key (element-type :float))
+(defun make-gl-array (initial-contents)
   (let* ((length (length initial-contents))
-         (a (gl:alloc-gl-array element-type length)))
+         (a
+          (gl:alloc-gl-array
+            (foreign-type (array-element-type initial-contents) :cffi t)
+            length)))
     (dotimes (i length a) (setf (gl:glaref a i) (aref initial-contents i)))))
 
 (defmacro with-gl-array ((&rest bind*) &body body)
@@ -217,12 +220,7 @@
              (destructuring-bind
                  (var vector)
                  bind
-               (let ((v (gensym "VECTOR")) (type (gensym "TYPE")))
-                 `(,var
-                   (let* ((,v ,vector) (,type (array-element-type ,v)))
-                     (make-gl-array ,v
-                                    :element-type (foreign-type ,type
-                                                                :cffi t)))))))
+               `(,var (make-gl-array ,vector))))
            bind*)
      (unwind-protect (progn ,@body)
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
