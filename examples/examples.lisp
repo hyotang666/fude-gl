@@ -345,8 +345,8 @@
                 (:quit ()
                   t)
                 (:idle ()
-                  (fude-gl::with-clear (win (:color-buffer-bit) :color
-                                        '(0.2 0.3 0.3 1.0))
+                  (fude-gl::with-clear (win (:color-buffer-bit)
+                                            :color '(0.2 0.3 0.3 1.0))
                     (gl:uniform-matrix uniform 4
                                        (vector
                                          (sb-cga:rotate* 0.0 0.0

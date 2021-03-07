@@ -475,3 +475,23 @@
     (gl:clear ,@(mapcar (lambda (buf) `(the buffer-bit ,buf)) bufs))
     ,@body
     (sdl2:gl-swap-window ,var-win)))
+
+(defun pprint-with-clear (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint-logical-block
+                      "~W~^ ~1I~@_" ; operator.
+                      (list "~:<" ; options
+                            "~^~W~^ ~:I~@_" ; var-win.
+                            (list "~:<" ; bufs
+                                  "~@{~W~^ ~@_~}" ; each buf.
+                                  "~:>~^ ~_")
+                            "~@{~W~^ ~@_~W~^ ~:_~}" ; k-v pairs
+                            "~:>~^ ~:_")
+                      "~@{~W~^ ~_~}" ; body
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member with-clear)) 'pprint-with-clear)
