@@ -238,24 +238,12 @@
            :draw-indirect-buffer :atomic-counter-buffer
            :dispatch-indirect-buffer :shader-storage-buffer))
 
-(defmacro with-buffer ((&rest bind*) &body body)
+(defmacro with-buffer ((&rest var*) &body body)
+  (assert (every #'symbolp var*))
   `(destructuring-bind
-       ,(mapcar #'car bind*)
-       (gl:gen-buffers ,(length bind*))
-     (unwind-protect
-         (progn
-          ,@(mapcan
-              (lambda (bind)
-                (destructuring-bind
-                    (var array
-                     &key (target :array-buffer) (usage :static-draw))
-                    bind
-                  `((gl:bind-buffer (the buffer-target ,target) ,var)
-                    (gl:buffer-data (the buffer-target ,target)
-                                    (the buffer-usage ,usage) ,array))))
-              bind*)
-          ,@body)
-       (gl:delete-buffers (list ,@(mapcar #'car bind*))))))
+       ,var*
+       (gl:gen-buffers ,(length var*))
+     (unwind-protect (progn ,@body) (gl:delete-buffers (list ,@var*)))))
 
 ;;; WITH-PROG
 
@@ -395,7 +383,7 @@
          (array-vars (alexandria:make-gensym-list length))
          (buf-vars (alexandria:make-gensym-list length)))
     `(with-gl-vector ,(mapcar (lambda (b g) `(,g ,(cadr b))) binds array-vars)
-       (with-buffer ,(mapcar #'list buf-vars array-vars)
+       (with-buffer ,(mapcar #'list buf-vars)
          ,@(labels ((rec (binds)
                       (if (endp binds)
                           body
