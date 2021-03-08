@@ -376,6 +376,69 @@
 
 (set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
 
+;;;; WITH-VAO
+
+(defmacro with-vao ((&rest bind*) &body body)
+  (let ((table (gensym "TABLE")))
+    (flet ((<init-buffer> (clause buf vec)
+             (destructuring-bind
+                 (&key (target :array-buffer) (usage :static-draw))
+                 (cddr clause)
+               `((gl:bind-buffer (the buffer-target ,target) ,buf)
+                 (gl:buffer-data (the buffer-target ,target)
+                                 (the buffer-usage ,usage) ,vec)))))
+      `(let ((,table (make-hash-table)))
+         (flet ((indices-of (id)
+                  (gethash id ,table)))
+           ,@(labels ((rec (bind*)
+                        (if (endp bind*)
+                            body
+                            (let ((prog (gensym "PROG"))
+                                  (vector (gensym "VECTOR"))
+                                  (vertices (gensym "VERTICES"))
+                                  (indices (gensym "INDICES"))
+                                  (bufs (alexandria:make-gensym-list 2)))
+                              (check-type (car bind*) (cons symbol (cons *)))
+                              (assert (every
+                                        (lambda (x) (assoc x (cdar bind*)))
+                                        '(:vertices :indices :attributes
+                                          :shader)))
+                              `((with-prog (,prog
+                                            ,@(cdr
+                                                (assoc :shader (cdar bind*))))
+                                  (let ((,vector
+                                         ,(second
+                                            (assoc :indices (cdar bind*)))))
+                                    (with-gl-vector ((,vertices
+                                                      ,(second
+                                                         (assoc :vertices (cdar
+                                                                            bind*))))
+                                                     (,indices ,vector))
+                                      (with-buffer ,bufs
+                                        (with-vertex-array ((,(caar bind*)
+                                                             ,@(<init-buffer>
+                                                                 (assoc
+                                                                   :vertices (cdar
+                                                                               bind*))
+                                                                 (car bufs)
+                                                                 vertices)
+                                                             (link-attributes
+                                                               ,(second
+                                                                  (assoc
+                                                                    :attributes (cdar
+                                                                                  bind*)))
+                                                               ,prog)
+                                                             ,@(<init-buffer>
+                                                                 (assoc
+                                                                   :indices (cdar
+                                                                              bind*))
+                                                                 (cadr bufs)
+                                                                 indices)))
+                                          (setf (gethash ,(caar bind*) ,table)
+                                                  ,vector)
+                                          ,@(rec (cdr bind*))))))))))))
+               (rec bind*)))))))
+
 ;;; WITH-SHADER
 
 (defmacro with-shader ((&rest binds) &body body)
