@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.16.0"
+  "1.17.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -14,6 +14,7 @@
    "uiop" ; Utilities.
    "alexandria" ; Public domain utilities.
    "cl-change-case" ; Convert lisp case to camel case.
+   "sdl2" ; Windowing support.
    )
   :pathname
   "src/"

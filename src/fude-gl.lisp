@@ -15,9 +15,14 @@
            #:with-textures
            #:with-2d-textures
            #:with-clear
-           #:foreign-type))
+           #:foreign-type
+           #:indices-of
+           #:draw-elements
+           #:tex-image-2d))
 
 (in-package :fude-gl)
+
+;;;; MATRIX
 
 (defun radians (degrees) (* degrees (/ pi 180)))
 
@@ -84,13 +89,35 @@
 ;;;; GENERIC-FUNCTIONS
 
 (defgeneric vertex-shader (name)
-  (:documentation "Accept class name, return its vertex shader code string."))
+  (:documentation "Return vertex shader code string."))
 
 (defgeneric fragment-shader (name)
-  (:documentation "Accept class name, return its fragment shader code string."))
+  (:documentation "Return fragment shader code string."))
+
+(defgeneric uniforms (name)
+  (:documentation "Return associated uniform symbols."))
 
 ;;;; DSL
 ;;; DEFSHADER
+
+(defun <uniforms> (name shader*)
+  `(defmethod uniforms ((type (eql ',name)))
+     (list
+       ,@(loop :for (nil lambda-list) :in shader*
+               :for position
+                    = (position-if
+                        (lambda (x) (and (symbolp x) (string= '&uniform x)))
+                        lambda-list)
+               :when position
+                 :nconc (let ((acc))
+                          (dolist (x (subseq lambda-list (1+ position)) acc)
+                            (pushnew `',(car x) acc :test #'equal)))))))
+
+(defun <shader-method> (method name main string)
+  `(defmethod ,method ((type (eql ',name)))
+     ,(if (typep main '(cons (cons (eql quote) (cons symbol null)) null))
+          `(,method ',(cadar main))
+          string)))
 
 (defmacro defshader (name version superclasses &body shader*)
   ;; Trivial syntax check.
@@ -100,12 +127,13 @@
   (assert (every (lambda (s) (find (car s) '(:vertex :fragment))) shader*))
   ;; binds
   (let ((format
-         #.(concatenate 'string "#version ~A core~%" ; version
-                        "~{in ~A ~A;~%~}~&" ; in
-                        "~{out ~A ~A;~%~}~&" ; out
-                        "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
-                        "void main () {~%~{~A~^~%~}~%}" ; the body.
-                        )))
+         (formatter
+          #.(concatenate 'string "#version ~A core~%" ; version
+                         "~{in ~A ~A;~%~}~&" ; in
+                         "~{out ~A ~A;~%~}~&" ; out
+                         "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
+                         "void main () {~%~{~A~^~%~}~%}" ; the body.
+                         ))))
     (labels ((defs (list)
                (loop :for (name type) :in list
                      :collect (change-case:camel-case (symbol-name type))
@@ -123,37 +151,31 @@
                            (lambda (x) (and (symbolp x) (string= '&uniform x)))
                            out))
                         (vars (and out (defs (subseq out 0 &uniform)))))
-                   (rec rest `',vars
+                   (rec rest vars
                         (cons
-                          (let ((method
-                                 (intern (format nil "~A-SHADER" type)
-                                         :fude-gl)))
-                            `(defmethod ,method ((type (eql ',name)))
-                               ,(if (typep main
-                                           '(cons
-                                              (cons (eql quote)
-                                                    (cons symbol null))
-                                              null))
-                                    `(,method ',(cadar main))
-                                    `(format nil (formatter ,format) ',version
-                                             ,in ',vars
-                                             ',(and &uniform
-                                                    (defs
-                                                      (subseq out
-                                                              (1+ &uniform))))
-                                             ',main))))
+                          (<shader-method>
+                            (intern (format nil "~A-SHADER" type) :fude-gl)
+                            name main
+                            (format nil format version in vars
+                                    (and &uniform
+                                         (defs (subseq out (1+ &uniform))))
+                                    main))
                           acc))))))
       ;; The body.
-      `(progn
-        (defclass ,name ,superclasses () (:metaclass vector-class))
-        ,@(rec shader*
-               `(loop :for c :in (class-list (find-class type))
+      `(eval-when (:compile-toplevel :load-toplevel :execute)
+         (defclass ,name ,superclasses () (:metaclass vector-class))
+         ,@(rec shader*
+                (loop :for c
+                           :in (mapcan (lambda (c) (class-list (find-class c)))
+                                       superclasses)
                       :for slots = (c2mop:class-direct-slots c)
                       :when slots
                         :collect (format nil "vec~D" (length slots))
                         :and :collect (change-case:camel-case
                                         (symbol-name (class-name c))))
-               nil)))))
+                nil)
+         ,(<uniforms> name shader*)
+         ',name))))
 
 (defun pprint-defshader (stream exp)
   (setf stream (or stream *standard-output*))
@@ -248,14 +270,14 @@
 ;;; WITH-PROG
 
 (defmacro with-prog ((var vertex-shader fragment-shader) &body body)
-  (let ((vs (gensym "VERTEX-SHADER")) (fs (gensym "FRAGMENT-SHADER")))
+  (alexandria:with-unique-names (vs fs compile warn)
     `(let ((,var (gl:create-program)))
-       (labels ((s-compile (id source)
+       (labels ((,compile (id source)
                   (gl:shader-source id source)
                   (gl:compile-shader id)
-                  (may-warn (gl:get-shader-info-log id))
+                  (,warn (gl:get-shader-info-log id))
                   (gl:attach-shader ,var id))
-                (may-warn (log)
+                (,warn (log)
                   (unless (equal "" log)
                     (warn log))))
          (unwind-protect
@@ -263,10 +285,10 @@
                    (,fs (gl:create-shader :fragment-shader)))
                (unwind-protect
                    (progn
-                    (s-compile ,vs ,vertex-shader)
-                    (s-compile ,fs ,fragment-shader)
+                    (,compile ,vs ,vertex-shader)
+                    (,compile ,fs ,fragment-shader)
                     (gl:link-program ,var)
-                    (may-warn (gl:get-program-info-log ,var))
+                    (,warn (gl:get-program-info-log ,var))
                     (gl:use-program ,var))
                  (gl:delete-shader ,fs)
                  (gl:delete-shader ,vs))
@@ -309,6 +331,9 @@
                           (change-case:camel-case
                             (symbol-name (class-name class)))
                           program))
+                 #++
+                 (uiop:format! *trace-output* "~%Length ~S. Offset ~S."
+                               (* total-length size) (* offset size))
                  (gl:vertex-attrib-pointer location length type nil ; As
                                                                     ; normalized-p
                                            (* total-length size)
@@ -331,29 +356,100 @@
 
 ;;; WITH-TEXTURES
 
+(deftype texture-wrapping ()
+  '(member :repeat :mirrored-repeat :clamp-to-edge :clamp-to-border))
+
+(deftype texture-target ()
+  '(member :texture-1d :texture-1d-array
+           :texture-2d :texture-2d-array
+           :texture-2d-multisample :texture-2d-multisample-array
+           :texture-3d :texture-cube-map
+           :texture-cube-map-array :texture-rectangle))
+
+(deftype texture-pname ()
+  '(member :depth-stencil-texture-mode
+           :texture-base-level :texture-compare-func
+           :texture-compare-mode :texture-lod-bias
+           :texture-min-filter :texture-mag-filter
+           :texture-min-lod :texture-max-lod
+           :texture-max-level :texture-swizzle-r
+           :texture-swizzle-g :texture-swizzle-b
+           :texture-swizzle-a :texture-wrap-s
+           :texture-wrap-t :texture-wrap-r))
+
+(deftype texture-mag-filter () '(member :linear :nearest))
+
+(deftype texture-min-filter ()
+  '(or textute-mag-filter
+       (member :nearest-mipmap-nearest :lenear-mipmap-nearest
+               :nearest-mipmap-linear :linear-mipmap-linear)))
+
+(deftype base-internal-format ()
+  '(member :depth-component :depth-stencil :red :rg :rgb :rgba))
+
+(deftype pixel-format ()
+  '(or base-internal-format
+       (member :bgr
+               :bgra :red-integer
+               :rg-integer :rgb-integer
+               :bgr-integer :rgba-integer
+               :bgra-integer :stencil-index)))
+
+(defvar *active-counter* -1)
+
 (defmacro with-textures ((&rest bind*) &body body)
-  `(destructuring-bind
-       ,(mapcar #'car bind*)
-       (gl:gen-textures ,(length bind*))
-     (unwind-protect
-         (progn
-          ,@(let ((active -1))
-              (mapcan
-                (lambda (bind)
+  ;; Trivial syntax check.
+  (dolist (b bind*) (the (cons symbol (cons texture-target *)) b))
+  (labels ((vname (k v)
+             (case k
+               ((:texture-wrap-s :texture-wrap-t :texture-wrap-r)
+                (ensure-check v 'texture-wrapping))
+               ((:texture-mag-filter) (ensure-check v 'texture-mag-filter))
+               ((:texture-min-fileter) (ensure-check v 'texture-min-filter))
+               (otherwise v)))
+           (<option-setters> (params target)
+             (destructuring-bind
+                 (&key (texture-wrap-s :repeat) (texture-wrap-t :repeat)
+                  (texture-min-filter :linear) (texture-mag-filter :linear)
+                  &allow-other-keys)
+                 params
+               (let ((params
+                      (list* :texture-wrap-s texture-wrap-s :texture-wrap-t
+                             texture-wrap-t :texture-mag-filter
+                             texture-mag-filter :texture-min-filter
+                             texture-min-filter
+                             (uiop:remove-plist-keys
+                               '(:texture-wrap-s :texture-wrap-t
+                                 :texture-min-filter :texture-mag-filter)
+                               params))))
+                 (loop :for (k v) :on params :by #'cddr
+                       :collect `(gl:tex-parameter ,target
+                                                   ,(ensure-check k
+                                                                  'texture-pname)
+                                                   ,(vname k v))))))
+           (ensure-check (v type)
+             (if (constantp v)
+                 (progn (assert (typep v type)) v)
+                 `(the ,type ,v))))
+    ;; The body.
+    `(destructuring-bind
+         ,(mapcar #'car bind*)
+         (gl:gen-textures ,(length bind*))
+       (unwind-protect
+           (progn
+            ,@(mapcan
+                (lambda (b)
                   (destructuring-bind
-                      (var form
-                       &key (type :texture-2d) (min :linear) (mag :linear)
-                       (wrap-s :repeat) (wrap-t :repeat))
-                      bind
-                    `((gl:active-texture ,(incf active))
-                      (gl:bind-texture ,type ,var)
-                      (gl:tex-parameter ,type :texture-min-filter ,min)
-                      (gl:tex-parameter ,type :texture-mag-filter ,mag)
-                      (gl:tex-parameter ,type :texture-wrap-s ,wrap-s)
-                      (gl:tex-parameter ,type :texture-wrap-t ,wrap-t) ,form)))
-                bind*))
-          ,@body)
-       (gl:delete-textures (list ,@(mapcar #'car bind*))))))
+                      (var target &key params init (uniform 0))
+                      b
+                    `((gl:active-texture ,var)
+                      (gl:bind-texture ,(ensure-check target 'texture-target)
+                                       ,var)
+                      ,@(<option-setters> params target) ,init
+                      (gl:uniformi ,uniform ,var))))
+                bind*)
+            ,@body)
+         (gl:delete-textures (list ,@(mapcar #'car bind*)))))))
 
 (defun pprint-with-textures (stream exp)
   (funcall
@@ -365,8 +461,9 @@
                       (list "~:<" ; binds
                             "~@{" ; iterate binds.
                             (list "~:<" ; each bind
-                                  "~W~^ ~:I~:_" ; var
-                                  "~@{~W~^ ~W~^ ~_~}" ; k-v options.
+                                  "~W~^ ~:I~@_" ; var
+                                  "~W~^ ~_" ; target.
+                                  "~@{~W~^ ~@_~W~^ ~_~}" ; k-v options.
                                   "~:>~^ ~_")
                             "~}" ; end of iterate.
                             "~:>~^ ~:@_")
@@ -376,110 +473,170 @@
 
 (set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
 
+(defun tex-image-2d (array)
+  (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
+    (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
+                     (the base-internal-format format)
+                     (array-dimension array 0) ; width
+                     (array-dimension array 1) ; height
+                     0 ; legacy stuff.
+                     (the pixel-format format)
+                     (foreign-type (array-element-type array))
+                     (make-array (array-total-size array)
+                                 :element-type (array-element-type array)
+                                 :displaced-to array))))
+
 ;;;; WITH-VAO
+
+(defmacro indices-of (id)
+  (declare (ignore id))
+  (error "INDICE-OF is must be inside of WITH-VAO."))
+
+(defun <uniform-binder> (prog)
+  (lambda (uniform)
+    (etypecase uniform
+      (symbol
+       `(,uniform
+         (gl:get-uniform-location ,prog
+                                  ,(change-case:camel-case
+                                     (symbol-name uniform)))))
+      ((cons symbol (cons symbol null))
+       `(,(first uniform)
+         (gl:get-uniform-location ,prog
+                                  ,(change-case:camel-case
+                                     (symbol-name (second uniform)))))))))
 
 (defmacro with-vao ((&rest bind*) &body body)
   (let ((table (gensym "TABLE")))
-    (flet ((<init-buffer> (clause buf vec)
-             (destructuring-bind
-                 (&key (target :array-buffer) (usage :static-draw))
-                 (cddr clause)
-               `((gl:bind-buffer (the buffer-target ,target) ,buf)
-                 (gl:buffer-data (the buffer-target ,target)
-                                 (the buffer-usage ,usage) ,vec)))))
+    (labels ((<init-buffer> (clause buf vec)
+               (destructuring-bind
+                   (&key (target :array-buffer) (usage :static-draw))
+                   (cddr clause)
+                 `((gl:bind-buffer (the buffer-target ,target) ,buf)
+                   (gl:buffer-data (the buffer-target ,target)
+                                   (the buffer-usage ,usage) ,vec))))
+             (clause (clause bind)
+               (or (assoc clause (cdr bind))
+                   (error "Missing ~S. ~S" clause bind)))
+             (ensure-second (u)
+               (if (symbolp u)
+                   u
+                   (second u)))
+             (rec (bind*)
+               (if (endp bind*)
+                   body
+                   (let ((prog (gensym "PROG"))
+                         (vector (gensym "VECTOR"))
+                         (vertices (gensym "VERTICES"))
+                         (indices (gensym "INDICES"))
+                         (vbo (gensym "VBO"))
+                         (ebo (gensym "EBO"))
+                         (shader (cdr (clause :shader (car bind*))))
+                         (vec (clause :indices (car bind*)))
+                         (uniforms (cdr (assoc :uniform (cdar bind*))))
+                         (verts (clause :vertices (car bind*)))
+                         (attr (second (clause :attributes (car bind*)))))
+                     (check-type (car bind*) (cons symbol (cons *)))
+                     (assert (every (lambda (x) (assoc x (cdar bind*)))
+                                    '(:vertices :indices :attributes :shader)))
+                     (let ((required (uniforms (caar bind*)))
+                           (actual (mapcar #'ensure-second uniforms)))
+                       (assert (null (set-exclusive-or required actual)) ()
+                         "Mismatch uniforms. ~S but ~S" required actual))
+                     `((with-prog (,prog ,@shader)
+                         (let ((,vector ,(second vec)))
+                           (with-gl-vector ((,vertices ,(second verts))
+                                            (,indices ,vector))
+                             (with-buffer ,(list vbo ebo)
+                               (with-vertex-array ((,(caar bind*)
+                                                    ,@(<init-buffer> verts vbo
+                                                                     vertices)
+                                                    (link-attributes ,attr
+                                                                     ,prog)
+                                                    ,@(<init-buffer> vec ebo
+                                                                     indices)))
+                                 (setf (gethash ,(caar bind*) ,table) ,vector)
+                                 (let ,(mapcar (<uniform-binder> prog) uniforms)
+                                   ,@(rec (cdr bind*)))))))))))))
       `(let ((,table (make-hash-table)))
-         (flet ((indices-of (id)
-                  (gethash id ,table)))
-           ,@(labels ((rec (bind*)
-                        (if (endp bind*)
-                            body
-                            (let ((prog (gensym "PROG"))
-                                  (vector (gensym "VECTOR"))
-                                  (vertices (gensym "VERTICES"))
-                                  (indices (gensym "INDICES"))
-                                  (bufs (alexandria:make-gensym-list 2)))
-                              (check-type (car bind*) (cons symbol (cons *)))
-                              (assert (every
-                                        (lambda (x) (assoc x (cdar bind*)))
-                                        '(:vertices :indices :attributes
-                                          :shader)))
-                              `((with-prog (,prog
-                                            ,@(cdr
-                                                (assoc :shader (cdar bind*))))
-                                  (let ((,vector
-                                         ,(second
-                                            (assoc :indices (cdar bind*)))))
-                                    (with-gl-vector ((,vertices
-                                                      ,(second
-                                                         (assoc :vertices (cdar
-                                                                            bind*))))
-                                                     (,indices ,vector))
-                                      (with-buffer ,bufs
-                                        (with-vertex-array ((,(caar bind*)
-                                                             ,@(<init-buffer>
-                                                                 (assoc
-                                                                   :vertices (cdar
-                                                                               bind*))
-                                                                 (car bufs)
-                                                                 vertices)
-                                                             (link-attributes
-                                                               ,(second
-                                                                  (assoc
-                                                                    :attributes (cdar
-                                                                                  bind*)))
-                                                               ,prog)
-                                                             ,@(<init-buffer>
-                                                                 (assoc
-                                                                   :indices (cdar
-                                                                              bind*))
-                                                                 (cadr bufs)
-                                                                 indices)))
-                                          (setf (gethash ,(caar bind*) ,table)
-                                                  ,vector)
-                                          ,@(rec (cdr bind*))))))))))))
-               (rec bind*)))))))
+         (macrolet ((indices-of (id)
+                      `(gethash ,id ,',table)))
+           ,@(rec bind*))))))
 
 ;;; WITH-SHADER
 
-(defmacro with-shader ((&rest binds) &body body)
-  (let* ((length (length binds))
-         (array-vars (alexandria:make-gensym-list length))
-         (buf-vars (alexandria:make-gensym-list length)))
-    `(with-gl-vector ,(mapcar (lambda (b g) `(,g ,(cadr b))) binds array-vars)
-       (with-buffer ,(mapcar #'list buf-vars)
-         ,@(labels ((rec (binds)
-                      (if (endp binds)
-                          body
-                          `((with-prog (,(caar binds)
-                                        (vertex-shader ',(caar binds))
-                                        (fragment-shader ',(caar binds)))
-                              (with-vertex-array ((,(gensym)
-                                                   (link-attributes
-                                                     ',(caar binds)
-                                                     ,(caar binds))))
-                                ,@(let ((uniforms (getf (car binds) :uniform)))
-                                    (if uniforms
-                                        `((let ,(mapcar
-                                                  (lambda (uniform)
-                                                    (destructuring-bind
-                                                        (var . original)
-                                                        (uiop:ensure-list
-                                                          uniform)
-                                                      `(,var
-                                                        (gl:get-uniform-location
-                                                          ,(caar binds)
-                                                          ,(if original
-                                                               (change-case:camel-case
-                                                                 (symbol-name
-                                                                   (car
-                                                                     original)))
-                                                               (change-case:camel-case
-                                                                 (symbol-name
-                                                                   var)))))))
-                                                  uniforms)
-                                            ,@(rec (cdr binds))))
-                                        (rec (cdr binds))))))))))
-             (rec binds))))))
+(defmacro with-shader ((&rest bind*) &body body)
+  (let ((uniform-vars
+         (alexandria:make-gensym-list
+           (loop :for (nil . clause*) :in bind*
+                 :sum (loop :for c :in clause*
+                            :when (eq :uniform (car c))
+                              :sum (count-if #'listp (cdr c)))))))
+    `(with-vao ,(mapcar
+                  (lambda (bind)
+                    (destructuring-bind
+                        (class &rest clause*)
+                        bind
+                      `(,class
+                        ,@(loop :for clause :in clause*
+                                :when (eq :indices (car clause))
+                                  :collect `(:indices
+                                             (coerce ,(second clause)
+                                                     '(array (unsigned-byte 8)
+                                                       (*)))
+                                             :target :element-array-buffer)
+                                :when (eq :uniform (car clause))
+                                  :collect `(:uniform
+                                             ,@(mapcar #'alexandria:ensure-car
+                                                       (cdr clause)))
+                                :else
+                                  :collect clause)
+                        (:attributes ',class)
+                        (:shader (vertex-shader ',class)
+                         (fragment-shader ',class)))))
+                  bind*)
+       ,@(let ((uniforms
+                (mapcan
+                  (lambda (bind)
+                    (remove-if #'symbolp (cdr (assoc :uniform (cdr bind)))))
+                  bind*)))
+           (if (null uniforms)
+               body
+               `((with-textures ,(mapcar
+                                   (lambda (uniform gvar)
+                                     (destructuring-bind
+                                         (var target init)
+                                         uniform
+                                       `(,gvar ,target :init ,init :uniform
+                                         ,var)))
+                                   uniforms uniform-vars)
+                   ,@body)))))))
+
+(defun pprint-with-shader (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; Pprint-logical-block.
+                      "~W~^ ~1I" ; Operator.
+                      (list "~:<" ; Binds
+                            (list "~:<" ; Each bind clause.
+                                  "~@{" ; Clause.
+                                  "~W~^ ~1I~_" ; Var
+                                  "~@{" ; Each options
+                                  (list "~:<" ; option.
+                                        "~W~^ ~:I~@_" ; option key.
+                                        "~@{~W~^ ~:_~}" ; option body.
+                                        "~:>~^ ~_")
+                                  "~}" ; Options.
+                                  "~}" ; End clause.
+                                  "~:>")
+                            "~:>~^ ~_")
+                      "~@{~W~^ ~_~}" ; Body.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
 
 ;;;; WITH-2D-TEXTURES
 
@@ -520,7 +677,7 @@
   '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
 
 (defmacro with-clear
-          ((var-win (&rest bufs) &key (color ''(1.0 1.0 1.0 1.0))) &body body)
+          ((var-win (&rest bufs) &key (color ''(0.0 0.0 0.0 1.0))) &body body)
   `(progn
     (apply #'gl:clear-color ,color)
     (gl:clear ,@(mapcar (lambda (buf) `(the buffer-bit ,buf)) bufs))
@@ -546,3 +703,17 @@
     stream exp))
 
 (set-pprint-dispatch '(cons (member with-clear)) 'pprint-with-clear)
+
+;;;; DRAW-ELEMENTS
+
+(deftype draw-mode ()
+  '(member :points :line-strip
+           :line-loop :lines
+           :line-strip-adjacency :lines-adjacency
+           :triangle-strip :triangle-fan
+           :triangles :tiangle-strip-adjacency
+           :triangles-adjacency :patches))
+
+(defun draw-elements (mode cl-vector &key (offset 0))
+  (%gl:draw-elements mode (length cl-vector)
+                     (foreign-type (array-element-type cl-vector)) offset))

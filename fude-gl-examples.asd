@@ -2,13 +2,13 @@
 (in-package :asdf)
 (defsystem "fude-gl-examples"
   :version
-  "0.7.4"
+  "0.8.0"
   :depends-on
   (
    "fude-gl"
    "sdl2" ; window manager.
    "opticl" ; image loader.
-   "sb-cga" ; Matrix operations.
+   "3d-matrices" ; Matrix operations.
    )
   :pathname
   "examples/"
