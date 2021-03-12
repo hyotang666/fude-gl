@@ -506,6 +506,11 @@
                                   ,(change-case:camel-case
                                      (symbol-name (second uniform)))))))))
 
+(defun ensure-second (thing)
+  (if (listp thing)
+      (second thing)
+      thing))
+
 (defmacro with-vao ((&rest bind*) &body body)
   (let ((table (gensym "TABLE")))
     (labels ((<init-buffer> (clause buf vec)
@@ -518,10 +523,6 @@
              (clause (clause bind)
                (or (assoc clause (cdr bind))
                    (error "Missing required cluase ~S in ~S" clause bind)))
-             (ensure-second (u)
-               (if (symbolp u)
-                   u
-                   (second u)))
              (rec (bind*)
                (if (endp bind*)
                    body
