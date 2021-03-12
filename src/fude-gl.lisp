@@ -520,7 +520,7 @@
       `(the ,type ,form)))
 
 (defmacro with-vao ((&rest bind*) &body body)
-  (let ((table (gensym "TABLE")))
+  (let ((refs))
     (labels ((<init-buffer> (clause buf vec)
                (destructuring-bind
                    (&key (target :array-buffer) (usage :static-draw))
@@ -542,9 +542,7 @@
                    `((let ,uniforms
                        ,@(rec (cdr bind*))))
                    (rec (cdr bind*))))
-             (<body-form>
-                 (bind* prog
-                  &optional indices-bind ebo-bind ebo-inits table-inits)
+             (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
                (let ((vertices (gensym "VERTICES"))
                      (vbo (gensym "VBO"))
                      (uniforms
@@ -563,23 +561,21 @@
                                            ,@(<init-buffer> verts vbo vertices)
                                            (link-attributes ,attr ,prog)
                                            ,@ebo-inits))
-                        ,@table-inits
                         ,@(<may-uniform-bind> uniforms bind*))))))
              (body (vec prog bind*)
                (if vec
                    (alexandria:with-unique-names (vector indices ebo)
                      `(let ((,vector ,(second vec)))
-                        ,(<body-form> bind* prog `((,indices ,vector))
-                                      (list ebo)
-                                      (<init-buffer> vec ebo indices)
-                                      `((setf (gethash ,(caar bind*) ,table)
-                                                ,vector)))))
+                        ,(progn
+                          (push (list (caar bind*) `',vector) refs)
+                          (<body-form> bind* prog `((,indices ,vector))
+                                       (list ebo)
+                                       (<init-buffer> vec ebo indices)))))
                    (<body-form> bind* prog))))
-      `(let ((,table (make-hash-table)))
-         (macrolet ((indices-of (id)
-                      `(or (gethash ,id ,',table)
-                           (error "No indices for ~S." ,id))))
-           ,@(rec bind*))))))
+      (let ((forms (rec bind*)))
+        `(macrolet ((indices-of (id)
+                      (case id ,@refs (otherwise "No indices for ~S" id))))
+           ,@forms)))))
 
 ;;; WITH-SHADER
 
