@@ -517,7 +517,7 @@
                                    (the buffer-usage ,usage) ,vec))))
              (clause (clause bind)
                (or (assoc clause (cdr bind))
-                   (error "Missing ~S. ~S" clause bind)))
+                   (error "Missing required cluase ~S in ~S" clause bind)))
              (ensure-second (u)
                (if (symbolp u)
                    u
@@ -537,8 +537,6 @@
                          (verts (clause :vertices (car bind*)))
                          (attr (second (clause :attributes (car bind*)))))
                      (check-type (car bind*) (cons symbol (cons *)))
-                     (assert (every (lambda (x) (assoc x (cdar bind*)))
-                                    '(:vertices :indices :attributes :shader)))
                      (let ((required (uniforms (caar bind*)))
                            (actual (mapcar #'ensure-second uniforms)))
                        (assert (null (set-exclusive-or required actual)) ()
