@@ -532,7 +532,7 @@
                          (vbo (gensym "VBO"))
                          (ebo (gensym "EBO"))
                          (shader (cdr (clause :shader (car bind*))))
-                         (vec (clause :indices (car bind*)))
+                         (vec (assoc :indices (cdar bind*)))
                          (uniforms (cdr (assoc :uniform (cdar bind*))))
                          (verts (clause :vertices (car bind*)))
                          (attr (second (clause :attributes (car bind*)))))
@@ -542,20 +542,36 @@
                        (assert (null (set-exclusive-or required actual)) ()
                          "Mismatch uniforms. ~S but ~S" required actual))
                      `((with-prog (,prog ,@shader)
-                         (let ((,vector ,(second vec)))
-                           (with-gl-vector ((,vertices ,(second verts))
-                                            (,indices ,vector))
-                             (with-buffer ,(list vbo ebo)
-                               (with-vertex-array ((,(caar bind*)
-                                                    ,@(<init-buffer> verts vbo
-                                                                     vertices)
-                                                    (link-attributes ,attr
-                                                                     ,prog)
-                                                    ,@(<init-buffer> vec ebo
-                                                                     indices)))
-                                 (setf (gethash ,(caar bind*) ,table) ,vector)
-                                 (let ,(mapcar (<uniform-binder> prog) uniforms)
-                                   ,@(rec (cdr bind*)))))))))))))
+                         ,(if vec
+                              `(let ((,vector ,(second vec)))
+                                 (with-gl-vector ((,vertices ,(second verts))
+                                                  ((,indices ,vector)))
+                                   (with-buffer ,(list vbo ebo)
+                                     (with-vertex-array ((,(caar bind*)
+                                                          ,@(<init-buffer>
+                                                              verts vbo
+                                                              vertices)
+                                                          (link-attributes
+                                                            ,attr ,prog)
+                                                          ,@(<init-buffer> vec
+                                                                           ebo
+                                                                           indices)))
+                                       (setf (gethash ,(caar bind*) ,table)
+                                               ,vector)
+                                       (let ,(mapcar (<uniform-binder> prog)
+                                                     uniforms)
+                                         ,@(rec (cdr bind*)))))))
+                              `(with-gl-vector ((,vertices ,(second verts)))
+                                 (with-buffer ,(list vbo)
+                                   (with-vertex-array ((,(caar bind*)
+                                                        ,@(<init-buffer> verts
+                                                                         vbo
+                                                                         vertices)
+                                                        (link-attributes ,attr
+                                                                         ,prog)))
+                                     (let ,(mapcar (<uniform-binder> prog)
+                                                   uniforms)
+                                       ,@(rec (cdr bind*)))))))))))))
       `(let ((,table (make-hash-table)))
          (macrolet ((indices-of (id)
                       `(or (gethash ,id ,',table)
