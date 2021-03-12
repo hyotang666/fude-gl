@@ -511,15 +511,23 @@
       (second thing)
       thing))
 
+(defun type-assert (form type)
+  (if (constantp form)
+      (progn
+       (assert (typep form type) ()
+         "~S is not type of ~S" form (millet:type-expand type))
+       form)
+      `(the ,type ,form)))
+
 (defmacro with-vao ((&rest bind*) &body body)
   (let ((table (gensym "TABLE")))
     (labels ((<init-buffer> (clause buf vec)
                (destructuring-bind
                    (&key (target :array-buffer) (usage :static-draw))
                    (cddr clause)
-                 `((gl:bind-buffer (the buffer-target ,target) ,buf)
-                   (gl:buffer-data (the buffer-target ,target)
-                                   (the buffer-usage ,usage) ,vec))))
+                 `((gl:bind-buffer ,(type-assert target 'buffer-target) ,buf)
+                   (gl:buffer-data ,(type-assert target 'buffer-target)
+                                   ,(type-assert usage 'buffer-usage) ,vec))))
              (clause (clause bind)
                (or (assoc clause (cdr bind))
                    (error "Missing required cluase ~S in ~S" clause bind)))

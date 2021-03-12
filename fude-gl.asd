@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.18.3"
+  "1.19.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -15,6 +15,7 @@
    "alexandria" ; Public domain utilities.
    "cl-change-case" ; Convert lisp case to camel case.
    "sdl2" ; Windowing support.
+   "millet" ; Wrapper for tiny utilities.
    )
   :pathname
   "src/"
