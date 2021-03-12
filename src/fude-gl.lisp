@@ -534,7 +534,9 @@
                    `((let ,uniforms
                        ,@(rec (cdr bind*))))
                    (rec (cdr bind*))))
-             (body (vec prog bind*)
+             (<body-form>
+                 (bind* prog
+                  &optional indices-bind ebo-bind ebo-inits table-inits)
                (let ((vertices (gensym "VERTICES"))
                      (vbo (gensym "VBO"))
                      (uniforms
@@ -547,28 +549,24 @@
                      (verts (clause :vertices (car bind*)))
                      (attr (second (clause :attributes (car bind*)))))
                  (check-type (car bind*) (cons symbol (cons *)))
-                 (if vec
-                     (alexandria:with-unique-names (vector indices ebo)
-                       `(let ((,vector ,(second vec)))
-                          (with-gl-vector ((,vertices ,(second verts))
-                                           (,indices ,vector))
-                            (with-buffer ,(list vbo ebo)
-                              (with-vertex-array ((,(caar bind*)
-                                                   ,@(<init-buffer> verts vbo
-                                                                    vertices)
-                                                   (link-attributes ,attr
-                                                                    ,prog)
-                                                   ,@(<init-buffer> vec ebo
-                                                                    indices)))
-                                (setf (gethash ,(caar bind*) ,table) ,vector)
-                                ,@(<may-uniform-bind> uniforms bind*))))))
-                     `(with-gl-vector ((,vertices ,(second verts)))
-                        (with-buffer ,(list vbo)
-                          (with-vertex-array ((,(caar bind*)
-                                               ,@(<init-buffer> verts vbo
-                                                                vertices)
-                                               (link-attributes ,attr ,prog)))
-                            ,@(<may-uniform-bind> uniforms bind*))))))))
+                 `(with-gl-vector ((,vertices ,(second verts)) ,@indices-bind)
+                    (with-buffer ,(list* vbo ebo-bind)
+                      (with-vertex-array ((,(caar bind*)
+                                           ,@(<init-buffer> verts vbo vertices)
+                                           (link-attributes ,attr ,prog)
+                                           ,@ebo-inits))
+                        ,@table-inits
+                        ,@(<may-uniform-bind> uniforms bind*))))))
+             (body (vec prog bind*)
+               (if vec
+                   (alexandria:with-unique-names (vector indices ebo)
+                     `(let ((,vector ,(second vec)))
+                        ,(<body-form> bind* prog `((,indices ,vector))
+                                      (list ebo)
+                                      (<init-buffer> vec ebo indices)
+                                      `((setf (gethash ,(caar bind*) ,table)
+                                                ,vector)))))
+                   (<body-form> bind* prog))))
       `(let ((,table (make-hash-table)))
          (macrolet ((indices-of (id)
                       `(or (gethash ,id ,',table)
