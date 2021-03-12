@@ -560,7 +560,8 @@
                                    ,@(rec (cdr bind*)))))))))))))
       `(let ((,table (make-hash-table)))
          (macrolet ((indices-of (id)
-                      `(gethash ,id ,',table)))
+                      `(or (gethash ,id ,',table)
+                           (error "No indices for ~S." ,id))))
            ,@(rec bind*))))))
 
 ;;; WITH-SHADER
