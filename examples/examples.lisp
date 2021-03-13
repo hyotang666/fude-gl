@@ -9,7 +9,10 @@
 (defun demos ()
   (restart-case (mapc #'funcall
                       '(hello-triangle uniform-demo colored-triangle
-                                       element-buffer texture-demo mix-demo))
+                                       element-buffer texture-demo mix-demo
+                                       hello double transform-demo translate-x
+                                       translate-y scaling rotating coord-demo
+                                       depth-demo cubes cameras walk-around))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -224,15 +227,17 @@
         (fude-gl:with-shader ((texture-demo
                                 (:vertices *quad*)
                                 (:indices '(0 1 2 2 3 0))
-                                (:uniform (tex :texture-2d
-                                           (fude-gl:tex-image-2d *png*)))))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   texture-demo))))))))))
+                                (:uniform (tex-loc tex))))
+          (fude-gl:with-textures ((tex :texture-2d
+                                       :init (fude-gl:tex-image-2d *png*)))
+            (gl:uniformi tex-loc tex)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     texture-demo)))))))))))
 
 ;;;; MIX
 
@@ -271,17 +276,20 @@
         (fude-gl:with-shader ((mix-demo
                                 (:vertices *mix-demo*)
                                 (:indices '(0 1 2 2 3 0))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *png*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *logo*)))))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (sdl2:gl-swap-window win)
-              (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                 mix-demo)))))))))
+                                (:uniform (tex1-loc tex1) (tex2-loc tex2))))
+          (fude-gl:with-textures ((tex1 :texture-2d
+                                        :init (fude-gl:tex-image-2d *png*))
+                                  (tex2 :texture-2d
+                                        :init (fude-gl:tex-image-2d *logo*)))
+            (gl:uniformi tex1-loc tex1)
+            (gl:uniformi tex2-loc tex2)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (sdl2:gl-swap-window win)
+                (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                   mix-demo))))))))))
 
 ;;;; HELLO from glut-examples.
 
@@ -400,26 +408,29 @@
         (fude-gl:with-shader ((transform-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          transform)))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (gl:uniform-matrix transform 4
-                                   (vector
-                                     (3d-matrices:marr
-                                       (3d-matrices:nmscale
-                                         (3d-matrices:nmrotate
-                                           (3d-matrices:meye 4) 3d-vectors:+vz+
-                                           (fude-gl:radians 90))
-                                         (3d-vectors:vec 0.5 0.5 0.5)))))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   transform-demo))))))))))
+                                (:uniform tex1 tex2 transform)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (gl:uniform-matrix transform 4
+                                     (vector
+                                       (3d-matrices:marr
+                                         (3d-matrices:nmscale
+                                           (3d-matrices:nmrotate
+                                             (3d-matrices:meye 4)
+                                             3d-vectors:+vz+
+                                             (fude-gl:radians 90))
+                                           (3d-vectors:vec 0.5 0.5 0.5)))))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     transform-demo)))))))))))
 
 (defun translate-x ()
   (sdl2:with-init (:everything)
@@ -432,26 +443,28 @@
         (fude-gl:with-shader ((transform-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          transform)))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (sleep (/ 1 60))
-                (gl:uniform-matrix transform 4
-                                   (vector
-                                     (3d-matrices:marr
-                                       (3d-matrices:mtranslation
-                                         (3d-vectors:vec
-                                           (sin (get-internal-real-time)) 0.0
-                                           0.0)))))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   transform-demo))))))))))
+                                (:uniform tex1 tex2 transform)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (sleep (/ 1 60))
+                  (gl:uniform-matrix transform 4
+                                     (vector
+                                       (3d-matrices:marr
+                                         (3d-matrices:mtranslation
+                                           (3d-vectors:vec
+                                             (sin (get-internal-real-time)) 0.0
+                                             0.0)))))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     transform-demo)))))))))))
 
 (defun translate-y ()
   (sdl2:with-init (:everything)
@@ -464,27 +477,29 @@
         (fude-gl:with-shader ((transform-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          transform)))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (sleep (/ 1 60))
-                (gl:uniform-matrix transform 4
-                                   (vector
-                                     (3d-matrices:marr
-                                       (3d-matrices:mtranslation
-                                         (3d-vectors:vec 0.0
-                                                         (sin
-                                                           (get-internal-real-time))
-                                                         0.0)))))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   transform-demo))))))))))
+                                (:uniform tex1 tex2 transform)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (sleep (/ 1 60))
+                  (gl:uniform-matrix transform 4
+                                     (vector
+                                       (3d-matrices:marr
+                                         (3d-matrices:mtranslation
+                                           (3d-vectors:vec 0.0
+                                                           (sin
+                                                             (get-internal-real-time))
+                                                           0.0)))))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     transform-demo)))))))))))
 
 (defun scaling ()
   (sdl2:with-init (:everything)
@@ -497,30 +512,32 @@
         (fude-gl:with-shader ((transform-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          transform)))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (sleep (/ 1 5))
-                (gl:uniform-matrix transform 4
-                                   (vector
-                                     (3d-matrices:marr
-                                       (3d-matrices:nmscale
-                                         (3d-matrices:mtranslation
-                                           (3d-vectors:vec 0 0 0))
-                                         (let ((v
-                                                (abs
-                                                  (sin
-                                                    (get-internal-real-time)))))
-                                           (3d-vectors:vec v v 0.0))))))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   transform-demo))))))))))
+                                (:uniform tex1 tex2 transform)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (sleep (/ 1 5))
+                  (gl:uniform-matrix transform 4
+                                     (vector
+                                       (3d-matrices:marr
+                                         (3d-matrices:nmscale
+                                           (3d-matrices:mtranslation
+                                             (3d-vectors:vec 0 0 0))
+                                           (let ((v
+                                                  (abs
+                                                    (sin
+                                                      (get-internal-real-time)))))
+                                             (3d-vectors:vec v v 0.0))))))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     transform-demo)))))))))))
 
 (defun rotating ()
   (sdl2:with-init (:everything)
@@ -533,28 +550,30 @@
         (fude-gl:with-shader ((transform-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          transform)))
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (sleep (/ 1 10))
-                (gl:uniform-matrix transform 4
-                                   (vector
-                                     (3d-matrices:marr
-                                       (3d-matrices:nmrotate
-                                         (3d-matrices:mtranslation
-                                           (3d-vectors:vec 0 0 0))
-                                         3d-vectors:+vz+
-                                         (fude-gl:radians
-                                           (get-internal-real-time))))))
-                (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                   transform-demo))))))))))
+                                (:uniform tex1 tex2 transform)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  (sleep (/ 1 10))
+                  (gl:uniform-matrix transform 4
+                                     (vector
+                                       (3d-matrices:marr
+                                         (3d-matrices:nmrotate
+                                           (3d-matrices:mtranslation
+                                             (3d-vectors:vec 0 0 0))
+                                           3d-vectors:+vz+
+                                           (fude-gl:radians
+                                             (get-internal-real-time))))))
+                  (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                     transform-demo)))))))))))
 
 ;;;; COORD-DEMO
 
@@ -587,33 +606,35 @@
         (fude-gl:with-shader ((coord-demo
                                 (:vertices *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          model view projection)))
-          (let ((m
-                 (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
-                                       (fude-gl:radians -55)))
-                (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
-                (p
-                 (3d-matrices:mperspective 45
-                                           (multiple-value-call #'/
-                                             (sdl2:get-window-size win))
-                                           0.1 100)))
-            (flet ((send (matrix uniform)
-                     (gl:uniform-matrix uniform 4
-                                        (vector (3d-matrices:marr matrix)))))
-              (sdl2:with-event-loop (:method :poll)
-                (:quit ()
-                  t)
-                (:idle ()
-                  (fude-gl:with-clear (win (:color-buffer-bit))
-                    (send m model)
-                    (send v view)
-                    (send p projection)
-                    (fude-gl:draw-elements :triangles (fude-gl:indices-of
-                                                       coord-demo))))))))))))
+                                (:uniform tex1 tex2 model view projection)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (let ((m
+                   (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
+                                         (fude-gl:radians -55)))
+                  (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
+                  (p
+                   (3d-matrices:mperspective 45
+                                             (multiple-value-call #'/
+                                               (sdl2:get-window-size win))
+                                             0.1 100)))
+              (flet ((send (matrix uniform)
+                       (gl:uniform-matrix uniform 4
+                                          (vector (3d-matrices:marr matrix)))))
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (fude-gl:with-clear (win (:color-buffer-bit))
+                      (send m model)
+                      (send v view)
+                      (send p projection)
+                      (fude-gl:draw-elements :triangles (fude-gl:indices-of
+                                                         coord-demo)))))))))))))
 
 ;;;; DEPTH-DEMO
 
@@ -664,37 +685,40 @@
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((depth-demo
                                 (:vertices *depth-demo*)
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          model view projection)))
-          (flet ((send (matrix uniform)
-                   (gl:uniform-matrix uniform 4
-                                      (vector (3d-matrices:marr matrix)))))
-            (gl:enable :depth-test)
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                (sleep (/ 1 15))
-                (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                  (let ((m
-                         (3d-matrices:nmrotate (3d-matrices:meye 4)
-                                               (3d-vectors:vec 0.5 1 0)
-                                               (fude-gl:radians
-                                                 (get-internal-real-time))))
-                        (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
-                        (p
-                         (3d-matrices:mperspective 45
-                                                   (multiple-value-call #'/
-                                                     (sdl2:get-window-size
-                                                       win))
-                                                   0.1 100)))
-                    (send m model)
-                    (send v view)
-                    (send p projection)
-                    (gl:draw-arrays :triangles 0 36)))))))))))
+                                (:uniform tex1 tex2 model view projection)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (flet ((send (matrix uniform)
+                     (gl:uniform-matrix uniform 4
+                                        (vector (3d-matrices:marr matrix)))))
+              (gl:enable :depth-test)
+              (sdl2:with-event-loop (:method :poll)
+                (:quit ()
+                  t)
+                (:idle ()
+                  (sleep (/ 1 15))
+                  (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                    (let ((m
+                           (3d-matrices:nmrotate (3d-matrices:meye 4)
+                                                 (3d-vectors:vec 0.5 1 0)
+                                                 (fude-gl:radians
+                                                   (get-internal-real-time))))
+                          (v
+                           (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
+                          (p
+                           (3d-matrices:mperspective 45
+                                                     (multiple-value-call #'/
+                                                       (sdl2:get-window-size
+                                                         win))
+                                                     0.1 100)))
+                      (send m model)
+                      (send v view)
+                      (send p projection)
+                      (gl:draw-arrays :triangles 0 36))))))))))))
 
 ;;;; CUBES
 
@@ -716,49 +740,293 @@
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((cubes
                                 (:vertices *depth-demo*)
-                                (:uniform (tex1 :texture-2d
-                                           (fude-gl:tex-image-2d *image*))
-                                          (tex2 :texture-2d
-                                           (fude-gl:tex-image-2d *face*))
-                                          model view projection)))
-          (flet ((send (matrix uniform)
-                   (gl:uniform-matrix uniform 4
-                                      (vector (3d-matrices:marr matrix)))))
-            (let ((cube-positions
-                   (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                         (3d-vectors:vec -1.5 -2.2 -2.5)
-                         (3d-vectors:vec -3.8 -2.0 -12.3)
-                         (3d-vectors:vec 2.4 -0.4 -3.5)
-                         (3d-vectors:vec -1.7 3 -7.5)
-                         (3d-vectors:vec 1.3 -2 -2.5)
-                         (3d-vectors:vec 1.5 2 -2.5)
-                         (3d-vectors:vec 1.5 0.2 -1.5)
-                         (3d-vectors:vec -1.3 1 -1.5))))
-              (gl:enable :depth-test)
-              (sdl2:with-event-loop (:method :poll)
-                (:quit ()
-                  t)
-                (:idle ()
-                  (sleep (/ 1 5))
-                  (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                    (loop :for pos :in cube-positions
-                          :for i :upfrom 0
-                          :do (let ((m
-                                     (3d-matrices:nmrotate
-                                       (3d-matrices:mtranslation pos)
-                                       (3d-vectors:vec 1 0.3 0.5)
-                                       (fude-gl:radians (* 20 i))))
-                                    (v
-                                     (3d-matrices:mtranslation
-                                       (3d-vectors:vec 0 0 -3)))
-                                    (p
-                                     (3d-matrices:mperspective 45
-                                                               (multiple-value-call
-                                                                   #'/
-                                                                 (sdl2:get-window-size
-                                                                   win))
-                                                               0.1 100)))
-                                (send m model)
-                                (send v view)
+                                (:uniform tex1 tex2 model view projection)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (flet ((send (matrix uniform)
+                     (gl:uniform-matrix uniform 4
+                                        (vector (3d-matrices:marr matrix)))))
+              (let ((cube-positions
+                     (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+                           (3d-vectors:vec -1.5 -2.2 -2.5)
+                           (3d-vectors:vec -3.8 -2.0 -12.3)
+                           (3d-vectors:vec 2.4 -0.4 -3.5)
+                           (3d-vectors:vec -1.7 3 -7.5)
+                           (3d-vectors:vec 1.3 -2 -2.5)
+                           (3d-vectors:vec 1.5 2 -2.5)
+                           (3d-vectors:vec 1.5 0.2 -1.5)
+                           (3d-vectors:vec -1.3 1 -1.5))))
+                (gl:enable :depth-test)
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (sleep (/ 1 5))
+                    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (loop :for pos :in cube-positions
+                            :for i :upfrom 0
+                            :do (let ((m
+                                       (3d-matrices:nmrotate
+                                         (3d-matrices:mtranslation pos)
+                                         (3d-vectors:vec 1 0.3 0.5)
+                                         (fude-gl:radians (* 20 i))))
+                                      (v
+                                       (3d-matrices:mtranslation
+                                         (3d-vectors:vec 0 0 -3)))
+                                      (p
+                                       (3d-matrices:mperspective 45
+                                                                 (multiple-value-call
+                                                                     #'/
+                                                                   (sdl2:get-window-size
+                                                                     win))
+                                                                 0.1 100)))
+                                  (send m model)
+                                  (send v view)
+                                  (send p projection)
+                                  (gl:draw-arrays :triangles 0 36))))))))))))))
+
+;;;; CAMERAS
+
+(defun cameras ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((cubes
+                                (:vertices *depth-demo*)
+                                (:uniform tex1 tex2 model view projection)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (flet ((send (matrix uniform)
+                     (gl:uniform-matrix uniform 4
+                                        (vector (3d-matrices:marr matrix)))))
+              (let ((cube-positions
+                     (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+                           (3d-vectors:vec -1.5 -2.2 -2.5)
+                           (3d-vectors:vec -3.8 -2.0 -12.3)
+                           (3d-vectors:vec 2.4 -0.4 -3.5)
+                           (3d-vectors:vec -1.7 3 -7.5)
+                           (3d-vectors:vec 1.3 -2 -2.5)
+                           (3d-vectors:vec 1.5 2 -2.5)
+                           (3d-vectors:vec 1.5 0.2 -1.5)
+                           (3d-vectors:vec -1.3 1 -1.5))))
+                (gl:enable :depth-test)
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (sleep (/ 1 15))
+                    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (let* ((radius 10)
+                             (v
+                              (3d-matrices:mlookat
+                                (3d-vectors:vec
+                                  (* (sin (get-internal-real-time)) radius) 0
+                                  (* (cos (get-internal-real-time)) radius))
+                                (3d-vectors:vec 0 0 0) (3d-vectors:vec 0 1 0))))
+                        (loop :for pos :in cube-positions
+                              :for i :upfrom 0
+                              :do (let ((m
+                                         (3d-matrices:nmrotate
+                                           (3d-matrices:mtranslation pos)
+                                           (3d-vectors:vec 1 0.3 0.5)
+                                           (fude-gl:radians (* 20 i))))
+                                        (p
+                                         (3d-matrices:mperspective 45
+                                                                   (multiple-value-call
+                                                                       #'/
+                                                                     (sdl2:get-window-size
+                                                                       win))
+                                                                   0.1 100)))
+                                    (send m model)
+                                    (send v view)
+                                    (send p projection)
+                                    (gl:draw-arrays :triangles 0
+                                                    36)))))))))))))))
+
+;;;; WALK-AROUND
+
+(defparameter *cube-positions*
+  (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+        (3d-vectors:vec -1.5 -2.2 -2.5) (3d-vectors:vec -3.8 -2.0 -12.3)
+        (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
+        (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
+        (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
+
+(defun move-camera (keysym camera-front camera-up camera-pos)
+  (let ((camera-speed 0.05))
+    (case (sdl2:scancode keysym)
+      (:scancode-up
+       (3d-vectors:nv+ camera-pos (3d-vectors:v* camera-speed camera-front)))
+      (:scancode-down
+       (3d-vectors:nv- camera-pos (3d-vectors:v* camera-speed camera-front)))
+      (:scancode-left
+       (3d-vectors:v- camera-pos
+                      (3d-vectors:v*
+                        (3d-vectors:vunit
+                          (3d-vectors:vc camera-front camera-up))
+                        camera-speed)))
+      (:scancode-right
+       (3d-vectors:v+ camera-pos
+                      (3d-vectors:v*
+                        (3d-vectors:vunit
+                          (3d-vectors:vc camera-front camera-up))
+                        camera-speed)))
+      (otherwise camera-pos))))
+
+(defun walk-around ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((cubes
+                                (:vertices *depth-demo*)
+                                (:uniform tex1 tex2 model view projection)))
+          (fude-gl:with-textures ((image :texture-2d
+                                         :init (fude-gl:tex-image-2d *image*))
+                                  (face :texture-2d
+                                        :init (fude-gl:tex-image-2d *face*)))
+            (gl:uniformi tex1 image)
+            (gl:uniformi tex2 face)
+            (flet ((send (matrix uniform)
+                     (gl:uniform-matrix uniform 4
+                                        (vector (3d-matrices:marr matrix)))))
+              (let ((camera-pos (3d-vectors:vec 0 0 3))
+                    (camera-front (3d-vectors:vec 0 0 -1))
+                    (camera-up (3d-vectors:vec 0 1 0))
+                    (p
+                     (3d-matrices:mperspective 45
+                                               (multiple-value-call #'/
+                                                 (sdl2:get-window-size win))
+                                               0.1 100)))
+                (gl:enable :depth-test)
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:keydown (:keysym keysym)
+                    (setf camera-pos
+                            (move-camera keysym camera-front camera-up
+                                         camera-pos)))
+                  (:idle ()
+                    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (loop :for pos :in *cube-positions*
+                            :for i :upfrom 0
+                            :for m
+                                 = (3d-matrices:nmrotate
+                                     (3d-matrices:mtranslation pos)
+                                     (3d-vectors:vec 1 0.3 0.5)
+                                     (fude-gl:radians (* 20 i)))
+                            :do (send m model)
+                                (send
+                                  (3d-matrices:mlookat camera-pos
+                                                       (3d-vectors:v+
+                                                         camera-pos
+                                                         camera-front)
+                                                       camera-up)
+                                  view)
                                 (send p projection)
                                 (gl:draw-arrays :triangles 0 36)))))))))))))
+
+;;;; MOVEMENT-SPEED
+
+(defparameter *delta-time* 0)
+
+(defparameter *last-frame* 0)
+
+(defun move-camera-with-delta (keysym camera-front camera-up camera-pos)
+  (let ((camera-speed (* 0.05 (min 1 *delta-time*))))
+    (case (sdl2:scancode keysym)
+      (:scancode-up
+       (3d-vectors:nv+ camera-pos (3d-vectors:v* camera-speed camera-front)))
+      (:scancode-down
+       (3d-vectors:nv- camera-pos (3d-vectors:v* camera-speed camera-front)))
+      (:scancode-left
+       (3d-vectors:v- camera-pos
+                      (3d-vectors:v*
+                        (3d-vectors:vunit
+                          (3d-vectors:vc camera-front camera-up))
+                        camera-speed)))
+      (:scancode-right
+       (3d-vectors:v+ camera-pos
+                      (3d-vectors:v*
+                        (3d-vectors:vunit
+                          (3d-vectors:vc camera-front camera-up))
+                        camera-speed)))
+      (otherwise camera-pos))))
+
+(defun movement-speed ()
+  (uiop:nest (sdl2:with-init (:everything))
+             (sdl2:with-window (win :flags '(:shown :opengl)
+                                    :x 100
+                                    :y 100
+                                    :w 800
+                                    :h 600))
+             (sdl2:with-gl-context (context win))
+             (fude-gl:with-shader ((cubes
+                                     (:vertices *depth-demo*)
+                                     (:uniform tex1 tex2 model view
+                                               projection))))
+             (fude-gl:with-textures ((image :texture-2d
+                                            :init (fude-gl:tex-image-2d
+                                                    *image*))
+                                     (face :texture-2d
+                                           :init (fude-gl:tex-image-2d
+                                                   *face*))))
+             (flet ((send (matrix uniform)
+                          (gl:uniform-matrix uniform 4
+                                             (vector
+                                               (3d-matrices:marr matrix))))))
+             (let ((camera-pos (3d-vectors:vec 0 0 3))
+                   (camera-front (3d-vectors:vec 0 0 -1))
+                   (camera-up (3d-vectors:vec 0 1 0))
+                   (p
+                    (3d-matrices:mperspective 45
+                                              (multiple-value-call #'/
+                                                (sdl2:get-window-size win))
+                                              0.1 100))))
+             (sdl2:with-event-loop (:method :poll)
+               (:initialize ()
+                 (gl:uniformi tex1 image)
+                 (gl:uniformi tex2 face)
+                 (gl:enable :depth-test))
+               (:quit ()
+                 t)
+               (:keydown (:keysym keysym)
+                 (setf camera-pos
+                         (move-camera-with-delta keysym camera-front camera-up
+                                                 camera-pos)))
+               (:idle ()
+                 (let ((current-frame (sdl2:get-ticks)))
+                   (setf *delta-time* (- current-frame *last-frame*)
+                         *last-frame* current-frame))
+                 (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                   (loop :for pos :in *cube-positions*
+                         :for i :upfrom 0
+                         :for m
+                              = (3d-matrices:nmrotate
+                                  (3d-matrices:mtranslation pos)
+                                  (3d-vectors:vec 1 0.3 0.5)
+                                  (fude-gl:radians (* 20 i)))
+                         :do (send m model)
+                             (send
+                              (3d-matrices:mlookat camera-pos
+                                                   (3d-vectors:v+ camera-pos
+                                                                  camera-front)
+                                                   camera-up)
+                              view)
+                             (send p projection)
+                             (gl:draw-arrays :triangles 0 36)))))))

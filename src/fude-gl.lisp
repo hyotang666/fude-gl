@@ -441,13 +441,12 @@
             ,@(mapcan
                 (lambda (b)
                   (destructuring-bind
-                      (var target &key params init (uniform 0))
+                      (var target &key params init)
                       b
                     `((gl:active-texture ,var)
                       (gl:bind-texture ,(ensure-check target 'texture-target)
                                        ,var)
-                      ,@(<option-setters> params target) ,init
-                      (gl:uniformi ,uniform ,var))))
+                      ,@(<option-setters> params target) ,init)))
                 bind*)
             ,@body)
          (gl:delete-textures (list ,@(mapcar #'car bind*)))))))
@@ -581,51 +580,26 @@
 ;;; WITH-SHADER
 
 (defmacro with-shader ((&rest bind*) &body body)
-  (let ((uniform-vars
-         (alexandria:make-gensym-list
-           (loop :for (nil . clause*) :in bind*
-                 :sum (loop :for c :in clause*
-                            :when (eq :uniform (car c))
-                              :sum (count-if #'listp (cdr c)))))))
-    `(with-vao ,(mapcar
-                  (lambda (bind)
-                    (destructuring-bind
-                        (class &rest clause*)
-                        bind
-                      `(,class
-                        ,@(loop :for clause :in clause*
-                                :when (eq :indices (car clause))
-                                  :collect `(:indices
-                                             (coerce ,(second clause)
-                                                     '(array (unsigned-byte 8)
-                                                       (*)))
-                                             :target :element-array-buffer)
-                                :when (eq :uniform (car clause))
-                                  :collect `(:uniform
-                                             ,@(mapcar #'alexandria:ensure-car
-                                                       (cdr clause)))
-                                :else
-                                  :collect clause)
-                        (:attributes ',class)
-                        (:shader (vertex-shader ',class)
-                         (fragment-shader ',class)))))
-                  bind*)
-       ,@(let ((uniforms
-                (mapcan
-                  (lambda (bind)
-                    (remove-if #'symbolp (cdr (assoc :uniform (cdr bind)))))
-                  bind*)))
-           (if (null uniforms)
-               body
-               `((with-textures ,(mapcar
-                                   (lambda (uniform gvar)
-                                     (destructuring-bind
-                                         (var target init)
-                                         uniform
-                                       `(,gvar ,target :init ,init :uniform
-                                         ,var)))
-                                   uniforms uniform-vars)
-                   ,@body)))))))
+  `(with-vao ,(mapcar
+                (lambda (bind)
+                  (destructuring-bind
+                      (class &rest clause*)
+                      bind
+                    `(,class
+                      ,@(loop :for clause :in clause*
+                              :when (eq :indices (car clause))
+                                :collect `(:indices
+                                           (coerce ,(second clause)
+                                                   '(array (unsigned-byte 8)
+                                                     (*)))
+                                           :target :element-array-buffer)
+                              :else
+                                :collect clause)
+                      (:attributes ',class)
+                      (:shader (vertex-shader ',class)
+                       (fragment-shader ',class)))))
+                bind*)
+     ,@body))
 
 (defun pprint-with-shader (stream exp)
   (funcall
@@ -652,39 +626,6 @@
     stream exp))
 
 (set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
-
-;;;; WITH-2D-TEXTURES
-
-(defmacro with-2d-textures ((&rest binds) &body body)
-  `(with-textures ,(mapcar
-                     (lambda (bind)
-                       (let ((a (gensym "ARRAY"))
-                             (tc (gensym "TEXTURE-COMPONENTS")))
-                         (destructuring-bind
-                             (var array &rest options)
-                             bind
-                           `(,var
-                             (let ((,a ,array))
-                               (flet ((,tc (array)
-                                        (ecase (array-dimension array 2)
-                                          (3 :rgb)
-                                          (4 :rgba))))
-                                 (gl:tex-image-2d :texture-2d 0 ; mipmap depth
-                                                  (,tc ,a)
-                                                  (array-dimension ,a 0) ; width
-                                                  (array-dimension ,a 1) ; height
-                                                  0 ; legacy
-                                                  (,tc ,a)
-                                                  (foreign-type
-                                                    (array-element-type ,a))
-                                                  (make-array
-                                                    (array-total-size ,a)
-                                                    :element-type (array-element-type
-                                                                    ,a)
-                                                    :displaced-to ,a))))
-                             ,@options))))
-                     binds)
-     ,@body))
 
 ;;;; WITH-CLEAR
 
