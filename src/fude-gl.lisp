@@ -6,6 +6,7 @@
            #:defshader
            ;;;; FUNDAMENTAL-CLASSES
            #:xy
+           #:xyz
            #:st
            #:rgb
            ;;;; UTILITIES
