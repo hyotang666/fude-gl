@@ -9,6 +9,7 @@
    "sdl2" ; window manager.
    "opticl" ; image loader.
    "3d-matrices" ; Matrix operations.
+   "dexador" ; http client.
    )
   :pathname
   "examples/"
