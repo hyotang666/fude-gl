@@ -368,16 +368,18 @@
 
 ;;;; MATRIX-OPERATIONS
 
-(let ((pathname (merge-pathnames "container.jpg" (user-homedir-pathname))))
-  (unless (probe-file pathname)
-    (dex:fetch "https://learnopengl.com/img/textures/container.jpg" pathname))
-  (defparameter *image* (opticl:read-jpeg-file pathname)))
+(defparameter *image*
+  (let ((pathname (merge-pathnames "container.jpg" (user-homedir-pathname))))
+    (unless (probe-file pathname)
+      (dex:fetch "https://learnopengl.com/img/textures/container.jpg"
+                 pathname))
+    (opticl:read-jpeg-file pathname)))
 
-(let ((pathname (merge-pathnames "awesomeface.png" (user-homedir-pathname))))
-  (unless (probe-file pathname)
-    (dex:fetch "https://learnopengl.com/img/textures/awesomeface.png"
-               pathname))
-  (defparameter *face*
+(defparameter *face*
+  (let ((pathname (merge-pathnames "awesomeface.png" (user-homedir-pathname))))
+    (unless (probe-file pathname)
+      (dex:fetch "https://learnopengl.com/img/textures/awesomeface.png"
+                 pathname))
     (opticl:vertical-flip-image (opticl:read-png-file pathname))))
 
 (fude-gl:defshader transform-demo 330 (fude-gl:xy fude-gl:st)
