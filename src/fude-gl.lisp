@@ -23,6 +23,16 @@
 
 (in-package :fude-gl)
 
+;;;; UTILITIES
+
+(defun type-assert (form type)
+  (if (constantp form)
+      (progn
+       (assert (typep form type) ()
+         "~S is not type of ~S" form (millet:type-expand type))
+       form)
+      `(the ,type ,form)))
+
 ;;;; MATRIX
 
 (defun radians (degrees) (* degrees (/ pi 180)))
@@ -404,9 +414,9 @@
   (labels ((vname (k v)
              (case k
                ((:texture-wrap-s :texture-wrap-t :texture-wrap-r)
-                (ensure-check v 'texture-wrapping))
-               ((:texture-mag-filter) (ensure-check v 'texture-mag-filter))
-               ((:texture-min-fileter) (ensure-check v 'texture-min-filter))
+                (type-assert v 'texture-wrapping))
+               ((:texture-mag-filter) (type-assert v 'texture-mag-filter))
+               ((:texture-min-fileter) (type-assert v 'texture-min-filter))
                (otherwise v)))
            (<option-setters> (params target)
              (destructuring-bind
@@ -425,13 +435,9 @@
                                params))))
                  (loop :for (k v) :on params :by #'cddr
                        :collect `(gl:tex-parameter ,target
-                                                   ,(ensure-check k
-                                                                  'texture-pname)
-                                                   ,(vname k v))))))
-           (ensure-check (v type)
-             (if (constantp v)
-                 (progn (assert (typep v type)) v)
-                 `(the ,type ,v))))
+                                                   ,(type-assert k
+                                                                 'texture-pname)
+                                                   ,(vname k v)))))))
     ;; The body.
     `(destructuring-bind
          ,(mapcar #'car bind*)
@@ -444,7 +450,7 @@
                       (var target &key params init)
                       b
                     `((gl:active-texture ,var)
-                      (gl:bind-texture ,(ensure-check target 'texture-target)
+                      (gl:bind-texture ,(type-assert target 'texture-target)
                                        ,var)
                       ,@(<option-setters> params target) ,init)))
                 bind*)
@@ -510,14 +516,6 @@
   (if (listp thing)
       (second thing)
       thing))
-
-(defun type-assert (form type)
-  (if (constantp form)
-      (progn
-       (assert (typep form type) ()
-         "~S is not type of ~S" form (millet:type-expand type))
-       form)
-      `(the ,type ,form)))
 
 (defmacro with-vao ((&rest bind*) &body body)
   (let ((refs))
