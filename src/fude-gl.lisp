@@ -406,8 +406,6 @@
                :bgr-integer :rgba-integer
                :bgra-integer :stencil-index)))
 
-(defvar *active-counter* -1)
-
 (defmacro with-textures ((&rest bind*) &body body)
   ;; Trivial syntax check.
   (dolist (b bind*) (the (cons symbol (cons texture-target *)) b))
