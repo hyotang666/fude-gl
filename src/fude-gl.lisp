@@ -669,3 +669,36 @@
 (defun draw-elements (mode cl-vector &key (offset 0))
   (%gl:draw-elements mode (length cl-vector)
                      (foreign-type (array-element-type cl-vector)) offset))
+
+;;;; ENABLE-CAPABILITIES
+
+(deftype enable-capabilities ()
+  '(member :blend :clip-distance
+           :color-logic-op :cull-face
+           :debug-output :debug-output-synchronous
+           :depth-clamp :depth-test
+           :dither :framebuffer-srgb
+           :line-smooth :multisample
+           :polygon-offset-fill :polygon-offset-line
+           :polygon-offset-point :polygon-smooth
+           :primitive-restart :primitive-restart-fixed-index
+           :rastarizer-discard :sample-alpha-to-coverage
+           :sample-alpha-to-one :sample-coverage
+           :sample-shading :sample-mask
+           :scissor-test :stencil-test
+           :texture-cube-map-seamless :program-point-size))
+
+(deftype source-factor ()
+  '(or dest-factor
+       (member :src-alpha-saturate
+               :src1-color :one-minus-src1-color
+               :src1-alpha :one-minus-src1-alpha)))
+
+(deftype dest-factor ()
+  '(member :zero :one
+           :src-color :one-minus-src-color
+           :dst-color :one-minus-dst-color
+           :src-alpha :one-minus-src-alpha
+           :dst-alpha :one-minus-dst-alpha
+           :constant-color :one-minus-constant-color
+           :constant-alpha :one-minus-constant-alpha))
