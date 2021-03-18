@@ -650,7 +650,7 @@
           ((var-win (&rest bufs) &key (color ''(0.0 0.0 0.0 1.0))) &body body)
   `(progn
     (apply #'gl:clear-color ,color)
-    (gl:clear ,@(mapcar (lambda (buf) `(the buffer-bit ,buf)) bufs))
+    (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) bufs))
     ,@body
     (sdl2:gl-swap-window ,var-win)))
 
