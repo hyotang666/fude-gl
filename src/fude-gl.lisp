@@ -522,22 +522,26 @@
       (second thing)
       thing))
 
+(defun <init-buffer> (clause buf vec)
+  (destructuring-bind
+      (&key (target :array-buffer) (usage :static-draw))
+      (cddr clause)
+    `((gl:bind-buffer ,(type-assert target 'buffer-target) ,buf)
+      (gl:buffer-data ,(type-assert target 'buffer-target)
+                      ,(type-assert usage 'buffer-usage) ,vec))))
+
 (defmacro with-vao ((&rest bind*) &body body)
   (let ((refs))
-    (labels ((<init-buffer> (clause buf vec)
-               (destructuring-bind
-                   (&key (target :array-buffer) (usage :static-draw))
-                   (cddr clause)
-                 `((gl:bind-buffer ,(type-assert target 'buffer-target) ,buf)
-                   (gl:buffer-data ,(type-assert target 'buffer-target)
-                                   ,(type-assert usage 'buffer-usage) ,vec))))
-             (clause (clause bind)
+    (labels ((clause (clause bind)
                (or (assoc clause (cdr bind))
                    (error "Missing required cluase ~S in ~S" clause bind)))
              (rec (bind*)
                (if (endp bind*)
                    body
-                   (let ((prog (gensym "PROG")))
+                   (let ((prog
+                          (if (null (cdaar bind*))
+                              (gensym "PROG")
+                              (cadaar bind*))))
                      `((with-prog ((,prog ,@(cdr (clause :shader (car bind*)))))
                          ,(body (assoc :indices (cdar bind*)) prog bind*))))))
              (<may-uniform-bind> (uniforms bind*)
@@ -550,17 +554,19 @@
                      (vbo (gensym "VBO"))
                      (uniforms
                       (let* ((uniforms (cdr (assoc :uniform (cdar bind*))))
-                             (required (uniforms (caar bind*)))
+                             (required (uniforms (caaar bind*)))
                              (actual (mapcar #'ensure-second uniforms)))
                         (assert (null (set-exclusive-or required actual)) ()
                           "Mismatch uniforms. ~S but ~S" required actual)
                         (mapcar (<uniform-binder> prog) uniforms)))
                      (verts (clause :vertices (car bind*)))
                      (attr (second (clause :attributes (car bind*)))))
-                 (check-type (car bind*) (cons symbol (cons *)))
+                 (check-type (car bind*)
+                             (cons (cons symbol (or null (cons symbol null)))
+                                   (cons *)))
                  `(with-gl-vector ((,vertices ,(second verts)) ,@indices-bind)
                     (with-buffer ,(list* vbo ebo-bind)
-                      (with-vertex-array ((,(caar bind*)
+                      (with-vertex-array ((,(caaar bind*)
                                            ,@(<init-buffer> verts vbo vertices)
                                            (link-attributes ,attr ,prog)
                                            ,@ebo-inits))
@@ -575,7 +581,12 @@
                                        (list ebo)
                                        (<init-buffer> vec ebo indices)))))
                    (<body-form> bind* prog))))
-      (let ((forms (rec bind*)))
+      (let ((forms
+             (rec
+               (mapcar
+                 (lambda (bind)
+                   `(,(alexandria:ensure-list (car bind)) ,@(cdr bind)))
+                 bind*))))
         `(macrolet ((indices-of (id)
                       (case id ,@refs (otherwise "No indices for ~S" id))))
            ,@forms)))))
@@ -588,7 +599,7 @@
                   (destructuring-bind
                       (class &rest clause*)
                       bind
-                    `(,class
+                    `(,(nreverse (alexandria:ensure-list class))
                       ,@(loop :for clause :in clause*
                               :when (eq :indices (car clause))
                                 :collect `(:indices
