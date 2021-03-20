@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.22.3"
+  "1.22.4"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -16,6 +16,7 @@
    "cl-change-case" ; Convert lisp case to camel case.
    "sdl2" ; Windowing support.
    "millet" ; Wrapper for tiny utilities.
+   "check-bnf" ; BNF like macro syntax checker.
    )
   :pathname
   "src/"

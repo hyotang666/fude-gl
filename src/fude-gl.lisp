@@ -246,10 +246,11 @@
             length)))
     (dotimes (i length a) (setf (gl:glaref a i) (aref initial-contents i)))))
 
-(defmacro with-gl-vector ((&rest bind*) &body body)
+(defmacro with-gl-vector (&whole whole (&rest bind*) &body body)
+  "Each var is bound by gl-array."
+  (check-bnf:check-bnf (:whole whole) ((bind* (symbol check-bnf:expression))))
   `(let ,(mapcar
            (lambda (bind)
-             (check-type bind (cons symbol (cons t null)))
              (destructuring-bind
                  (var vector)
                  bind
