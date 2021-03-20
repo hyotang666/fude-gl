@@ -660,10 +660,15 @@
   '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
 
 (defmacro with-clear
-          ((var-win (&rest bufs) &key (color ''(0.0 0.0 0.0 1.0))) &body body)
+          (&whole whole (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)))
+           &body body)
+  (check-bnf:check-bnf (:whole whole)
+    ((var-win symbol))
+    ((buf* check-bnf:expression))
+    ((color check-bnf:expression)))
   `(progn
     (apply #'gl:clear-color ,color)
-    (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) bufs))
+    (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) buf*))
     ,@body
     (sdl2:gl-swap-window ,var-win)))
 
