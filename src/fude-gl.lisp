@@ -363,7 +363,11 @@
 
 ;;; WITH-VERTEX-ARRAY
 
-(defmacro with-vertex-array ((&rest bind*) &body body)
+(defmacro with-vertex-array (&whole whole (&rest bind*) &body body)
+  "Each VAR is bound by openGL vertex array id."
+  (check-bnf:check-bnf (:whole whole)
+    ((bind* (symbol init-form+))
+     (init-form+ check-bnf:expression)))
   `(let ,(mapcar (lambda (bind) `(,(car bind) (gl:gen-vertex-array))) bind*)
      (unwind-protect
          (progn
