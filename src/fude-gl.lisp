@@ -510,19 +510,25 @@
   (declare (ignore id))
   (error "INDICE-OF is must be inside of WITH-VAO."))
 
+(defun get-uniform-location (program name)
+  (let ((location (gl:get-uniform-location program name)))
+    (assert (not (minusp location)) ()
+      "Uniform ~S is not active in program ~S." name program)
+    location))
+
 (defun <uniform-binder> (prog)
   (lambda (uniform)
     (etypecase uniform
       (symbol
        `(,uniform
-         (gl:get-uniform-location ,prog
-                                  ,(change-case:camel-case
-                                     (symbol-name uniform)))))
+         (get-uniform-location ,prog
+                               ,(change-case:camel-case
+                                  (symbol-name uniform)))))
       ((cons symbol (cons symbol null))
        `(,(first uniform)
-         (gl:get-uniform-location ,prog
-                                  ,(change-case:camel-case
-                                     (symbol-name (second uniform)))))))))
+         (get-uniform-location ,prog
+                               ,(change-case:camel-case
+                                  (symbol-name (second uniform)))))))))
 
 (defun ensure-second (thing)
   (if (listp thing)
