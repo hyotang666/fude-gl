@@ -272,8 +272,9 @@
            :draw-indirect-buffer :atomic-counter-buffer
            :dispatch-indirect-buffer :shader-storage-buffer))
 
-(defmacro with-buffer ((&rest var*) &body body)
-  (assert (every #'symbolp var*))
+(defmacro with-buffer (&whole whole (&rest var*) &body body)
+  "Each VAR is bound by openGL buffer object id."
+  (check-bnf:check-bnf (:whole whole) ((var* symbol)))
   `(destructuring-bind
        ,var*
        (gl:gen-buffers ,(length var*))
