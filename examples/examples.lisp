@@ -35,7 +35,7 @@
                            :w 800
                            :h 600)
       (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ((hello-triangle (:vertices *triangle*)))
+        (fude-gl:with-shader ((hello-triangle (:vertices nil *triangle*)))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -60,7 +60,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((uniform-demo
-                                (:vertices *triangle*)
+                                (:vertices nil *triangle*)
                                 (:uniform |triangleColor|)))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
@@ -108,7 +108,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((colored-triangle
-                                (:vertices *colored-triangle*)))
+                                (:vertices nil *colored-triangle*)))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -154,7 +154,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((colored-triangle
-                                (:vertices *element-buffer-example*)
+                                (:vertices nil *element-buffer-example*)
                                 (:indices '(0 1 2 2 3 0))))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
@@ -225,7 +225,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((texture-demo
-                                (:vertices *quad*)
+                                (:vertices nil *quad*)
                                 (:indices '(0 1 2 2 3 0))
                                 (:uniform (tex-loc tex))))
           (fude-gl:with-textures ((tex :texture-2d
@@ -274,7 +274,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((mix-demo
-                                (:vertices *mix-demo*)
+                                (:vertices nil *mix-demo*)
                                 (:indices '(0 1 2 2 3 0))
                                 (:uniform (tex1-loc tex1) (tex2-loc tex2))))
           (fude-gl:with-textures ((tex1 :texture-2d
@@ -313,7 +313,7 @@
                            :title "hello")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((hello
-                                (:vertices *hello-quad*)
+                                (:vertices nil *hello-quad*)
                                 (:indices '(0 1 2 2 3 1))))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
@@ -347,7 +347,7 @@
                            :title "double")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((double
-                                (:vertices *double-quad*)
+                                (:vertices nil *double-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform transform)))
           (sdl2:with-event-loop (:method :poll)
@@ -408,7 +408,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((transform-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
           (fude-gl:with-textures ((image :texture-2d
@@ -443,7 +443,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((transform-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
           (fude-gl:with-textures ((image :texture-2d
@@ -477,7 +477,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((transform-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
           (fude-gl:with-textures ((image :texture-2d
@@ -512,7 +512,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((transform-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
           (fude-gl:with-textures ((image :texture-2d
@@ -550,7 +550,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((transform-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
           (fude-gl:with-textures ((image :texture-2d
@@ -606,7 +606,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((coord-demo
-                                (:vertices *texture-quad*)
+                                (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 model view projection)))
           (fude-gl:with-textures ((image :texture-2d
@@ -686,7 +686,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((depth-demo
-                                (:vertices *depth-demo*)
+                                (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
           (fude-gl:with-textures ((image :texture-2d
                                          :init (fude-gl:tex-image-2d *image*))
@@ -741,7 +741,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((cubes
-                                (:vertices *depth-demo*)
+                                (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
           (fude-gl:with-textures ((image :texture-2d
                                          :init (fude-gl:tex-image-2d *image*))
@@ -802,7 +802,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((cubes
-                                (:vertices *depth-demo*)
+                                (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
           (fude-gl:with-textures ((image :texture-2d
                                          :init (fude-gl:tex-image-2d *image*))
@@ -896,7 +896,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((cubes
-                                (:vertices *depth-demo*)
+                                (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
           (fude-gl:with-textures ((image :texture-2d
                                          :init (fude-gl:tex-image-2d *image*))
@@ -971,64 +971,98 @@
       (otherwise camera-pos))))
 
 (defun movement-speed ()
-  (uiop:nest (sdl2:with-init (:everything))
-             (sdl2:with-window (win :flags '(:shown :opengl)
-                                    :x 100
-                                    :y 100
-                                    :w 800
-                                    :h 600))
-             (sdl2:with-gl-context (context win))
-             (fude-gl:with-shader ((cubes
-                                     (:vertices *depth-demo*)
-                                     (:uniform tex1 tex2 model view
-                                               projection))))
-             (fude-gl:with-textures ((image :texture-2d
-                                            :init (fude-gl:tex-image-2d
-                                                    *image*))
-                                     (face :texture-2d
-                                           :init (fude-gl:tex-image-2d
-                                                   *face*))))
-             (flet ((send (matrix uniform)
-                          (gl:uniform-matrix uniform 4
-                                             (vector
-                                               (3d-matrices:marr matrix))))))
-             (let ((camera-pos (3d-vectors:vec 0 0 3))
-                   (camera-front (3d-vectors:vec 0 0 -1))
-                   (camera-up (3d-vectors:vec 0 1 0))
-                   (p
-                    (3d-matrices:mperspective 45
-                                              (multiple-value-call #'/
-                                                (sdl2:get-window-size win))
-                                              0.1 100))))
-             (sdl2:with-event-loop (:method :poll)
-               (:initialize ()
-                 (gl:uniformi tex1 image)
-                 (gl:uniformi tex2 face)
-                 (gl:enable :depth-test))
-               (:quit ()
-                 t)
-               (:keydown (:keysym keysym)
-                 (setf camera-pos
-                         (move-camera-with-delta keysym camera-front camera-up
-                                                 camera-pos)))
-               (:idle ()
-                 (let ((current-frame (sdl2:get-ticks)))
-                   (setf *delta-time* (- current-frame *last-frame*)
-                         *last-frame* current-frame))
-                 (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                   (loop :for pos :in *cube-positions*
-                         :for i :upfrom 0
-                         :for m
-                              = (3d-matrices:nmrotate
-                                  (3d-matrices:mtranslation pos)
-                                  (3d-vectors:vec 1 0.3 0.5)
-                                  (fude-gl:radians (* 20 i)))
-                         :do (send m model)
-                             (send
-                              (3d-matrices:mlookat camera-pos
-                                                   (3d-vectors:v+ camera-pos
-                                                                  camera-front)
-                                                   camera-up)
-                              view)
-                             (send p projection)
-                             (gl:draw-arrays :triangles 0 36)))))))
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :x 100
+                           :y 100
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ((cubes
+                            (:vertices nil *depth-demo*)
+                            (:uniform tex1 tex2 model view projection))))
+    (fude-gl:with-textures ((image :texture-2d
+                                   :init (fude-gl:tex-image-2d *image*))
+                            (face :texture-2d
+                                  :init (fude-gl:tex-image-2d *face*))))
+    (flet ((send (matrix uniform)
+                 (gl:uniform-matrix uniform 4
+                                    (vector (3d-matrices:marr matrix))))))
+    (let ((camera-pos (3d-vectors:vec 0 0 3))
+          (camera-front (3d-vectors:vec 0 0 -1))
+          (camera-up (3d-vectors:vec 0 1 0))
+          (p
+           (3d-matrices:mperspective 45
+                                     (multiple-value-call #'/
+                                       (sdl2:get-window-size win))
+                                     0.1 100))))
+    (sdl2:with-event-loop (:method :poll)
+      (:initialize ()
+        (gl:uniformi tex1 image)
+        (gl:uniformi tex2 face)
+        (gl:enable :depth-test))
+      (:quit ()
+        t)
+      (:keydown (:keysym keysym)
+        (setf camera-pos
+                (move-camera-with-delta keysym camera-front camera-up
+                                        camera-pos)))
+      (:idle ()
+        (let ((current-frame (sdl2:get-ticks)))
+          (setf *delta-time* (- current-frame *last-frame*)
+                *last-frame* current-frame))
+        (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+          (loop :for pos :in *cube-positions*
+                :for i :upfrom 0
+                :for m
+                     = (3d-matrices:nmrotate (3d-matrices:mtranslation pos)
+                                             (3d-vectors:vec 1 0.3 0.5)
+                                             (fude-gl:radians (* 20 i)))
+                :do (send m model)
+                    (send
+                     (3d-matrices:mlookat camera-pos
+                                          (3d-vectors:v+ camera-pos
+                                                         camera-front)
+                                          camera-up)
+                     view)
+                    (send p projection)
+                    (gl:draw-arrays :triangles 0 36)))))))
+
+;;;; FONT
+
+(defun text ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :blend)
+      (gl:blend-func :src-alpha :one-minus-src-alpha))
+    (fude-gl:with-shader ((fude-gl::glyph
+                            (:vertices vertices
+                                       (make-array (* 4 6)
+                                                   :element-type 'single-float
+                                                   :initial-element 0.0)
+                                       :usage :dynamic-draw)
+                            (:vertex-array glyph-vao)
+                            (:buffer buffer)
+                            (:uniform projection text |textColor|))))
+    (fude-gl::with-glyph nil)
+    (flet ((send (matrix uniform)
+             (gl:uniform-matrix uniform 4 (vector (3d-matrices:marr matrix)))))
+      (send
+        (multiple-value-bind (w h)
+            (sdl2:get-window-size win)
+          (3d-matrices:mortho 0 w 0 h -1 1))
+        projection))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:idle ()
+        (sleep (/ 1 15))
+        (fude-gl:with-clear (win (:color-buffer-bit))
+          (fude-gl::render-text "Hello world!" fude-gl::glyph
+                                :color-uniform |textColor|
+                                :vertices vertices
+                                :vertex-array glyph-vao
+                                :vertex-buffer buffer))))))
