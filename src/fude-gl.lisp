@@ -420,6 +420,7 @@
                :bgra-integer :stencil-index)))
 
 (defmacro with-textures ((&rest bind*) &body body)
+  "Each VAR is bound by openGL texture id."
   ;; Trivial syntax check.
   (dolist (b bind*) (the (cons symbol (cons texture-target *)) b))
   (labels ((vname (k v)
