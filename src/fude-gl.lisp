@@ -24,6 +24,7 @@
 (in-package :fude-gl)
 
 ;;;; UTILITIES
+;; MACROS
 
 (defun type-assert (form type)
   (if (constantp form)
@@ -33,60 +34,54 @@
        form)
       `(the ,type ,form)))
 
-;;;; MATRIX
+;; MATRIX
 
 (defun radians (degrees) (* degrees (/ pi 180)))
 
-;;;; METACLASS
-
-(defclass vector-class (standard-class) ())
-
-(defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
-
 ;;;; CLASSES
-#| NOTE:
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun class-list (class)
+    "Return class list specified to abstract oder, superclasses are reverse order."
+    (uiop:while-collecting (acc)
+      (labels ((rec (c)
+                 (unless (eq 'standard-object (class-name c))
+                   (acc c)
+                   (mapc #'rec (reverse (c2mop:class-direct-superclasses c))))))
+        (rec class))))
+  (defun class-initargs (class)
+    (uiop:while-collecting (acc)
+      (dolist (c (nreverse (class-list class)))
+        (dolist (s (c2mop:class-direct-slots c))
+          (acc (car (c2mop:slot-definition-initargs s)))))))
+  ;; METACLASS
+  (defclass vector-class (standard-class) ())
+  (defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
+  ;; CLASSES
+  #| NOTE:
  | T is constant.
  | We could not name a slot with constant (at least in sbcl).
  | So we decide to use prefix % for every slot name.
  | We choice having single rule rather than having corner case.
  |#
-
-(defclass xy ()
-  ((%x :initarg :x :type single-float) (%y :initarg :y :type single-float))
-  (:metaclass vector-class))
-
-(defclass xyz ()
-  ((%x :initarg :x :type single-float)
-   (%y :initarg :y :type single-float)
-   (%z :initarg :z :type single-float))
-  (:metaclass vector-class))
-
-(defclass st ()
-  ((%s :initarg :s :type single-float) (%t :initarg :t :type single-float))
-  (:metaclass vector-class))
-
-(defclass rgb ()
-  ((%r :initarg :r :type single-float)
-   (%g :initarg :g :type single-float)
-   (%b :initarg :b :type single-float))
-  (:metaclass vector-class))
+  (defclass xy ()
+    ((%x :initarg :x :type single-float) (%y :initarg :y :type single-float))
+    (:metaclass vector-class))
+  (defclass xyz ()
+    ((%x :initarg :x :type single-float)
+     (%y :initarg :y :type single-float)
+     (%z :initarg :z :type single-float))
+    (:metaclass vector-class))
+  (defclass st ()
+    ((%s :initarg :s :type single-float) (%t :initarg :t :type single-float))
+    (:metaclass vector-class))
+  (defclass rgb ()
+    ((%r :initarg :r :type single-float)
+     (%g :initarg :g :type single-float)
+     (%b :initarg :b :type single-float))
+    (:metaclass vector-class)))
 
 ;;;; CONSTRUCTOR
-
-(defun class-list (class)
-  "Return class list specified to abstract oder, superclasses are reverse order."
-  (uiop:while-collecting (acc)
-    (labels ((rec (c)
-               (unless (eq 'standard-object (class-name c))
-                 (acc c)
-                 (mapc #'rec (reverse (c2mop:class-direct-superclasses c))))))
-      (rec class))))
-
-(defun class-initargs (class)
-  (uiop:while-collecting (acc)
-    (dolist (c (nreverse (class-list class)))
-      (dolist (s (c2mop:class-direct-slots c))
-        (acc (car (c2mop:slot-definition-initargs s)))))))
 
 (defmethod make-instance :around ((c vector-class) &rest args)
   (let ((values
@@ -111,24 +106,24 @@
 ;;;; DSL
 ;;; DEFSHADER
 
-(defun <uniforms> (name shader*)
-  `(defmethod uniforms ((type (eql ',name)))
-     (list
-       ,@(loop :for (nil lambda-list) :in shader*
-               :for position
-                    = (position-if
-                        (lambda (x) (and (symbolp x) (string= '&uniform x)))
-                        lambda-list)
-               :when position
-                 :nconc (let ((acc))
-                          (dolist (x (subseq lambda-list (1+ position)) acc)
-                            (pushnew `',(car x) acc :test #'equal)))))))
-
-(defun <shader-method> (method name main string)
-  `(defmethod ,method ((type (eql ',name)))
-     ,(if (typep main '(cons (cons (eql quote) (cons symbol null)) null))
-          `(,method ',(cadar main))
-          string)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun <uniforms> (name shader*)
+    `(defmethod uniforms ((type (eql ',name)))
+       (list
+         ,@(loop :for (nil lambda-list) :in shader*
+                 :for position
+                      = (position-if
+                          (lambda (x) (and (symbolp x) (string= '&uniform x)))
+                          lambda-list)
+                 :when position
+                   :nconc (let ((acc))
+                            (dolist (x (subseq lambda-list (1+ position)) acc)
+                              (pushnew `',(car x) acc :test #'equal)))))))
+  (defun <shader-method> (method name main string)
+    `(defmethod ,method ((type (eql ',name)))
+       ,(if (typep main '(cons (cons (eql quote) (cons symbol null)) null))
+            `(,method ',(cadar main))
+            string))))
 
 (defmacro defshader (name version superclasses &body shader*)
   ;; Trivial syntax check.
@@ -282,7 +277,10 @@
 
 ;;; WITH-PROG
 
-(defmacro with-prog ((&rest bind*) &body body)
+(defmacro with-prog (&whole whole (&rest bind*) &body body)
+  "Each VAR is bound by openGL shader program id."
+  (check-bnf:check-bnf (:whole whole)
+    ((bind* (symbol check-bnf:expression check-bnf:expression))))
   (alexandria:with-unique-names (compile warn vs fs)
     `(let ,(mapcar (lambda (bind) `(,(car bind) (gl:create-program))) bind*)
        (labels ((,compile (var id source)
@@ -307,7 +305,8 @@
                               (,compile ,var ,vs ,vertex-shader)
                               (,compile ,var ,fs ,fragment-shader)
                               (gl:link-program ,var)
-                              (,warn (gl:get-program-info-log ,var)))
+                              (,warn (gl:get-program-info-log ,var))
+                              (gl:use-program ,var))
                            (gl:delete-shader ,fs)
                            (gl:delete-shader ,vs)))))
                   bind*)
@@ -538,12 +537,12 @@
 (defun <init-buffer> (clause buf vec)
   (destructuring-bind
       (&key (target :array-buffer) (usage :static-draw))
-      (cddr clause)
+      clause
     `((gl:bind-buffer ,(type-assert target 'buffer-target) ,buf)
       (gl:buffer-data ,(type-assert target 'buffer-target)
                       ,(type-assert usage 'buffer-usage) ,vec))))
 
-(defmacro with-vao ((&rest bind*) &body body)
+(defun parse-with-vao-binds (bind* body)
   (let ((refs))
     (labels ((clause (clause bind)
                (or (assoc clause (cdr bind))
@@ -551,11 +550,12 @@
              (rec (bind*)
                (if (endp bind*)
                    body
-                   (let ((prog
-                          (if (null (cdaar bind*))
-                              (gensym "PROG")
-                              (cadaar bind*))))
-                     `((with-prog ((,prog ,@(cdr (clause :shader (car bind*)))))
+                   (destructuring-bind
+                       (prog vs fs)
+                       (cdr (clause :shader (car bind*)))
+                     (unless prog
+                       (setf prog (gensym "PROG")))
+                     `((with-prog ((,prog ,vs ,fs))
                          ,(body (assoc :indices (cdar bind*)) prog bind*))))))
              (<may-uniform-bind> (uniforms bind*)
                (if uniforms
@@ -563,56 +563,103 @@
                        ,@(rec (cdr bind*))))
                    (rec (cdr bind*))))
              (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
-               (let ((vertices (gensym "VERTICES"))
-                     (vbo (gensym "VBO"))
-                     (uniforms
-                      (let* ((uniforms (cdr (assoc :uniform (cdar bind*))))
-                             (required (uniforms (caaar bind*)))
-                             (actual (mapcar #'ensure-second uniforms)))
-                        (assert (null (set-exclusive-or required actual)) ()
-                          "Mismatch uniforms. ~S but ~S" required actual)
-                        (mapcar (<uniform-binder> prog) uniforms)))
-                     (verts (clause :vertices (car bind*)))
-                     (attr (second (clause :attributes (car bind*)))))
-                 (check-type (car bind*)
-                             (cons (cons symbol (or null (cons symbol null)))
-                                   (cons *)))
-                 `(with-gl-vector ((,vertices ,(second verts)) ,@indices-bind)
+               (let* ((verts (clause :vertices (car bind*)))
+                      (vertices (or (second verts) (gensym "VERTICES")))
+                      (vbo
+                       (or (cadr (assoc :buffer (cdar bind*))) (gensym "VBO")))
+                      (uniforms
+                       (let* ((uniforms (cdr (assoc :uniform (cdar bind*))))
+                              (required (uniforms (prog-name prog bind*)))
+                              (actual (mapcar #'ensure-second uniforms)))
+                         (assert (null
+                                   (set-exclusive-or required actual
+                                                     :test #'string=))
+                           ()
+                           "Mismatch uniforms. ~S but ~S" required actual)
+                         (mapcar (<uniform-binder> prog) uniforms)))
+                      (attr (second (clause :attributes (car bind*)))))
+                 `(with-gl-vector ((,vertices ,(third verts)) ,@indices-bind)
                     (with-buffer ,(list* vbo ebo-bind)
-                      (with-vertex-array ((,(caaar bind*)
-                                           ,@(<init-buffer> verts vbo vertices)
+                      (with-vertex-array ((,(caar bind*)
+                                           ,@(<init-buffer> (cdddr verts) vbo
+                                                            vertices)
                                            (link-attributes ,attr ,prog)
                                            ,@ebo-inits))
                         ,@(<may-uniform-bind> uniforms bind*))))))
+             (prog-name (prog bind*)
+               (or (and (symbol-package prog) prog) (caar bind*)))
              (body (vec prog bind*)
                (if vec
                    (alexandria:with-unique-names (vector indices ebo)
                      `(let ((,vector ,(second vec)))
                         ,(progn
-                          (push (list (caar bind*) `',vector) refs)
+                          (push (list (prog-name prog bind*) `',vector) refs)
                           (<body-form> bind* prog `((,indices ,vector))
                                        (list ebo)
-                                       (<init-buffer> vec ebo indices)))))
+                                       (<init-buffer> (cddr vec) ebo
+                                                      indices)))))
                    (<body-form> bind* prog))))
-      (let ((forms
-             (rec
-               (mapcar
-                 (lambda (bind)
-                   `(,(alexandria:ensure-list (car bind)) ,@(cdr bind)))
-                 bind*))))
+      (values (rec bind*) refs))))
+
+(defmacro with-vao (&whole whole (&rest bind*) &body body)
+  "Each VAR is bound by openGL vertex array object id."
+  (check-bnf:check-bnf (:whole whole)
+    ((bind* (var option+))
+     (option+
+      (or vertices-clause
+          indices-clause
+          uniform-clause
+          buffer-clause
+          attributes-clause
+          shader-clause))
+     ;; When this VAR is specified, it is bound by gl-array pointer.
+     (vertices-clause ((eql :vertices) var init-form vertices-option*))
+     (vertices-option* (member :usage :target :size) check-bnf:expression)
+     ;;
+     (indices-clause ((eql :indices) init-form indices-option*))
+     (indices-option* keyword check-bnf:expression)
+     ;; When this VAR is specified, it is bound by openGL uniform location.
+     (uniform-clause ((eql :uniform) uniform-var-spec+))
+     (uniform-var-spec (or var (var var)))
+     ;; When this VAR is specified, it is bound by openGL buffer object id.
+     (buffer-clause ((eql :buffer) var))
+     ;;
+     (attributes-clause ((eql :attributes) attribute-name))
+     (attribute-name check-bnf:expression)
+     ;; When this VAR is specified, it is bound by openGL shader program id.
+     (shader-clause ((eql :shader) var vertex-shader fragment-shader))
+     (vertex-shader check-bnf:expression)
+     (fragment-shader check-bnf:expression)
+     ;;
+     (var symbol)
+     (init-form check-bnf:expression)))
+  (multiple-value-bind (forms refs)
+      (parse-with-vao-binds bind* body)
+    (if (null refs)
+        (car forms)
         `(macrolet ((indices-of (id)
                       (case id ,@refs (otherwise "No indices for ~S" id))))
-           ,@forms)))))
+           ,@forms))))
 
 ;;; WITH-SHADER
 
-(defmacro with-shader ((&rest bind*) &body body)
+(defmacro with-shader (&whole whole (&rest bind*) &body body)
+  (check-bnf:check-bnf (:whole whole)
+    ((bind* (symbol option+))
+     (option+ (option-name option-form+))
+     (option-name
+      (member :vertices
+              :indices :uniform
+              :buffer :attributes
+              :shader :vertex-array))
+     (option-form+ check-bnf:expression)))
   `(with-vao ,(mapcar
                 (lambda (bind)
                   (destructuring-bind
                       (class &rest clause*)
                       bind
-                    `(,(nreverse (alexandria:ensure-list class))
+                    `(,(or (cadr (assoc :vertex-array (cdr bind)))
+                           (gensym "VAO"))
                       ,@(loop :for clause :in clause*
                               :when (eq :indices (car clause))
                                 :collect `(:indices
@@ -620,11 +667,12 @@
                                                    '(array (unsigned-byte 8)
                                                      (*)))
                                            :target :element-array-buffer)
-                              :else
+                              :else :unless (eq :vertex-array (car clause))
                                 :collect clause)
-                      (:attributes ',class)
-                      (:shader (vertex-shader ',class)
-                       (fragment-shader ',class)))))
+                      (:attributes ',(alexandria:ensure-car class))
+                      (:shader ,class
+                       (vertex-shader ',(alexandria:ensure-car class))
+                       (fragment-shader ',(alexandria:ensure-car class))))))
                 bind*)
      ,@body))
 
@@ -738,3 +786,158 @@
            :dst-alpha :one-minus-dst-alpha
            :constant-color :one-minus-constant-color
            :constant-alpha :one-minus-constant-alpha))
+
+;;;; FONT
+
+(defun initialize-fonts (root)
+  (let ((ht (make-hash-table :test #'equal)))
+    (uiop:collect-sub*directories root #'identity ; always true.
+                                  #'identity ; recurse all directories.
+                                  (lambda (dir)
+                                    (loop :for pathname
+                                               :in (uiop:directory-files dir
+                                                                         "*.ttf")
+                                          :do (setf (gethash
+                                                      (pathname-name pathname)
+                                                      ht)
+                                                      pathname))))
+    ht))
+
+(defparameter *fonts* (initialize-fonts "/usr/share/fonts/"))
+
+(defun find-font (name &optional (errorp t))
+  (or (values (gethash name *fonts*))
+      (and errorp (error "Missing font named: ~S" name))))
+
+(defun list-all-fonts ()
+  (loop :for k :being :each :hash-key :of *fonts*
+        :collect k))
+
+(defun font-loader (font-name)
+  (let ((loader (find-font font-name nil)))
+    (typecase loader
+      (zpb-ttf::font-loader loader)
+      ((or string pathname)
+       (setf (gethash font-name *fonts*) (zpb-ttf::open-font-loader loader)))
+      (otherwise
+       (error
+         "Unknown font. ~S ~:_Eval (fude-gl:list-all-fonts) for supported fonts."
+         font-name)))))
+
+(defstruct char-glyph
+  (texture 0 :type (unsigned-byte 32) :read-only t)
+  w
+  h
+  bearing-x
+  bearing-y
+  advance)
+
+(defshader glyph 330 (xy st)
+  (:vertex ((|texCoords| :vec2) &uniform (projection :mat4))
+    "texCoords = st;"
+    "gl_Position = projection * vec4(xy, 0.0, 1.0);")
+  (:fragment ((color :vec4) &uniform (text :|sampler2D|) (|textColor| :vec3))
+    "color = vec4(textColor, 1.0) * vec4(1.0, 1.0, 1.0, texture(text, texCoords).r);"))
+
+(defvar *glyphs*)
+
+(defmacro with-glyph (() &body body)
+  `(let ((*glyphs* (make-hash-table)))
+     (unwind-protect (progn ,@body)
+       (loop :for g :being :each :hash-value of *glyphs*
+             :do (gl:delete-textures (list (char-glyph-texture g)))))))
+
+(defun font-data (char loader size)
+  (flet ((non-zero-int (i)
+           (if (zerop i)
+               1
+               i)))
+    (let* ((string (string char))
+           (bbox (vecto:string-bounding-box string size loader))
+           (w
+            (ceiling
+              (non-zero-int (- (zpb-ttf:xmax bbox) (zpb-ttf:xmin bbox)))))
+           (h
+            (ceiling
+              (non-zero-int (- (zpb-ttf:ymax bbox) (zpb-ttf:ymin bbox))))))
+      ;; TODO Implement gray scale rasterizer.
+      (vecto:with-canvas (:width w :height h)
+        (vecto:set-font loader size)
+        (vecto:set-rgb-fill 1 1 1)
+        (vecto:draw-string 0 (- (zpb-ttf:ymin bbox)) string)
+        (values (loop :with vec = (vecto::image-data vecto::*graphics-state*)
+                      :with new
+                            = (make-array (* w h)
+                                          :element-type '(unsigned-byte 8)
+                                          :initial-element 0)
+                      :for i :upfrom 3 :by 4
+                      :while (array-in-bounds-p vec i)
+                      :do (setf (aref new (floor i 4)) (aref vec i))
+                      :finally (return new))
+                w
+                h
+                (floor (zpb-ttf:xmin bbox))
+                (ceiling (zpb-ttf:ymax bbox))
+                (ceiling
+                  (* (zpb-ttf:advance-width (zpb-ttf:find-glyph char loader))
+                     (/ size (zpb-ttf:units/em loader)))))))))
+
+(defun char-glyph (char font-name &optional (size 16))
+  (let ((loader (font-loader font-name)))
+    (if (not (zpb-ttf:glyph-exists-p char loader))
+        (error "~S is not exist in the font ~S." char font-name)
+        (or (gethash char *glyphs*)
+            (multiple-value-bind (image w h bearing-x bearing-y advance)
+                (font-data char loader size)
+              (gl:pixel-store :unpack-alignment 1)
+              (let ((texture (car (gl:gen-textures 1))))
+                (gl:active-texture texture)
+                (gl:bind-texture :texture-2d texture)
+                (gl:tex-image-2d :texture-2d 0 :red w h 0 :red
+                                 :unsigned-byte image)
+                (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
+                (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
+                (gl:tex-parameter :texture-2d :texture-min-filter :linear)
+                (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+                (setf (gethash char *glyphs*)
+                        (make-char-glyph :texture texture
+                                         :w w
+                                         :h h
+                                         :bearing-x bearing-x
+                                         :bearing-y bearing-y
+                                         :advance advance))))))))
+
+(defun render-text
+       (text shader
+        &key (x 0) (y 0) (scale 1) (color '(1 1 1)) (font "Ubuntu-M")
+        (vertices (error ":VERTICES is required."))
+        (color-uniform (error ":COLOR-UNIFORM is required."))
+        ((:vertex-array vao) (error ":VERTEX-ARRAY is required."))
+        ((:vertex-buffer vbo) (error ":VERTEX-BUFFER is required.")))
+  (setf text (map 'list (lambda (c) (char-glyph c font)) text))
+  (gl:use-program shader)
+  (apply #'gl:uniformf color-uniform color)
+  (gl:active-texture 0)
+  (gl:bind-vertex-array vao)
+  (loop :for glyph :in text
+        :for x-pos = (+ x (* (char-glyph-bearing-x glyph) scale))
+        :for y-pos
+             = (- y
+                  (* (- (char-glyph-h glyph) (char-glyph-bearing-y glyph))
+                     scale))
+        :for w = (* scale (char-glyph-w glyph))
+        :for h = (* scale (char-glyph-h glyph))
+        :do (loop :for elt
+                       :in (list x-pos (+ h y-pos) 0 0 ; first
+                                 x-pos y-pos 0 1 ; second
+                                 (+ w x-pos) y-pos 1 1 ; third
+                                 x-pos (+ h y-pos) 0 0 ; fourth
+                                 (+ w x-pos) y-pos 1 1 ; fifth
+                                 (+ w x-pos) (+ h y-pos) 1 0)
+                  :for i :upfrom 0
+                  :do (setf (gl:glaref vertices i) (float elt)))
+            (gl:bind-texture :texture-2d (char-glyph-texture glyph))
+            (gl:bind-buffer :array-buffer vbo)
+            (gl:buffer-sub-data :array-buffer vertices)
+            (gl:draw-arrays :triangles 0 6)
+            (incf x (* scale (char-glyph-advance glyph)))))
