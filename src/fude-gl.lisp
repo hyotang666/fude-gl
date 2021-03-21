@@ -684,6 +684,7 @@
                 (list "~:<" ; Pprint-logical-block.
                       "~W~^ ~1I" ; Operator.
                       (list "~:<" ; Binds
+                            "~@{" ; clauses.
                             (list "~:<" ; Each bind clause.
                                   "~@{" ; Clause.
                                   "~W~^ ~1I~_" ; Var
@@ -694,7 +695,8 @@
                                         "~:>~^ ~_")
                                   "~}" ; Options.
                                   "~}" ; End clause.
-                                  "~:>")
+                                  "~:>~^ ~_")
+                            "~}" ; clauses end.
                             "~:>~^ ~_")
                       "~@{~W~^ ~_~}" ; Body.
                       "~:>"))))
