@@ -283,36 +283,30 @@
     ((bind* (symbol check-bnf:expression check-bnf:expression))))
   (alexandria:with-unique-names (compile warn vs fs)
     `(let ,(mapcar (lambda (bind) `(,(car bind) (gl:create-program))) bind*)
-       (labels ((,compile (var id source)
-                  (gl:shader-source id source)
-                  (gl:compile-shader id)
-                  (,warn (gl:get-shader-info-log id))
-                  (gl:attach-shader var id))
-                (,warn (log)
-                  (unless (equal "" log)
-                    (warn log))))
-         (unwind-protect
-             (progn
-              ,@(mapcar
-                  (lambda (bind)
-                    (destructuring-bind
-                        (var vertex-shader fragment-shader)
-                        bind
-                      `(let ((,vs (gl:create-shader :vertex-shader))
-                             (,fs (gl:create-shader :fragment-shader)))
-                         (unwind-protect
-                             (progn
-                              (,compile ,var ,vs ,vertex-shader)
-                              (,compile ,var ,fs ,fragment-shader)
-                              (gl:link-program ,var)
-                              (,warn (gl:get-program-info-log ,var))
-                              (gl:use-program ,var))
-                           (gl:delete-shader ,fs)
-                           (gl:delete-shader ,vs)))))
-                  bind*)
-              ,@body)
-           ,@(mapcar (lambda (bind) `(gl:delete-program ,(car bind)))
-                     bind*))))))
+       (unwind-protect
+           (progn
+            ,@(loop :for (var vertex-shader fragment-shader) :in bind*
+                    :collect `(let ((,vs (gl:create-shader :vertex-shader))
+                                    (,fs (gl:create-shader :fragment-shader)))
+                                (unwind-protect
+                                    (labels ((,compile (var id source)
+                                               (gl:shader-source id source)
+                                               (gl:compile-shader id)
+                                               (,warn
+                                                (gl:get-shader-info-log id))
+                                               (gl:attach-shader var id))
+                                             (,warn (log)
+                                               (unless (equal "" log)
+                                                 (warn log))))
+                                      (,compile ,var ,vs ,vertex-shader)
+                                      (,compile ,var ,fs ,fragment-shader)
+                                      (gl:link-program ,var)
+                                      (,warn (gl:get-program-info-log ,var))
+                                      (gl:use-program ,var))
+                                  (gl:delete-shader ,fs)
+                                  (gl:delete-shader ,vs))))
+            ,@body)
+         ,@(mapcar (lambda (bind) `(gl:delete-program ,(car bind))) bind*)))))
 
 ;;; LINK-ATTRIBUTES
 
