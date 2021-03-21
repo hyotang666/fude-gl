@@ -842,10 +842,14 @@
 (defvar *glyphs*)
 
 (defmacro with-glyph (() &body body)
-  `(let ((*glyphs* (make-hash-table)))
+  `(let ((*fonts* (alexandria:copy-hash-table *fonts*))
+         (*glyphs* (make-hash-table)))
      (unwind-protect (progn ,@body)
        (loop :for g :being :each :hash-value of *glyphs*
-             :do (gl:delete-textures (list (char-glyph-texture g)))))))
+             :do (gl:delete-textures (list (char-glyph-texture g))))
+       (loop :for v :being :each :hash-value of *fonts*
+             :when (typep v 'zpb-ttf::font-loader)
+               :do (zpb-ttf::close-font-loader v)))))
 
 (defun font-data (char loader size)
   (flet ((non-zero-int (i)
