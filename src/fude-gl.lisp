@@ -23,6 +23,12 @@
 
 (in-package :fude-gl)
 
+;;;; GL-OBJECT
+
+(defstruct gl-object
+  (name (alexandria:required-argument :name) :type symbol :read-only t)
+  (id (alexandria:required-argument :id) :type (unsigned-byte 32) :read-only t))
+
 ;;;; UTILITIES
 ;; MACROS
 
@@ -255,6 +261,7 @@
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
 
 ;;; WITH-BUFFER
+;; GL enum types.
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
 
@@ -267,48 +274,116 @@
            :draw-indirect-buffer :atomic-counter-buffer
            :dispatch-indirect-buffer :shader-storage-buffer))
 
-(defmacro with-buffer (&whole whole (&rest var*) &body body)
-  "Each VAR is bound by openGL buffer object id."
-  (check-bnf:check-bnf (:whole whole) ((var* symbol)))
+;; BUFFER object.
+
+(defstruct (buffer (:include gl-object))
+  (target :array-buffer :type buffer-target :read-only t)
+  (usage :static-draw :type buffer-usage :read-only t))
+
+(defvar *buffers* nil "Dynamic buffer environment.")
+
+(defvar *buffer* :uninitizlied-buffer "Current buffer.")
+
+(declaim (type list *buffers*)
+         (type (or (eql :uninitialized-buffer) buffer) *buffer*))
+
+(defun find-buffer (name)
+  (or (find name *buffers* :key #'buffer-name)
+      (error "Missing buffer named ~S. ~S" name *buffers*)))
+
+(defmacro in-buffer (name)
+  (let ((buffer (gensym "BUFFER")))
+    `(let ((,buffer (find-buffer ',name)))
+       (gl:bind-buffer (buffer-target ,buffer) (buffer-id ,buffer))
+       (setf *buffer* ,buffer))))
+
+(defmacro with-buffer (&whole whole (&rest bind*) &body body)
+  (check-bnf:check-bnf (:whole whole)
+    ((bind* (var buffer-option*))
+     (buffer-option* option-key keyword)
+     (option-key (member :target :usage))
+     (var symbol)))
   `(destructuring-bind
-       ,var*
-       (gl:gen-buffers ,(length var*))
-     (unwind-protect (progn ,@body) (gl:delete-buffers (list ,@var*)))))
+       ,(mapcar #'car bind*)
+       (mapcar
+         (lambda (bind id)
+           (destructuring-bind
+               (name &key (target :array-buffer) (usage :static-draw))
+               bind
+             (make-buffer :id id :name name :target target :usage usage)))
+         ',bind* (gl:gen-buffers ,(length bind*)))
+     (unwind-protect
+         (let ((*buffer* *buffer*)
+               (*buffers* (list* ,@(mapcar #'car bind*) *buffers*)))
+           ,@body)
+       (gl:delete-buffers
+         (list ,@(mapcar (lambda (bind) `(buffer-id ,(car bind))) bind*))))))
 
 ;;; WITH-PROG
 
+(defvar *progs* nil)
+
+(defvar *prog* :uninitialized-program)
+
+(defstruct (program (:include gl-object)))
+
+(defun find-program (name)
+  (or (find name *progs* :key #'program-name)
+      (error "Missing program named ~S: ~S" name *progs*)))
+
+(defmacro in-shader (name)
+  (let ((program (gensym "PROGRAM")))
+    `(let ((,program (find-program ',name)))
+       (gl:use-program (program-id ,program))
+       (setf *prog* ,program))))
+
 (defmacro with-prog (&whole whole (&rest bind*) &body body)
-  "Each VAR is bound by openGL shader program id."
   (check-bnf:check-bnf (:whole whole)
     ((bind* (symbol check-bnf:expression check-bnf:expression))))
   (alexandria:with-unique-names (compile warn vs fs)
-    `(let ,(mapcar (lambda (bind) `(,(car bind) (gl:create-program))) bind*)
+    `(let* ((*prog* *prog*)
+            ,@(loop :for (name) :in bind*
+                    :collect `(,name
+                               (make-program :name ',name
+                                             :id (gl:create-program))))
+            (*progs* (list* ,@(mapcar #'car bind*) *progs*)))
        (unwind-protect
            (progn
             ,@(loop :for (var vertex-shader fragment-shader) :in bind*
                     :collect `(let ((,vs (gl:create-shader :vertex-shader))
                                     (,fs (gl:create-shader :fragment-shader)))
                                 (unwind-protect
-                                    (labels ((,compile (var id source)
+                                    (labels ((,compile (prog id source)
                                                (gl:shader-source id source)
                                                (gl:compile-shader id)
                                                (,warn
                                                 (gl:get-shader-info-log id))
-                                               (gl:attach-shader var id))
+                                               (gl:attach-shader
+                                                 (program-id prog) id))
                                              (,warn (log)
                                                (unless (equal "" log)
                                                  (warn log))))
                                       (,compile ,var ,vs ,vertex-shader)
                                       (,compile ,var ,fs ,fragment-shader)
-                                      (gl:link-program ,var)
-                                      (,warn (gl:get-program-info-log ,var))
-                                      (gl:use-program ,var))
+                                      (gl:link-program (program-id ,var))
+                                      (,warn
+                                       (gl:get-program-info-log
+                                         (program-id ,var))))
                                   (gl:delete-shader ,fs)
                                   (gl:delete-shader ,vs))))
             ,@body)
-         ,@(mapcar (lambda (bind) `(gl:delete-program ,(car bind))) bind*)))))
+         ,@(mapcar
+             (lambda (bind) `(gl:delete-program (program-id ,(car bind))))
+             bind*)))))
 
 ;;; LINK-ATTRIBUTES
+
+(defun get-attrib-location (program class)
+  (let* ((name (change-case:camel-case (symbol-name (class-name class))))
+         (loc (gl:get-attrib-location (program-id program) name)))
+    (if (minusp loc)
+        (error "Not active attribute name ~S in ~S." name program)
+        loc)))
 
 (defun link-attributes (class program)
   (labels ((rec (class-list total-length funs)
@@ -327,11 +402,7 @@
                             (cons (processer (car class-list)) funs))))))
            (processer (class)
              (lambda (total-length length offset)
-               (let* ((location
-                       (gl:get-attrib-location program
-                                               (change-case:camel-case
-                                                 (symbol-name
-                                                   (class-name class)))))
+               (let* ((location (get-attrib-location program class))
                       (slots
                        (c2mop:class-direct-slots
                          (c2mop:ensure-finalized class)))
@@ -339,11 +410,6 @@
                        (ecase (c2mop:slot-definition-type (car slots))
                          (single-float :float)))
                       (size (cffi:foreign-type-size type)))
-                 (when (minusp location)
-                   (error "Variable ~S is not active in program ~S"
-                          (change-case:camel-case
-                            (symbol-name (class-name class)))
-                          program))
                  #++
                  (uiop:format! *trace-output* "~%Length ~S. Offset ~S."
                                (* total-length size) (* offset size))
@@ -356,20 +422,41 @@
 
 ;;; WITH-VERTEX-ARRAY
 
+(defstruct (vertex-array (:include gl-object)))
+
+(defvar *vertex-arrays* nil)
+
+(defvar *vertex-array* :uninitialzied-vertex-array)
+
+(defun find-vertex-array (name)
+  (or (find name *vertex-arrays* :key #'vertex-array-name)
+      (error "Missing vertex-array named ~S. ~S" name *vertex-arrays*)))
+
+(defmacro in-vertex-array (name)
+  (let ((vao (gensym "VERTEX-ARRAY")))
+    `(let ((,vao (find-vertex-array ',name)))
+       (gl:bind-vertex-array (vertex-array-id ,vao))
+       (setf *vertex-array* ,vao))))
+
 (defmacro with-vertex-array (&whole whole (&rest bind*) &body body)
-  "Each VAR is bound by openGL vertex array id."
   (check-bnf:check-bnf (:whole whole)
     ((bind* (symbol init-form+))
      (init-form+ check-bnf:expression)))
-  `(let ,(mapcar (lambda (bind) `(,(car bind) (gl:gen-vertex-array))) bind*)
+  `(let* ((*vertex-array* *vertex-array*)
+          ,@(loop :for (name) :in bind*
+                  :collect `(,name
+                             (make-vertex-array :name ',name
+                                                :id (gl:gen-vertex-array))))
+          (*vertex-arrays* (list* ,@(mapcar #'car bind*) *vertex-arrays*)))
      (unwind-protect
          (progn
           ,@(mapcan
-              (lambda (bind)
-                `((gl:bind-vertex-array ,(car bind)) ,@(cdr bind)))
+              (lambda (bind) `((in-vertex-array ,(car bind)) ,@(cdr bind)))
               bind*)
           ,@body)
-       (gl:delete-vertex-arrays (list ,@(mapcar #'car bind*))))))
+       (gl:delete-vertex-arrays
+         (list
+           ,@(mapcar (lambda (bind) `(vertex-array-id ,(car bind))) bind*))))))
 
 ;;; WITH-TEXTURES
 
@@ -412,6 +499,26 @@
                :bgr-integer :rgba-integer
                :bgra-integer :stencil-index)))
 
+(defstruct (texture (:include gl-object))
+  (target (alexandria:required-argument :target)
+          :type texture-target
+          :read-only t))
+
+(defvar *textures* nil)
+
+(defvar *texture* :uninitialized-texture)
+
+(defun find-texture (name)
+  (or (find name *textures* :key #'texture-name)
+      (error "Missing texture named ~S. ~S" name *textures*)))
+
+(defmacro in-texture (name)
+  (let ((texture (gensym "TEXTURE")))
+    `(let ((,texture (find-texture ',name)))
+       (gl:active-texture (texture-id ,texture))
+       (gl:bind-texture (texture-target ,texture) (texture-id ,texture))
+       (setf *texture* ,texture))))
+
 (defmacro with-textures ((&rest bind*) &body body)
   "Each VAR is bound by openGL texture id."
   ;; Trivial syntax check.
@@ -446,21 +553,25 @@
     ;; The body.
     `(destructuring-bind
          ,(mapcar #'car bind*)
-         (gl:gen-textures ,(length bind*))
+         (loop :for (name target) :in ',bind*
+               :for id :in (gl:gen-textures ,(length bind*))
+               :collect (make-texture :id id :name name :target target))
        (unwind-protect
-           (progn
-            ,@(mapcan
-                (lambda (b)
-                  (destructuring-bind
-                      (var target &key params init)
-                      b
-                    `((gl:active-texture ,var)
-                      (gl:bind-texture ,(type-assert target 'texture-target)
-                                       ,var)
-                      ,@(<option-setters> params target) ,init)))
-                bind*)
-            ,@body)
-         (gl:delete-textures (list ,@(mapcar #'car bind*)))))))
+           (let ((*texture* *texture*)
+                 (*textures* (list* ,@(mapcar #'car bind*) *textures*)))
+             ,@(mapcan
+                 (lambda (b)
+                   (destructuring-bind
+                       (var target &key params init)
+                       b
+                     `((in-texture ,var) ,@(<option-setters> params target)
+                       ,@(when init
+                           `(,init)))))
+                 bind*)
+             ,@body)
+         (gl:delete-textures
+           (list
+             ,@(mapcar (lambda (bind) `(texture-id ,(car bind))) bind*)))))))
 
 (defun pprint-with-textures (stream exp)
   (funcall
@@ -504,7 +615,7 @@
   (error "INDICE-OF is must be inside of WITH-VAO."))
 
 (defun get-uniform-location (program name)
-  (let ((location (gl:get-uniform-location program name)))
+  (let ((location (gl:get-uniform-location (program-id program) name)))
     (assert (not (minusp location)) ()
       "Uniform ~S is not active in program ~S." name program)
     location))
@@ -528,13 +639,20 @@
       (second thing)
       thing))
 
-(defun <init-buffer> (clause buf vec)
-  (destructuring-bind
-      (&key (target :array-buffer) (usage :static-draw))
-      clause
-    `((gl:bind-buffer ,(type-assert target 'buffer-target) ,buf)
-      (gl:buffer-data ,(type-assert target 'buffer-target)
-                      ,(type-assert usage 'buffer-usage) ,vec))))
+(defun <init-buffer> (buf vec)
+  `((in-buffer ,buf)
+    (gl:buffer-data (buffer-target ,buf) (buffer-usage ,buf) ,vec)))
+
+(defun prog-name (prog bind*)
+  (or (and (symbol-package prog) prog) (caar bind*)))
+
+(defun uniform-bind (bind* prog)
+  (let* ((uniforms (cdr (assoc :uniform (cdar bind*))))
+         (required (uniforms (prog-name prog bind*)))
+         (actual (mapcar #'ensure-second uniforms)))
+    (assert (null (set-exclusive-or required actual :test #'string=)) ()
+      "Mismatch uniforms. ~S but ~S" required actual)
+    (mapcar (<uniform-binder> prog) uniforms)))
 
 (defun parse-with-vao-binds (bind* body)
   (let ((refs))
@@ -560,28 +678,19 @@
                (let* ((verts (clause :vertices (car bind*)))
                       (vertices (or (second verts) (gensym "VERTICES")))
                       (vbo
-                       (or (cadr (assoc :buffer (cdar bind*))) (gensym "VBO")))
-                      (uniforms
-                       (let* ((uniforms (cdr (assoc :uniform (cdar bind*))))
-                              (required (uniforms (prog-name prog bind*)))
-                              (actual (mapcar #'ensure-second uniforms)))
-                         (assert (null
-                                   (set-exclusive-or required actual
-                                                     :test #'string=))
-                           ()
-                           "Mismatch uniforms. ~S but ~S" required actual)
-                         (mapcar (<uniform-binder> prog) uniforms)))
+                       `(,(or (cadr (assoc :buffer (cdar bind*)))
+                              (gensym "VBO"))
+                         ,@(cdddr (assoc :vertices (cdar bind*)))))
+                      (uniforms (uniform-bind bind* prog))
                       (attr (second (clause :attributes (car bind*)))))
                  `(with-gl-vector ((,vertices ,(third verts)) ,@indices-bind)
                     (with-buffer ,(list* vbo ebo-bind)
                       (with-vertex-array ((,(caar bind*)
-                                           ,@(<init-buffer> (cdddr verts) vbo
-                                                            vertices)
+                                           ,@(<init-buffer> (car vbo) vertices)
+                                           (in-shader ,prog)
                                            (link-attributes ,attr ,prog)
                                            ,@ebo-inits))
                         ,@(<may-uniform-bind> uniforms bind*))))))
-             (prog-name (prog bind*)
-               (or (and (symbol-package prog) prog) (caar bind*)))
              (body (vec prog bind*)
                (if vec
                    (alexandria:with-unique-names (vector indices ebo)
@@ -589,9 +698,10 @@
                         ,(progn
                           (push (list (prog-name prog bind*) `',vector) refs)
                           (<body-form> bind* prog `((,indices ,vector))
-                                       (list ebo)
-                                       (<init-buffer> (cddr vec) ebo
-                                                      indices)))))
+                                       `((,ebo
+                                          ,@(uiop:remove-plist-key :size (cddr
+                                                                           vec))))
+                                       (<init-buffer> ebo indices)))))
                    (<body-form> bind* prog))))
       (values (rec bind*) refs))))
 
@@ -615,12 +725,12 @@
      ;; When this VAR is specified, it is bound by openGL uniform location.
      (uniform-clause ((eql :uniform) uniform-var-spec+))
      (uniform-var-spec (or var (var var)))
-     ;; When this VAR is specified, it is bound by openGL buffer object id.
+     ;; When this VAR is specified, it is bound by buffer object.
      (buffer-clause ((eql :buffer) var))
      ;;
      (attributes-clause ((eql :attributes) attribute-name))
      (attribute-name check-bnf:expression)
-     ;; When this VAR is specified, it is bound by openGL shader program id.
+     ;; When this VAR is specified, it is bound by program object.
      (shader-clause ((eql :shader) var vertex-shader fragment-shader))
      (vertex-shader check-bnf:expression)
      (fragment-shader check-bnf:expression)
@@ -914,10 +1024,10 @@
         ((:vertex-array vao) (error ":VERTEX-ARRAY is required."))
         ((:vertex-buffer vbo) (error ":VERTEX-BUFFER is required.")))
   (setf text (map 'list (lambda (c) (char-glyph c font)) text))
-  (gl:use-program shader)
+  (gl:use-program (program-id shader))
   (apply #'gl:uniformf color-uniform color)
   (gl:active-texture 0)
-  (gl:bind-vertex-array vao)
+  (gl:bind-vertex-array (vertex-array-id vao))
   (loop :for glyph :in text
         :for x-pos = (+ x (* (char-glyph-bearing-x glyph) scale))
         :for y-pos
@@ -936,7 +1046,7 @@
                   :for i :upfrom 0
                   :do (setf (gl:glaref vertices i) (float elt)))
             (gl:bind-texture :texture-2d (char-glyph-texture glyph))
-            (gl:bind-buffer :array-buffer vbo)
+            (gl:bind-buffer :array-buffer (buffer-id vbo))
             (gl:buffer-sub-data :array-buffer vertices)
             (gl:draw-arrays :triangles 0 6)
             (incf x (* scale (char-glyph-advance glyph)))))
