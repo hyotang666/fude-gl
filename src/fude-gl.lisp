@@ -26,7 +26,9 @@
 ;;;; GL-OBJECT
 
 (defstruct gl-object
-  (name (alexandria:required-argument :name) :type symbol :read-only t)
+  (name (alexandria:required-argument :name)
+        :type (or character symbol)
+        :read-only t)
   (id (alexandria:required-argument :id) :type (unsigned-byte 32) :read-only t))
 
 ;;;; UTILITIES
@@ -520,7 +522,7 @@
 (defun find-texture (thing)
   (etypecase thing
     (texture thing)
-    (symbol
+    ((or character symbol)
      (or (find thing *textures* :key #'texture-name)
          (error "Missing texture named ~S. ~S" thing *textures*)))))
 
@@ -943,7 +945,7 @@
          font-name)))))
 
 (defstruct char-glyph
-  (texture 0 :type (unsigned-byte 32) :read-only t)
+  (texture (alexandria:required-argument :texture) :type texture :read-only t)
   w
   h
   bearing-x
@@ -964,7 +966,8 @@
          (*glyphs* (make-hash-table)))
      (unwind-protect (progn ,@body)
        (loop :for g :being :each :hash-value of *glyphs*
-             :do (gl:delete-textures (list (char-glyph-texture g))))
+             :collect (texture-id (char-glyph-texture g)) :into textures
+             :finally (gl:delete-textures textures))
        (loop :for v :being :each :hash-value of *fonts*
              :when (typep v 'zpb-ttf::font-loader)
                :do (zpb-ttf::close-font-loader v)))))
@@ -1011,9 +1014,11 @@
             (multiple-value-bind (image w h bearing-x bearing-y advance)
                 (font-data char loader size)
               (gl:pixel-store :unpack-alignment 1)
-              (let ((texture (car (gl:gen-textures 1))))
-                (gl:active-texture texture)
-                (gl:bind-texture :texture-2d texture)
+              (let ((texture
+                     (make-texture :id (car (gl:gen-textures 1))
+                                   :name char
+                                   :target :texture-2d)))
+                (in-texture texture)
                 (gl:tex-image-2d :texture-2d 0 :red w h 0 :red
                                  :unsigned-byte image)
                 (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
@@ -1036,10 +1041,10 @@
         ((:vertex-array vao) (error ":VERTEX-ARRAY is required."))
         ((:vertex-buffer vbo) (error ":VERTEX-BUFFER is required.")))
   (setf text (map 'list (lambda (c) (char-glyph c font)) text))
-  (gl:use-program (program-id shader))
+  (in-shader shader)
   (apply #'gl:uniformf color-uniform color)
   (gl:active-texture 0)
-  (gl:bind-vertex-array (vertex-array-id vao))
+  (in-vertex-array vao)
   (loop :for glyph :in text
         :for x-pos = (+ x (* (char-glyph-bearing-x glyph) scale))
         :for y-pos
@@ -1057,8 +1062,9 @@
                                  (+ w x-pos) (+ h y-pos) 1 0)
                   :for i :upfrom 0
                   :do (setf (gl:glaref vertices i) (float elt)))
-            (gl:bind-texture :texture-2d (char-glyph-texture glyph))
-            (gl:bind-buffer :array-buffer (buffer-id vbo))
-            (gl:buffer-sub-data :array-buffer vertices)
+            (gl:bind-texture (texture-target (char-glyph-texture glyph))
+                             (texture-id (char-glyph-texture glyph)))
+            (in-buffer vbo)
+            (gl:buffer-sub-data (buffer-target vbo) vertices)
             (gl:draw-arrays :triangles 0 6)
             (incf x (* scale (char-glyph-advance glyph)))))
