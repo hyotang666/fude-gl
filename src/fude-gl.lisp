@@ -287,13 +287,16 @@
 (declaim (type list *buffers*)
          (type (or (eql :uninitialized-buffer) buffer) *buffer*))
 
-(defun find-buffer (name)
-  (or (find name *buffers* :key #'buffer-name)
-      (error "Missing buffer named ~S. ~S" name *buffers*)))
+(defun find-buffer (thind)
+  (etypecase thind
+    (buffer thind)
+    (symbol
+     (or (find thind *buffers* :key #'buffer-name)
+         (error "Missing buffer named ~S. ~S" thind *buffers*)))))
 
-(defmacro in-buffer (name)
+(defmacro in-buffer (form)
   (let ((buffer (gensym "BUFFER")))
-    `(let ((,buffer (find-buffer ',name)))
+    `(let ((,buffer (find-buffer ,form)))
        (gl:bind-buffer (buffer-target ,buffer) (buffer-id ,buffer))
        (setf *buffer* ,buffer))))
 
@@ -327,13 +330,16 @@
 
 (defstruct (program (:include gl-object)))
 
-(defun find-program (name)
-  (or (find name *progs* :key #'program-name)
-      (error "Missing program named ~S: ~S" name *progs*)))
+(defun find-program (thing)
+  (etypecase thing
+    (program thing)
+    (symbol
+     (or (find thing *progs* :key #'program-name)
+         (error "Missing program named ~S: ~S" thing *progs*)))))
 
-(defmacro in-shader (name)
+(defmacro in-shader (form)
   (let ((program (gensym "PROGRAM")))
-    `(let ((,program (find-program ',name)))
+    `(let ((,program (find-program ,form)))
        (gl:use-program (program-id ,program))
        (setf *prog* ,program))))
 
@@ -428,13 +434,16 @@
 
 (defvar *vertex-array* :uninitialzied-vertex-array)
 
-(defun find-vertex-array (name)
-  (or (find name *vertex-arrays* :key #'vertex-array-name)
-      (error "Missing vertex-array named ~S. ~S" name *vertex-arrays*)))
+(defun find-vertex-array (thing)
+  (etypecase thing
+    (vertex-array thing)
+    (symbol
+     (or (find thing *vertex-arrays* :key #'vertex-array-name)
+         (error "Missing vertex-array named ~S. ~S" thing *vertex-arrays*)))))
 
-(defmacro in-vertex-array (name)
+(defmacro in-vertex-array (form)
   (let ((vao (gensym "VERTEX-ARRAY")))
-    `(let ((,vao (find-vertex-array ',name)))
+    `(let ((,vao (find-vertex-array ,form)))
        (gl:bind-vertex-array (vertex-array-id ,vao))
        (setf *vertex-array* ,vao))))
 
@@ -451,7 +460,7 @@
      (unwind-protect
          (progn
           ,@(mapcan
-              (lambda (bind) `((in-vertex-array ,(car bind)) ,@(cdr bind)))
+              (lambda (bind) `((in-vertex-array ',(car bind)) ,@(cdr bind)))
               bind*)
           ,@body)
        (gl:delete-vertex-arrays
@@ -508,13 +517,16 @@
 
 (defvar *texture* :uninitialized-texture)
 
-(defun find-texture (name)
-  (or (find name *textures* :key #'texture-name)
-      (error "Missing texture named ~S. ~S" name *textures*)))
+(defun find-texture (thing)
+  (etypecase thing
+    (texture thing)
+    (symbol
+     (or (find thing *textures* :key #'texture-name)
+         (error "Missing texture named ~S. ~S" thing *textures*)))))
 
-(defmacro in-texture (name)
+(defmacro in-texture (form)
   (let ((texture (gensym "TEXTURE")))
-    `(let ((,texture (find-texture ',name)))
+    `(let ((,texture (find-texture ,form)))
        (gl:active-texture (texture-id ,texture))
        (gl:bind-texture (texture-target ,texture) (texture-id ,texture))
        (setf *texture* ,texture))))
@@ -564,7 +576,7 @@
                    (destructuring-bind
                        (var target &key params init)
                        b
-                     `((in-texture ,var) ,@(<option-setters> params target)
+                     `((in-texture ',var) ,@(<option-setters> params target)
                        ,@(when init
                            `(,init)))))
                  bind*)
@@ -640,7 +652,7 @@
       thing))
 
 (defun <init-buffer> (buf vec)
-  `((in-buffer ,buf)
+  `((in-buffer ',buf)
     (gl:buffer-data (buffer-target ,buf) (buffer-usage ,buf) ,vec)))
 
 (defun prog-name (prog bind*)
@@ -687,7 +699,7 @@
                     (with-buffer ,(list* vbo ebo-bind)
                       (with-vertex-array ((,(caar bind*)
                                            ,@(<init-buffer> (car vbo) vertices)
-                                           (in-shader ,prog)
+                                           (in-shader ',prog)
                                            (link-attributes ,attr ,prog)
                                            ,@ebo-inits))
                         ,@(<may-uniform-bind> uniforms bind*))))))
