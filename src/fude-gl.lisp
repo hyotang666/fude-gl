@@ -972,6 +972,22 @@
              :when (typep v 'zpb-ttf::font-loader)
                :do (zpb-ttf::close-font-loader v)))))
 
+(defun pprint-with-glyph (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; Pprint-logical-block.
+                      "~W~^ ~1I~@_" ; Operator.
+                      (list "~:<" ; Pprint-logical-block for option.
+                            "~@{~W~^ ~@_~}" ; each elt.
+                            "~:>~^ ~_")
+                      "~@{~W~^ ~_~}" ; The body.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member with-glyph)) 'pprint-with-glyph)
+
 (defun font-data (char loader size)
   (flet ((non-zero-int (i)
            (if (zerop i)

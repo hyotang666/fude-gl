@@ -1064,7 +1064,7 @@
                             (:buffer buffer)
                             (:uniform projection text |textColor|)))
       (fude-gl::in-shader fude-gl::glyph))
-    (fude-gl::with-glyph nil)
+    (fude-gl::with-glyph ())
     (flet ((send (matrix uniform)
              (gl:uniform-matrix uniform 4 (vector (3d-matrices:marr matrix)))))
       (send
