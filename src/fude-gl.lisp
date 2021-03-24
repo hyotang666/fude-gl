@@ -1087,12 +1087,12 @@
         :for w = (* scale (char-glyph-w glyph))
         :for h = (* scale (char-glyph-h glyph))
         :do (loop :for elt
-                       :in (list x-pos (+ h y-pos) 0 0 ; first
-                                 x-pos y-pos 0 1 ; second
-                                 (+ w x-pos) y-pos 1 1 ; third
-                                 x-pos (+ h y-pos) 0 0 ; fourth
-                                 (+ w x-pos) y-pos 1 1 ; fifth
-                                 (+ w x-pos) (+ h y-pos) 1 0)
+                       :in (list x-pos (+ h y-pos) 0 0 ; upper left
+                                 x-pos y-pos 0 1 ; bottom left
+                                 (+ w x-pos) y-pos 1 1 ; bottom right
+                                 x-pos (+ h y-pos) 0 0 ; upper left
+                                 (+ w x-pos) y-pos 1 1 ; bottom right
+                                 (+ w x-pos) (+ h y-pos) 1 0) ; upper right
                   :for i :upfrom 0
                   :do (setf (gl:glaref vertices i) (float elt)))
             (gl:bind-texture (texture-target (char-glyph-texture glyph))
