@@ -289,12 +289,12 @@
 (declaim (type list *buffers*)
          (type (or (eql :uninitialized-buffer) buffer) *buffer*))
 
-(defun find-buffer (thind)
-  (etypecase thind
-    (buffer thind)
+(defun find-buffer (thing)
+  (etypecase thing
+    (buffer thing)
     (symbol
-     (or (find thind *buffers* :key #'buffer-name)
-         (error "Missing buffer named ~S. ~S" thind *buffers*)))))
+     (or (find thing *buffers* :key #'buffer-name)
+         (error "Missing buffer named ~S. ~S" thing *buffers*)))))
 
 (defmacro in-buffer (form)
   (let ((buffer (gensym "BUFFER")))
