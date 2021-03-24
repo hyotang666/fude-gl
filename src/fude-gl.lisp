@@ -1059,7 +1059,20 @@
         (vertices (error ":VERTICES is required."))
         (color-uniform (error ":COLOR-UNIFORM is required."))
         ((:vertex-array vao) (error ":VERTEX-ARRAY is required."))
-        ((:vertex-buffer vbo) (error ":VERTEX-BUFFER is required.")))
+        ((:vertex-buffer vbo) (error ":VERTEX-BUFFER is required."))
+        (win
+         (when (or (eq :center x) (eq :center y))
+           (alexandria:required-argument :win))))
+  (when win
+    (let ((bbox
+           (vecto:string-bounding-box text (ceiling (* scale *font-size*))
+                                      (font-loader font))))
+      (when (eq :center x)
+        (setf x (- (floor (sdl2:get-window-size win) 2)
+                   (floor (- (zpb-ttf:xmax bbox) (zpb-ttf:xmin bbox)) 2))))
+      (when (eq :center y)
+        (setf y (- (floor (nth-value 1 (sdl2:get-window-size win)) 2)
+                   (floor (- (zpb-ttf:ymax bbox) (zpb-ttf:ymin bbox)) 2))))))
   (setf text (map 'list (lambda (c) (char-glyph c font)) text))
   (in-shader shader)
   (apply #'gl:uniformf color-uniform color)
