@@ -925,6 +925,8 @@
 
 (defparameter *fonts* (initialize-fonts "/usr/share/fonts/"))
 
+(defparameter *font-size* 16)
+
 (defun find-font (name &optional (errorp t))
   (or (values (gethash name *fonts*))
       (and errorp (error "Missing font named: ~S" name))))
@@ -961,9 +963,10 @@
 
 (defvar *glyphs*)
 
-(defmacro with-glyph (() &body body)
+(defmacro with-glyph ((&key (size '*font-size*)) &body body)
   `(let ((*fonts* (alexandria:copy-hash-table *fonts*))
-         (*glyphs* (make-hash-table)))
+         (*glyphs* (make-hash-table))
+         (*font-size* ,size))
      (unwind-protect (progn ,@body)
        (loop :for g :being :each :hash-value of *glyphs*
              :collect (texture-id (char-glyph-texture g)) :into textures
@@ -1022,7 +1025,7 @@
                   (* (zpb-ttf:advance-width (zpb-ttf:find-glyph char loader))
                      (/ size (zpb-ttf:units/em loader)))))))))
 
-(defun char-glyph (char font-name &optional (size 16))
+(defun char-glyph (char font-name &optional (size *font-size*))
   (let ((loader (font-loader font-name)))
     (if (not (zpb-ttf:glyph-exists-p char loader))
         (error "~S is not exist in the font ~S." char font-name)
