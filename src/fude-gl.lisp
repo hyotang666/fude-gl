@@ -4,14 +4,28 @@
   (:use :cl)
   (:export ;;;; MAIN API.
            #:defshader
+           #:with-shader
            ;;;; FUNDAMENTAL-CLASSES
            #:xy
            #:xyz
            #:st
            #:rgb
+           ;;;; TEXT-RENDERING
+           #:render-text
+           #:glyph ; shader-class
+           #:with-glyph
+           #:*font-size*
+           #:font-loader
+           ;;;; GL-OBJECTS
+           ;; texture
+           #:texture
+           #:texture-id
+           ;; program
+           #:in-shader
+           ;; vertex-array
+           #:in-vertex-array
            ;;;; UTILITIES
            #:radians
-           #:with-shader
            #:with-gl-vector
            #:with-textures
            #:with-2d-textures
