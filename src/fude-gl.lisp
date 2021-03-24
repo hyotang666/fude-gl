@@ -1007,7 +1007,8 @@
       ;; TODO Implement gray scale rasterizer.
       (vecto:with-canvas (:width w :height h)
         (vecto:set-font loader size)
-        (vecto:draw-string 0 (- (zpb-ttf:ymin bbox)) string)
+        (vecto:draw-string (- (zpb-ttf:xmin bbox)) (- (zpb-ttf:ymin bbox))
+                           string)
         (values (loop :with vec = (vecto::image-data vecto::*graphics-state*)
                       :with new
                             = (make-array (* w h)
