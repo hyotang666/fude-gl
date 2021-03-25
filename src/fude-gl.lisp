@@ -861,7 +861,9 @@
        (let ((,delta (- ,idle (- (get-internal-real-time) ,time))))
          (if (plusp ,delta)
              (sleep (* ,(/ 1 internal-time-units-per-second) ,delta))
-             (warn "Over FPS. ~S" (- ,delta)))))))
+             (warn "Over FPS. ~S sec."
+                   (float
+                     (* (/ 1 internal-time-units-per-second) (- ,delta)))))))))
 
 (defun pprint-with-clear (stream exp)
   (funcall
