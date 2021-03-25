@@ -354,44 +354,41 @@
        (gl:use-program (program-id ,program))
        (setf *prog* ,program))))
 
+(defun compile-shader (prog vertex-shader fragment-shader)
+  (let ((vs (gl:create-shader :vertex-shader))
+        (fs (gl:create-shader :fragment-shader)))
+    (unwind-protect
+        (labels ((compile-s (prog id source)
+                   (gl:shader-source id source)
+                   (gl:compile-shader id)
+                   (may-warn (gl:get-shader-info-log id))
+                   (gl:attach-shader (program-id prog) id))
+                 (may-warn (log)
+                   (unless (equal "" log)
+                     (warn log))))
+          (compile-s prog vs vertex-shader)
+          (compile-s prog fs fragment-shader)
+          (gl:link-program (program-id prog))
+          (may-warn (gl:get-program-info-log (program-id prog))))
+      (gl:delete-shader fs)
+      (gl:delete-shader vs))))
+
 (defmacro with-prog (&whole whole (&rest bind*) &body body)
   (check-bnf:check-bnf (:whole whole)
     ((bind* (symbol check-bnf:expression check-bnf:expression))))
-  (alexandria:with-unique-names (compile warn vs fs)
-    `(let* ((*prog* *prog*)
-            ,@(loop :for (name) :in bind*
-                    :collect `(,name
-                               (make-program :name ',name
-                                             :id (gl:create-program))))
-            (*progs* (list* ,@(mapcar #'car bind*) *progs*)))
-       (unwind-protect
-           (progn
-            ,@(loop :for (var vertex-shader fragment-shader) :in bind*
-                    :collect `(let ((,vs (gl:create-shader :vertex-shader))
-                                    (,fs (gl:create-shader :fragment-shader)))
-                                (unwind-protect
-                                    (labels ((,compile (prog id source)
-                                               (gl:shader-source id source)
-                                               (gl:compile-shader id)
-                                               (,warn
-                                                (gl:get-shader-info-log id))
-                                               (gl:attach-shader
-                                                 (program-id prog) id))
-                                             (,warn (log)
-                                               (unless (equal "" log)
-                                                 (warn log))))
-                                      (,compile ,var ,vs ,vertex-shader)
-                                      (,compile ,var ,fs ,fragment-shader)
-                                      (gl:link-program (program-id ,var))
-                                      (,warn
-                                       (gl:get-program-info-log
-                                         (program-id ,var))))
-                                  (gl:delete-shader ,fs)
-                                  (gl:delete-shader ,vs))))
-            ,@body)
-         ,@(mapcar
-             (lambda (bind) `(gl:delete-program (program-id ,(car bind))))
-             bind*)))))
+  `(let* ((*prog* *prog*)
+          ,@(loop :for (name) :in bind*
+                  :collect `(,name
+                             (make-program :name ',name
+                                           :id (gl:create-program))))
+          (*progs* (list* ,@(mapcar #'car bind*) *progs*)))
+     (unwind-protect
+         (progn
+          ,@(loop :for bind :in bind*
+                  :collect `(compile-shader ,@bind))
+          ,@body)
+       ,@(mapcar (lambda (bind) `(gl:delete-program (program-id ,(car bind))))
+                 bind*))))
 
 ;;; LINK-ATTRIBUTES
 
