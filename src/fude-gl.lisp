@@ -61,6 +61,14 @@
 
 (defun radians (degrees) (* degrees (/ pi 180)))
 
+(defun ortho (win &optional (direction :bottom-up))
+  (multiple-value-bind (w h)
+      (sdl2:get-window-size win)
+    (3d-matrices:marr
+      (ecase direction
+        (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
+        (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1))))))
+
 ;;;; CLASSES
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -1131,12 +1139,7 @@
                      (:uniform (,projection projection) (,text text)
                                (,text-color |textColor|))))
        (in-shader glyph)
-       (gl:uniform-matrix ,projection 4
-                          (multiple-value-bind (w h)
-                              (sdl2:get-window-size ,win)
-                            (vector
-                              (3d-matrices:marr
-                                (3d-matrices:mortho 0 w 0 h -1 1)))))
+       (gl:uniform-matrix ,projection 4 (vector (ortho ,win)))
        (with-glyph (:size ,size)
          (flet ((,name (string &key (x 0) (y 0) (scale 1))
                   (render-text string glyph
