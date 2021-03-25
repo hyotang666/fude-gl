@@ -266,13 +266,8 @@
 (defmacro with-gl-vector (&whole whole (&rest bind*) &body body)
   "Each var is bound by gl-array."
   (check-bnf:check-bnf (:whole whole) ((bind* (symbol check-bnf:expression))))
-  `(let ,(mapcar
-           (lambda (bind)
-             (destructuring-bind
-                 (var vector)
-                 bind
-               `(,var (make-gl-vector ,vector))))
-           bind*)
+  `(let ,(loop :for (var vector) :in bind*
+               :collect `(,var (make-gl-vector ,vector)))
      (unwind-protect (progn ,@body)
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
 
