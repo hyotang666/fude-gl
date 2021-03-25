@@ -11,6 +11,7 @@
            #:st
            #:rgb
            ;;;; TEXT-RENDERING
+           #:with-text-renderer
            #:render-text
            #:glyph ; shader-class
            #:with-glyph
@@ -1116,3 +1117,37 @@
             (gl:buffer-sub-data (buffer-target vbo) vertices)
             (gl:draw-arrays :triangles 0 6)
             (incf x (* scale (char-glyph-advance glyph)))))
+
+(defmacro with-text-renderer
+          ((name &key (size 16) (win (alexandria:required-argument :win)))
+           &body body)
+  (alexandria:with-unique-names (vertices vao buffer projection text text-color)
+    `(with-shader ((glyph
+                     (:vertices ,vertices
+                                (make-array (* 4 6)
+                                            :element-type 'single-float
+                                            :initial-element 0.0)
+                                :usage :dynamic-draw)
+                     (:vertex-array ,vao)
+                     (:buffer ,buffer)
+                     (:uniform (,projection projection) (,text text)
+                               (,text-color |textColor|))))
+       (in-shader glyph)
+       (gl:uniform-matrix ,projection 4
+                          (multiple-value-bind (w h)
+                              (sdl2:get-window-size ,win)
+                            (vector
+                              (3d-matrices:marr
+                                (3d-matrices:mortho 0 w 0 h -1 1)))))
+       (with-glyph (:size ,size)
+         (flet ((,name (string &key (x 0) (y 0) (scale 1))
+                  (render-text string glyph
+                               :color-uniform ,text-color
+                               :vertices ,vertices
+                               :vertex-array ,vao
+                               :vertex-buffer ,buffer
+                               :scale scale
+                               :x x
+                               :y y
+                               :win ,win)))
+           ,@body)))))

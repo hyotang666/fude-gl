@@ -1047,31 +1047,10 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :blend)
       (gl:blend-func :src-alpha :one-minus-src-alpha))
-    (fude-gl:with-shader ((fude-gl::glyph
-                            (:vertices vertices
-                                       (make-array (* 4 6)
-                                                   :element-type 'single-float
-                                                   :initial-element 0.0)
-                                       :usage :dynamic-draw)
-                            (:vertex-array glyph-vao)
-                            (:buffer buffer)
-                            (:uniform projection text |textColor|)))
-      (fude-gl::in-shader fude-gl::glyph))
-    (fude-gl::with-glyph ())
-    (flet ((send (matrix uniform)
-             (gl:uniform-matrix uniform 4 (vector (3d-matrices:marr matrix)))))
-      (send
-        (multiple-value-bind (w h)
-            (sdl2:get-window-size win)
-          (3d-matrices:mortho 0 w 0 h -1 1))
-        projection))
+    (fude-gl::with-text-renderer (renderer :size 32 :win win))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
-          (fude-gl::render-text "Hello world!" fude-gl::glyph
-                                :color-uniform |textColor|
-                                :vertices vertices
-                                :vertex-array glyph-vao
-                                :vertex-buffer buffer))))))
+          (renderer "Hello world! g" :x 0 :y :center))))))
