@@ -467,7 +467,6 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
-      (sleep (/ 1 60))
       (gl:uniform-matrix transform 4
                          (vector
                            (3d-matrices:marr
@@ -500,7 +499,6 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (sleep (/ 1 60))
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -536,7 +534,6 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (sleep (/ 1 15))
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -575,7 +572,6 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (sleep (/ 1 10))
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -715,7 +711,6 @@
                 (:quit ()
                   t)
                 (:idle ()
-                  (sleep (/ 1 15))
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                     (let ((m
                            (3d-matrices:nmrotate (3d-matrices:meye 4)
@@ -781,7 +776,6 @@
                   (:quit ()
                     t)
                   (:idle ()
-                    (sleep (/ 1 5))
                     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                       (loop :for pos :in cube-positions
                             :for i :upfrom 0
@@ -843,7 +837,6 @@
                   (:quit ()
                     t)
                   (:idle ()
-                    (sleep (/ 1 15))
                     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                       (let* ((radius 10)
                              (v
@@ -1076,7 +1069,6 @@
       (:quit ()
         t)
       (:idle ()
-        (sleep (/ 1 15))
         (fude-gl:with-clear (win (:color-buffer-bit))
           (fude-gl::render-text "Hello world!" fude-gl::glyph
                                 :color-uniform |textColor|

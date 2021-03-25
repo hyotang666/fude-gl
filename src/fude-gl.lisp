@@ -834,17 +834,25 @@
   '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
 
 (defmacro with-clear
-          (&whole whole (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)))
+          (&whole whole
+           (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)) (fps 60))
            &body body)
   (check-bnf:check-bnf (:whole whole)
     ((var-win symbol))
     ((buf* check-bnf:expression))
     ((color check-bnf:expression)))
-  `(progn
-    (apply #'gl:clear-color ,color)
-    (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) buf*))
-    ,@body
-    (sdl2:gl-swap-window ,var-win)))
+  (let ((time (gensym "TIME"))
+        (idle (gensym "IDLE"))
+        (delta (gensym "DELTA")))
+    `(let ((,time (get-internal-real-time))
+           (,idle ,(* internal-time-units-per-second (/ 1 fps))))
+       (apply #'gl:clear-color ,color)
+       (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) buf*))
+       ,@body
+       (sdl2:gl-swap-window ,var-win)
+       (let ((,delta (- ,idle (- (get-internal-real-time) ,time))))
+         (when (plusp ,delta)
+           (sleep (* ,(/ 1 internal-time-units-per-second) ,delta)))))))
 
 (defun pprint-with-clear (stream exp)
   (funcall
