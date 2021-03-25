@@ -859,8 +859,9 @@
        ,@body
        (sdl2:gl-swap-window ,var-win)
        (let ((,delta (- ,idle (- (get-internal-real-time) ,time))))
-         (when (plusp ,delta)
-           (sleep (* ,(/ 1 internal-time-units-per-second) ,delta)))))))
+         (if (plusp ,delta)
+             (sleep (* ,(/ 1 internal-time-units-per-second) ,delta))
+             (warn "Over FPS. ~S" (- ,delta)))))))
 
 (defun pprint-with-clear (stream exp)
   (funcall
