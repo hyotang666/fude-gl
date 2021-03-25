@@ -692,6 +692,7 @@
              (<may-uniform-bind> (uniforms bind*)
                (if uniforms
                    `((let ,uniforms
+                       (declare (ignorable ,@(mapcar #'car uniforms)))
                        ,@(rec (cdr bind*))))
                    (rec (cdr bind*))))
              (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
