@@ -72,6 +72,51 @@
 ;;;; CLASSES
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *vertex-attributes* (make-hash-table)))
+
+#| NOTE:
+ | T is constant.
+ | We could not name a slot with constant (at least in sbcl).
+ | So we decide to use prefix % for every slot name.
+ | We choice having single rule rather than having corner case.
+ |#
+
+(defmacro define-vertex-attribute (name (&rest slot*) &body option*)
+  `(progn
+    (defclass ,name ()
+      ,(mapcar
+         (lambda (slot)
+           `(,(intern (format nil "%~A" slot) :fude-gl) :initarg
+             ,(intern (string slot) :keyword) :type single-float))
+         (or slot* (coerce (symbol-name name) 'list)))
+      (:metaclass
+       ,(if (second (assoc :instances option*))
+            'instanced-array
+            'attributes)))
+    (setf (gethash ',name *vertex-attributes*) ',name)))
+
+(defun pprint-define-vertex-attribute (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; ppirnt logical block
+                      "~W~^ ~1I~@_" ; operator.
+                      "~W~^ ~@_" ; name
+                      (list "~:<" ; pprint-logical-block of slots
+                            "~@{~W~^ ~@_~}" ; slots.
+                            "~:>~^ ~_")
+                      "~@{~W~^ ~_~}" ; options.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member define-vertex-attribute))
+                     'pprint-define-vertex-attribute)
+
+(defun vertex-attribute-p (thing)
+  (and (symbolp thing) (values (gethash thing *vertex-attributes*))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (defun class-list (class)
     "Return class list specified to abstract oder, superclasses are reverse order."
     (uiop:while-collecting (acc)
@@ -88,29 +133,16 @@
   ;; METACLASS
   (defclass vector-class (standard-class) ())
   (defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
+  ;; METACLASS for attributes.
+  (defclass attributes (vector-class) ())
+  ;; METACLASS for instanced-array.
+  (defclass instanced-array (vector-class) ())
   ;; CLASSES
-  #| NOTE:
- | T is constant.
- | We could not name a slot with constant (at least in sbcl).
- | So we decide to use prefix % for every slot name.
- | We choice having single rule rather than having corner case.
- |#
-  (defclass xy ()
-    ((%x :initarg :x :type single-float) (%y :initarg :y :type single-float))
-    (:metaclass vector-class))
-  (defclass xyz ()
-    ((%x :initarg :x :type single-float)
-     (%y :initarg :y :type single-float)
-     (%z :initarg :z :type single-float))
-    (:metaclass vector-class))
-  (defclass st ()
-    ((%s :initarg :s :type single-float) (%t :initarg :t :type single-float))
-    (:metaclass vector-class))
-  (defclass rgb ()
-    ((%r :initarg :r :type single-float)
-     (%g :initarg :g :type single-float)
-     (%b :initarg :b :type single-float))
-    (:metaclass vector-class)))
+  (define-vertex-attribute xy ())
+  (define-vertex-attribute xyz ())
+  (define-vertex-attribute st ())
+  (define-vertex-attribute rgb ())
+  (define-vertex-attribute offset (x y) (:instances t)))
 
 ;;;; CONSTRUCTOR
 
@@ -213,7 +245,7 @@
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
     ((version unsigned-byte))
-    (((superclass+ superclasses) symbol))
+    (((superclass+ superclasses) (satisfies vertex-attribute-p)))
     ((shader* (or vertex-clause fragment-clause))
      ;;
      (vertex-clause ((eql :vertex) shader-lambda-list main*))
