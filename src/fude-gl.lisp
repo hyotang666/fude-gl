@@ -265,7 +265,6 @@
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (defclass ,name ,superclasses () (:metaclass vector-class))
      ,@(<shader-forms> shader* superclasses name version)
-     (with-prog ((check (vertex-shader ',name) (fragment-shader ',name))))
      ,(<uniforms> name shader*)
      ',name))
 
