@@ -195,13 +195,14 @@
     (let ((format
            (formatter
             #.(concatenate 'string "#version ~A core~%" ; version
-                           "~{in ~A ~A;~%~}~&" ; in
+                           "~{~@[~A~]in ~A ~A;~%~}~&" ; in
                            "~{out ~A ~A;~%~}~&" ; out
                            "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
                            "void main () {~%~{~A~^~%~}~%}" ; the body.
                            ))))
       (labels ((defs (list)
                  (loop :for (name type . vector-size) :in list
+                       :collect nil
                        :collect (change-case:camel-case (symbol-name type))
                        :collect (if vector-size
                                     (format nil "~A[~A]"
@@ -216,27 +217,33 @@
                      (body (car shaders) (cdr shaders) in acc)))
                (body (shader rest in acc)
                  (destructuring-bind
-                     (type out &rest main)
+                     (type shader-lambda-list &rest main)
                      shader
-                   (let* ((&uniform (position-if #'uniform-keywordp out))
-                          (vars (and out (defs (subseq out 0 &uniform)))))
+                   (let* ((&uniform
+                           (position-if #'uniform-keywordp shader-lambda-list))
+                          (vars
+                           (and shader-lambda-list
+                                (defs (subseq shader-lambda-list 0 &uniform)))))
                      (rec rest vars
                           (cons
                             (<shader-method>
                               (intern (format nil "~A-SHADER" type) :fude-gl)
                               name main
-                              (format nil format version in vars
+                              (format nil format version in (remove nil vars)
                                       (and &uniform
-                                           (defs (subseq out (1+ &uniform))))
+                                           (delete nil
+                                                   (defs
+                                                     (subseq shader-lambda-list
+                                                             (1+ &uniform)))))
                                       main))
                             acc))))))
         (rec shader-clause*
-             (loop :for c
-                        :in (mapcan (lambda (c) (class-list (find-class c)))
-                                    superclasses)
+             (loop :for c :in (mapcar #'find-class superclasses)
                    :for slots = (c2mop:class-direct-slots c)
+                   :for i :upfrom 0
                    :when slots
-                     :collect (format nil "vec~D" (length slots))
+                     :collect (format nil "layout (location = ~A) " i)
+                     :and :collect (format nil "vec~D" (length slots))
                      :and :collect (change-case:camel-case
                                      (symbol-name (class-name c))))
              nil)))))
@@ -454,50 +461,6 @@
        ,@(mapcar (lambda (bind) `(gl:delete-program (program-id ,(car bind))))
                  bind*))))
 
-;;; LINK-ATTRIBUTES
-
-(defun get-attrib-location (program class)
-  (let* ((name (change-case:camel-case (symbol-name (class-name class))))
-         (loc (gl:get-attrib-location (program-id program) name)))
-    (if (minusp loc)
-        (error "Not active attribute name ~S in ~S." name program)
-        loc)))
-
-(defun link-attributes (class program)
-  (labels ((rec (class-list total-length funs)
-             (if (endp class-list)
-                 (let ((total (apply #'+ total-length)))
-                   (loop :for f :in funs
-                         :for l :in total-length
-                         :do (funcall f total l offset)
-                         :sum l :into offset))
-                 (let ((slots
-                        (length (c2mop:class-direct-slots (car class-list)))))
-                   (if (zerop slots)
-                       (rec (cdr class-list) total-length funs)
-                       (rec (cdr class-list)
-                            (cons (the (integer 1 4) slots) total-length)
-                            (cons (processer (car class-list)) funs))))))
-           (processer (class)
-             (lambda (total-length length offset)
-               (let* ((location (get-attrib-location program class))
-                      (slots
-                       (c2mop:class-direct-slots
-                         (c2mop:ensure-finalized class)))
-                      (type
-                       (ecase (c2mop:slot-definition-type (car slots))
-                         (single-float :float)))
-                      (size (cffi:foreign-type-size type)))
-                 #++
-                 (uiop:format! *trace-output* "~%Length ~S. Offset ~S."
-                               (* total-length size) (* offset size))
-                 (gl:vertex-attrib-pointer location length type nil ; As
-                                                                    ; normalized-p
-                                           (* total-length size)
-                                           (* offset size))
-                 (gl:enable-vertex-attrib-array location)))))
-    (rec (class-list (find-class class)) nil nil)))
-
 ;;; WITH-VERTEX-ARRAY
 
 (defstruct (vertex-array (:include gl-object)))
@@ -532,7 +495,7 @@
      (unwind-protect
          (progn
           ,@(mapcan
-              (lambda (bind) `((in-vertex-array ',(car bind)) ,@(cdr bind)))
+              (lambda (bind) `((in-vertex-array ,(car bind)) ,@(cdr bind)))
               bind*)
           ,@body)
        (gl:delete-vertex-arrays
@@ -694,6 +657,57 @@
 
 ;;;; WITH-VAO
 
+(defun send (gl-vector buffer)
+  (in-buffer buffer)
+  (gl:buffer-data (buffer-target buffer) (buffer-usage buffer) gl-vector))
+
+(defun find-attribute (attribute class)
+  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+        :for index :upfrom 0
+        :when (eq attribute (class-name c))
+          :return (values c index)
+        :finally (error "Missing attribute ~S in ~S" attribute
+                        (c2mop:class-direct-superclasses (find-class class)))))
+
+(defun count-attributes (class)
+  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+        :when (typep c 'attributes)
+          :sum (length (c2mop:class-slots c))))
+
+(defun attribute-offset (attribute class)
+  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+        :until (eq attribute (class-name c))
+        :sum (length (c2mop:class-slots c))))
+
+(defun link-attribute (attribute class)
+  (multiple-value-bind (c index)
+      (find-attribute attribute class)
+    (let* ((slots (c2mop:class-slots (c2mop:ensure-finalized c)))
+           (type (foreign-type (c2mop:slot-definition-type (car slots)))))
+      (gl:enable-vertex-attrib-array index)
+      (etypecase c
+        (attributes
+         (gl:vertex-attrib-pointer index (length slots) type nil
+                                   (* (count-attributes class)
+                                      (cffi:foreign-type-size type))
+                                   (* (attribute-offset attribute class)
+                                      (cffi:foreign-type-size type))))
+        (instanced-array
+         (gl:vertex-attrib-pointer index (length slots) type nil
+                                   (* (length slots)
+                                      (cffi:foreign-type-size type))
+                                   0)
+         (%gl:vertex-attrib-divisor 2 1))))))
+
+(defun link-attributes (class instance-buffer)
+  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+        :when (typep c 'instanced-array)
+          :if instance-buffer
+            :do (in-buffer instance-buffer)
+          :else
+            :do (error "Missing instace buffer for ~S." class)
+        :do (link-attribute (class-name c) class)))
+
 (defmacro indices-of (id)
   (declare (ignore id))
   (error "INDICE-OF is must be inside of WITH-VAO."))
@@ -724,7 +738,7 @@
       thing))
 
 (defun <init-buffer> (buf vec)
-  `((in-buffer ',buf)
+  `((in-buffer ,buf)
     (gl:buffer-data (buffer-target ,buf) (buffer-usage ,buf) ,vec)))
 
 (defun prog-name (prog bind*)
@@ -738,56 +752,73 @@
       "Mismatch uniforms. ~S but ~S" required actual)
     (mapcar (<uniform-binder> prog) uniforms)))
 
+(defun eassoc (key alist)
+  (or (assoc key alist) (error "Missing key ~S in ~S" key alist)))
+
 (defun parse-with-vao-binds (bind* body)
   (let ((refs))
-    (labels ((clause (clause bind)
-               (or (assoc clause (cdr bind))
-                   (error "Missing required cluase ~S in ~S" clause bind)))
-             (rec (bind*)
+    (labels ((rec (bind*)
                (if (endp bind*)
                    body
                    (destructuring-bind
                        (prog vs fs)
-                       (cdr (clause :shader (car bind*)))
+                       (cdr (eassoc :shader (cdar bind*)))
                      (unless prog
                        (setf prog (gensym "PROG")))
                      `((with-prog ((,prog ,vs ,fs))
                          ,(body (assoc :indices (cdar bind*)) prog bind*))))))
-             (<may-uniform-bind> (uniforms bind*)
-               (if uniforms
-                   `((let ,uniforms
-                       (declare (ignorable ,@(mapcar #'car uniforms)))
-                       ,@(rec (cdr bind*))))
-                   (rec (cdr bind*))))
-             (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
-               (let* ((verts (clause :vertices (car bind*)))
-                      (vertices (or (second verts) (gensym "VERTICES")))
-                      (vbo
-                       `(,(or (cadr (assoc :buffer (cdar bind*)))
-                              (gensym "VBO"))
-                         ,@(cdddr (assoc :vertices (cdar bind*)))))
-                      (uniforms (uniform-bind bind* prog))
-                      (attr (second (clause :attributes (car bind*)))))
-                 `(with-gl-vector ((,vertices ,(third verts)) ,@indices-bind)
-                    (with-buffer ,(list* vbo ebo-bind)
-                      (with-vertex-array ((,(caar bind*)
-                                           ,@(<init-buffer> (car vbo) vertices)
-                                           (in-shader ',prog)
-                                           (link-attributes ,attr ,prog)
-                                           ,@ebo-inits))
-                        ,@(<may-uniform-bind> uniforms bind*))))))
-             (body (vec prog bind*)
-               (if vec
+             (body (clause prog bind*)
+               (if clause
                    (alexandria:with-unique-names (vector indices ebo)
-                     `(let ((,vector ,(second vec)))
+                     `(let ((,vector ,(second clause)))
                         ,(progn
                           (push (list (prog-name prog bind*) `',vector) refs)
                           (<body-form> bind* prog `((,indices ,vector))
                                        `((,ebo
                                           ,@(uiop:remove-plist-key :size (cddr
-                                                                           vec))))
+                                                                           clause))))
                                        (<init-buffer> ebo indices)))))
-                   (<body-form> bind* prog))))
+                   (<body-form> bind* prog)))
+             (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
+               (let* ((verts (eassoc :vertices (cdar bind*)))
+                      (vertices (or (second verts) (gensym "VERTICES")))
+                      (vbo
+                       `(,(or (cadr (assoc :buffer (cdar bind*)))
+                              (gensym "VBO"))
+                         ,@(uiop:remove-plist-key :instances (cdddr
+                                                               (assoc :vertices (cdar
+                                                                                  bind*))))))
+                      (uniforms (uniform-bind bind* prog))
+                      (attr (second (eassoc :attributes (cdar bind*))))
+                      (instances (getf (cdr verts) :instances))
+                      (instances-bind
+                       (when instances
+                         `((,(gensym "INSTANCES") ,instances))))
+                      (instances-buffer
+                       (when instances
+                         `((,(gensym "INSTANCES-BUFFER"))))))
+                 `(with-gl-vector ((,vertices ,(third verts)) ,@indices-bind
+                                   ,@instances-bind)
+                    (with-buffer ,(append (list vbo) instances-buffer ebo-bind)
+                      (with-vertex-array ((,(caar bind*)
+                                           ,@(<init-buffer> (car vbo) vertices)
+                                           ,@(when instances
+                                               (<init-buffer>
+                                                 (caar instances-buffer)
+                                                 (caar instances-bind)))
+                                           (in-shader ,prog)
+                                           (in-buffer ,(car vbo))
+                                           (link-attributes ,attr
+                                                            ,(caar
+                                                               instances-buffer))
+                                           ,@ebo-inits))
+                        ,@(<may-uniform-bind> uniforms bind*))))))
+             (<may-uniform-bind> (uniforms bind*)
+               (if uniforms
+                   `((let ,uniforms
+                       (declare (ignorable ,@(mapcar #'car uniforms)))
+                       ,@(rec (cdr bind*))))
+                   (rec (cdr bind*)))))
       (values (rec bind*) refs))))
 
 (defmacro with-vao (&whole whole (&rest bind*) &body body)
@@ -803,7 +834,8 @@
           shader-clause))
      ;; When this VAR is specified, it is bound by gl-array pointer.
      (vertices-clause ((eql :vertices) var init-form vertices-option*))
-     (vertices-option* (member :usage :target :size) check-bnf:expression)
+     (vertices-option* (member :usage :target :size :instances)
+      check-bnf:expression)
      ;;
      (indices-clause ((eql :indices) init-form indices-option*))
      (indices-option* keyword check-bnf:expression)

@@ -66,13 +66,13 @@
                             (:uniform |triangleColor|))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
-        t))
-    (:idle nil)
-    (fude-gl:with-clear (win (:color-buffer-bit))
-      (fude-gl::in-shader uniform-demo)
-      (gl:uniformf |triangleColor| (/ (+ 1.0 (sin (get-internal-real-time))) 2)
-                   0.0 0.0)
-      (gl:draw-arrays :triangles 0 3))))
+        t)
+      (:idle ()
+        (fude-gl:with-clear (win (:color-buffer-bit))
+          (fude-gl::in-shader uniform-demo)
+          (gl:uniformf |triangleColor|
+                       (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0 0.0)
+          (gl:draw-arrays :triangles 0 3))))))
 
 ;;;; COLORED-TRIANGLE
 
@@ -112,13 +112,13 @@
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ((colored-triangle
                             (:vertices nil *colored-triangle*)))
-      (fude-gl::in-shader colored-triangle))
-    (sdl2:with-event-loop (:method :poll)
-      (:quit ()
-        t))
-    (:idle nil)
-    (fude-gl:with-clear (win (:color-buffer-bit))
-      (gl:draw-arrays :triangles 0 3))))
+      (fude-gl::in-shader colored-triangle)
+      (sdl2:with-event-loop (:method :poll)
+        (:quit ()
+          t)
+        (:idle ()
+          (fude-gl:with-clear (win (:color-buffer-bit))
+            (gl:draw-arrays :triangles 0 3)))))))
 
 ;;;; ELEMENT-BUFFER
 
@@ -1105,4 +1105,226 @@
         t)
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
-          (%gl:draw-arrays-instanced :triangles 0 6 100))))))
+          (%gl:draw-arrays-instanced :triangles 0 6 (length translations)))))))
+
+;;;; INSTANCED-ARRAYS
+
+(fude-gl:defshader instanced-arrays-demo 330 (fude-gl:xy fude-gl:rgb
+                                              fude-gl::offset)
+  (:vertex ((|fColor| :vec3))
+    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+    "fColor = rgb;")
+  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+
+(defparameter *translations*
+  (loop :with offset = 0.1
+        :for y :upfrom -10 :below 10 :by 2
+        :nconc (loop :for x :upfrom -10 :below 10 :by 2
+                     :collect (list (+ (/ x 10) offset) (+ (/ y 10) offset)))
+          :into result
+        :finally (return
+                  (make-array '(100 2)
+                              :element-type 'single-float
+                              :initial-contents result))))
+
+#++
+(defun instanced-arrays-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl::with-prog ((prog (fude-gl::vertex-shader
+                                    'instanced-arrays-demo)
+                               (fude-gl::fragment-shader
+                                 'instanced-arrays-demo)))
+          (fude-gl::in-shader prog)
+          (fude-gl:with-gl-vector ((translations *translations*)
+                                   (quad *instancing*))
+            (fude-gl::with-buffer ((instance-buffer) (quad-buffer))
+              (fude-gl::with-vertex-array ((vao
+                                            ;; Initialize-buffer
+                                            (fude-gl::in-buffer quad-buffer)
+                                            (gl:buffer-data
+                                              (fude-gl::buffer-target
+                                                quad-buffer)
+                                              (fude-gl::buffer-usage
+                                                quad-buffer)
+                                              quad)
+                                            ;;; Initialize vertex array.
+                                            ;; xy
+                                            (fude-gl::in-buffer quad-buffer)
+                                            (gl:enable-vertex-attrib-array 0)
+                                            (gl:vertex-attrib-pointer 0 2
+                                                                      :float
+                                                                      nil
+                                                                      (* 5
+                                                                         (cffi:foreign-type-size
+                                                                           :float))
+                                                                      0)
+                                            ;; rgb
+                                            (fude-gl::in-buffer quad-buffer)
+                                            (gl:enable-vertex-attrib-array 1)
+                                            (gl:vertex-attrib-pointer 1 3
+                                                                      :float
+                                                                      nil
+                                                                      (* 5
+                                                                         (cffi:foreign-type-size
+                                                                           :float))
+                                                                      (* 2
+                                                                         (cffi:foreign-type-size
+                                                                           :float)))
+                                            ;; offset
+                                            (fude-gl::in-buffer
+                                             instance-buffer)
+                                            (gl:buffer-data
+                                              (fude-gl::buffer-target
+                                                instance-buffer)
+                                              (fude-gl::buffer-usage
+                                                instance-buffer)
+                                              translations)
+                                            (gl:enable-vertex-attrib-array 2)
+                                            (gl:vertex-attrib-pointer 2 2
+                                                                      :float
+                                                                      nil
+                                                                      (* 2
+                                                                         (cffi:foreign-type-size
+                                                                           :float))
+                                                                      0)
+                                            (%gl:vertex-attrib-divisor 2 1)))
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (fude-gl:with-clear (win (:color-buffer-bit))
+                      (%gl:draw-arrays-instanced :triangles 0 6 100))))))))))))
+
+#+design
+(fude-gl:defshader instanced-arrays-demo 330 (fude-gl:xy fude-gl:rgb &instance
+                                              offset)
+  (:vertex ((|fcolor| :vec3))
+    "gl_position = vec4(xy + offset, 0.0, 1.0);"
+    "fcolor = rgb;")
+  (:fragment ((|fragcolor| :vec4)) "fragcolor = vec4(fcolor, 1.0);"))
+
+#++
+(defun instanced-arrays-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl::with-prog ((prog (fude-gl::vertex-shader
+                                    'instanced-arrays-demo)
+                               (fude-gl::fragment-shader
+                                 'instanced-arrays-demo)))
+          (fude-gl::in-shader prog)
+          (fude-gl:with-gl-vector ((translations *translations*)
+                                   (quad *instancing*))
+            (fude-gl::with-buffer ((instance-buffer) (quad-buffer))
+              (fude-gl::with-vertex-array ((vao
+                                            ;; Initialize-buffer
+                                            (fude-gl::send quad quad-buffer)
+                                            (fude-gl::send translations
+                                                           instance-buffer)
+                                            ;;; Initialize vertex array.
+                                            (fude-gl::in-buffer quad-buffer)
+                                            ;; xy
+                                            (fude-gl::link-attribute
+                                              'fude-gl:xy
+                                              'instanced-arrays-demo)
+                                            ;; rgb
+                                            (fude-gl::link-attribute
+                                              'fude-gl:rgb
+                                              'instanced-arrays-demo)
+                                            ;; offset
+                                            (fude-gl::in-buffer
+                                             instance-buffer)
+                                            (fude-gl::link-attribute
+                                              'fude-gl::offset
+                                              'instanced-arrays-demo)))
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (fude-gl:with-clear (win (:color-buffer-bit))
+                      (%gl:draw-arrays-instanced :triangles 0 6 100))))))))))))
+
+#++
+(defun instanced-arrays-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl::with-prog ((prog (fude-gl::vertex-shader
+                                    'instanced-arrays-demo)
+                               (fude-gl::fragment-shader
+                                 'instanced-arrays-demo)))
+          (fude-gl::in-shader prog)
+          (fude-gl:with-gl-vector ((translations *translations*)
+                                   (quad *instancing*))
+            (fude-gl::with-buffer ((instance-buffer) (quad-buffer))
+              (fude-gl::with-vertex-array ((vao
+                                            (fude-gl::send quad quad-buffer)
+                                            (fude-gl::send translations
+                                                           instance-buffer)
+                                            (fude-gl::in-buffer quad-buffer)
+                                            (fude-gl::link-attributes
+                                              'instanced-arrays-demo
+                                              instance-buffer)))
+                (sdl2:with-event-loop (:method :poll)
+                  (:quit ()
+                    t)
+                  (:idle ()
+                    (fude-gl:with-clear (win (:color-buffer-bit))
+                      (%gl:draw-arrays-instanced :triangles 0 6 100))))))))))))
+
+#++
+(defun instanced-arrays-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl::with-vao ((vao
+                             (:shader instanced-arrays-demo
+                              (fude-gl::vertex-shader 'instanced-arrays-demo)
+                              (fude-gl::fragment-shader
+                                'instanced-arrays-demo))
+                             (:attributes 'instanced-arrays-demo)
+                             (:vertices nil *instancing* :instances
+                              *translations*)))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (fude-gl:with-clear (win (:color-buffer-bit))
+                (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
+
+(defun instanced-arrays-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((instanced-arrays-demo
+                                (:vertices quad-buffer-var *instancing*
+                                           :instances *translations*)))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (fude-gl:with-clear (win (:color-buffer-bit))
+                (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
+
+(fude-gl:defshader instance-id-demo 330 (fude-gl:xy fude-gl:rgb
+                                         fude-gl::offset)
+  (:vertex ((|fColor| :vec3))
+    "gl_Position = vec4(xy * (gl_InstanceID / 100.0) + offset, 0.0, 1.0);"
+    "fColor = rgb;")
+  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+
+(defun instance-id-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ((instance-id-demo
+                                (:vertices quad-buffer-var *instancing*
+                                           :instances *translations*)))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (fude-gl:with-clear (win (:color-buffer-bit))
+                (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
