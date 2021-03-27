@@ -156,63 +156,86 @@
             `(,method ',(cadar main))
             string))))
 
-(defmacro defshader (name version superclasses &body shader*)
-  ;; Trivial syntax check.
-  (check-type name symbol)
-  (check-type version (or symbol integer))
-  (assert (and (listp superclasses) (every #'find-class superclasses)))
-  (assert (every (lambda (s) (find (car s) '(:vertex :fragment))) shader*))
-  ;; binds
-  (let ((format
-         (formatter
-          #.(concatenate 'string "#version ~A core~%" ; version
-                         "~{in ~A ~A;~%~}~&" ; in
-                         "~{out ~A ~A;~%~}~&" ; out
-                         "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
-                         "void main () {~%~{~A~^~%~}~%}" ; the body.
-                         ))))
-    (labels ((defs (list)
-               (loop :for (name type) :in list
-                     :collect (change-case:camel-case (symbol-name type))
-                     :collect (change-case:camel-case (symbol-name name))))
-             (rec (shaders in acc)
-               (if (endp shaders)
-                   (nreverse acc)
-                   (body (car shaders) (cdr shaders) in acc)))
-             (body (shader rest in acc)
-               (destructuring-bind
-                   (type out &rest main)
-                   shader
-                 (let* ((&uniform
-                         (position-if
-                           (lambda (x) (and (symbolp x) (string= '&uniform x)))
-                           out))
-                        (vars (and out (defs (subseq out 0 &uniform)))))
-                   (rec rest vars
-                        (cons
-                          (<shader-method>
-                            (intern (format nil "~A-SHADER" type) :fude-gl)
-                            name main
-                            (format nil format version in vars
-                                    (and &uniform
-                                         (defs (subseq out (1+ &uniform))))
-                                    main))
-                          acc))))))
-      ;; The body.
-      `(eval-when (:compile-toplevel :load-toplevel :execute)
-         (defclass ,name ,superclasses () (:metaclass vector-class))
-         ,@(rec shader*
-                (loop :for c
-                           :in (mapcan (lambda (c) (class-list (find-class c)))
-                                       superclasses)
-                      :for slots = (c2mop:class-direct-slots c)
-                      :when slots
-                        :collect (format nil "vec~D" (length slots))
-                        :and :collect (change-case:camel-case
-                                        (symbol-name (class-name c))))
-                nil)
-         ,(<uniforms> name shader*)
-         ',name))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun uniform-keywordp (thing)
+    (and (symbolp thing) (string= '&uniform thing)))
+  (defun <shader-forms> (shader-clause* superclasses name version)
+    (let ((format
+           (formatter
+            #.(concatenate 'string "#version ~A core~%" ; version
+                           "~{in ~A ~A;~%~}~&" ; in
+                           "~{out ~A ~A;~%~}~&" ; out
+                           "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
+                           "void main () {~%~{~A~^~%~}~%}" ; the body.
+                           ))))
+      (labels ((defs (list)
+                 (loop :for (name type . vector-size) :in list
+                       :collect (change-case:camel-case (symbol-name type))
+                       :collect (if vector-size
+                                    (format nil "~A[~A]"
+                                            (change-case:camel-case
+                                              (symbol-name name))
+                                            (car vector-size))
+                                    (change-case:camel-case
+                                      (symbol-name name)))))
+               (rec (shaders in acc)
+                 (if (endp shaders)
+                     (nreverse acc)
+                     (body (car shaders) (cdr shaders) in acc)))
+               (body (shader rest in acc)
+                 (destructuring-bind
+                     (type out &rest main)
+                     shader
+                   (let* ((&uniform (position-if #'uniform-keywordp out))
+                          (vars (and out (defs (subseq out 0 &uniform)))))
+                     (rec rest vars
+                          (cons
+                            (<shader-method>
+                              (intern (format nil "~A-SHADER" type) :fude-gl)
+                              name main
+                              (format nil format version in vars
+                                      (and &uniform
+                                           (defs (subseq out (1+ &uniform))))
+                                      main))
+                            acc))))))
+        (rec shader-clause*
+             (loop :for c
+                        :in (mapcan (lambda (c) (class-list (find-class c)))
+                                    superclasses)
+                   :for slots = (c2mop:class-direct-slots c)
+                   :when slots
+                     :collect (format nil "vec~D" (length slots))
+                     :and :collect (change-case:camel-case
+                                     (symbol-name (class-name c))))
+             nil)))))
+
+(defmacro defshader (&whole whole name version superclasses &body shader*)
+  (check-bnf:check-bnf (:whole whole)
+    ((name symbol))
+    ((version unsigned-byte))
+    (((superclass+ superclasses) symbol))
+    ((shader* (or vertex-clause fragment-clause))
+     ;;
+     (vertex-clause ((eql :vertex) shader-lambda-list main*))
+     ;;
+     (fragment-clause ((eql :fragment) shader-lambda-list main*))
+     ;;
+     (shader-lambda-list (out-spec* uniform-keyword? uniform-spec*))
+     (out-spec (var type-key))
+     (uniform-keyword (satisfies uniform-keywordp))
+     (uniform-spec (var type-key vector-size?))
+     (vector-size unsigned-byte)
+     ;;
+     (var symbol)
+     (type-key keyword)
+     (main check-bnf:expression)))
+  ;; The body.
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (defclass ,name ,superclasses () (:metaclass vector-class))
+     ,@(<shader-forms> shader* superclasses name version)
+     (with-prog ((check (vertex-shader ',name) (fragment-shader ',name))))
+     ,(<uniforms> name shader*)
+     ',name))
 
 (defun pprint-defshader (stream exp)
   (setf stream (or stream *standard-output*))

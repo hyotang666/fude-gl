@@ -1054,3 +1054,55 @@
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
           (renderer "Hello world! g" :x 0 :y :center))))))
+
+;;;; INSTANCING
+
+(defparameter *instancing*
+  (coerce
+    #(-0.05 0.05 1.0 0.0 0.0 ; first
+      0.05 -0.05 0.0 1.0 0.0 ; second
+      -0.05 -0.05 0.0 0.0 1.0 ; third
+      -0.05 0.05 1.0 0.0 0.0 ; fourth
+      0.05 -0.05 0.0 1.0 0.0 ; fifth
+      0.05 0.05 0.0 1.0 1.0 ; sixth
+      )
+    '(array single-float (*))))
+
+(fude-gl:defshader instancing 330 (fude-gl:xy fude-gl:rgb)
+  (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
+    "vec2 offset = offsets[gl_InstanceID];"
+    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+    "fColor = rgb;")
+  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+
+(defun instancing ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ((instancing
+                            (:vertices nil *instancing*)
+                            (:uniform offsets)
+                            (:vertex-array vao))))
+    (let ((translations
+           (uiop:while-collecting (acc)
+             (loop :with offset = 0.1
+                   :for y :upfrom -10 :below 10 :by 2
+                   :do (loop :for x :upfrom -10 :below 10 :by 2
+                             :do (acc
+                                  (vector (+ (/ x 10) offset)
+                                          (+ (/ y 10) offset))))))))
+      (fude-gl:in-shader instancing)
+      (loop :for vec2 :in translations
+            :for i :upfrom 0
+            :do (gl:uniformfv
+                  (gl:get-uniform-location (fude-gl::program-id instancing)
+                                           (format nil "offsets[~A]" i))
+                  vec2))
+      (fude-gl::in-vertex-array vao))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:idle ()
+        (fude-gl:with-clear (win (:color-buffer-bit))
+          (%gl:draw-arrays-instanced :triangles 0 6 100))))))
