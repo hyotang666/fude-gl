@@ -326,7 +326,7 @@
 
 (defvar *buffers* nil "Dynamic buffer environment.")
 
-(defvar *buffer* :uninitizlied-buffer "Current buffer.")
+(defvar *buffer* :uninitialized-buffer "Current buffer.")
 
 (declaim (type list *buffers*)
          (type (or (eql :uninitialized-buffer) buffer) *buffer*))
