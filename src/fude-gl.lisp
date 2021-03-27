@@ -288,18 +288,19 @@
         (t (error "Not supported type. ~S" cl-type))))
 
 (defun make-gl-vector (initial-contents)
-  (let* ((length (length initial-contents))
+  (let* ((length (array-total-size initial-contents))
          (a
           (gl:alloc-gl-array
             (foreign-type (array-element-type initial-contents) :cffi t)
             length)))
-    (dotimes (i length a) (setf (gl:glaref a i) (aref initial-contents i)))))
+    (dotimes (i length a)
+      (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
 
 (defmacro with-gl-vector (&whole whole (&rest bind*) &body body)
   "Each var is bound by gl-array."
   (check-bnf:check-bnf (:whole whole) ((bind* (symbol check-bnf:expression))))
-  `(let ,(loop :for (var vector) :in bind*
-               :collect `(,var (make-gl-vector ,vector)))
+  `(let ,(loop :for (var array) :in bind*
+               :collect `(,var (make-gl-vector ,array)))
      (unwind-protect (progn ,@body)
        ,@(mapcar (lambda (bind) `(gl:free-gl-array ,(car bind))) bind*))))
 
