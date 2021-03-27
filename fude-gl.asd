@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "1.34.2"
+  "1.34.3"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -19,6 +19,7 @@
    "check-bnf" ; BNF like macro syntax checker.
    "vecto" ; TTF rasterization.
    "zpb-ttf" ; TTF font loader.
+   "3d-matrices" ; Matrix operations.
    )
   :pathname
   "src/"
