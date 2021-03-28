@@ -1127,7 +1127,9 @@
                               :element-type 'single-float
                               :initial-contents result))))
 
-#++
+;; Using low level abstructions.
+
+#+|version0|
 (defun instanced-arrays-demo ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
@@ -1205,7 +1207,9 @@
     "fcolor = rgb;")
   (:fragment ((|fragcolor| :vec4)) "fragcolor = vec4(fcolor, 1.0);"))
 
-#++
+;; Use helper functions.
+
+#+|version1|
 (defun instanced-arrays-demo ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
@@ -1246,7 +1250,9 @@
                     (fude-gl:with-clear (win (:color-buffer-bit))
                       (%gl:draw-arrays-instanced :triangles 0 6 100))))))))))))
 
-#++
+;; Use higher level helper function.
+
+#+|version2|
 (defun instanced-arrays-demo ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
@@ -1274,7 +1280,9 @@
                     (fude-gl:with-clear (win (:color-buffer-bit))
                       (%gl:draw-arrays-instanced :triangles 0 6 100))))))))))))
 
-#++
+;; Use WITH-VAO.
+
+#+|version3|
 (defun instanced-arrays-demo ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
@@ -1285,8 +1293,8 @@
                               (fude-gl::fragment-shader
                                 'instanced-arrays-demo))
                              (:attributes 'instanced-arrays-demo)
-                             (:vertices nil *instancing* :instances
-                              *translations*)))
+                             (:vertices nil *instancing*)
+                             (:instances (fude-gl::offset *translations*))))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -1294,13 +1302,16 @@
               (fude-gl:with-clear (win (:color-buffer-bit))
                 (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
 
+;; Use WITH-SHADER
+;;#+|version4|
+
 (defun instanced-arrays-demo ()
   (sdl2:with-init (:everything)
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((instanced-arrays-demo
-                                (:vertices quad-buffer-var *instancing*
-                                           :instances *translations*)))
+                                (:vertices quad-buffer-var *instancing*)
+                                (:instances (fude-gl::offset *translations*))))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -1320,8 +1331,42 @@
     (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ((instance-id-demo
-                                (:vertices quad-buffer-var *instancing*
-                                           :instances *translations*)))
+                                (:vertices quad-buffer-var *instancing*)
+                                (:instances (fude-gl::offset *translations*))))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (fude-gl:with-clear (win (:color-buffer-bit))
+                (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
+
+(fude-gl:defshader some-instances-demo 330 (fude-gl:xy fude-gl:rgb
+                                            fude-gl::offset fude-gl::a)
+  (:vertex ((|fColor| :vec4))
+    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+    "fColor = vec4(rgb, a);")
+  (:fragment ((|fragColor| :vec4)) "fragColor = fColor;"))
+
+(defun make-random-alpha-array (size)
+  (let ((result
+         (make-array size :element-type 'single-float :initial-element 0.0))
+        (unit (float (/ size)))
+        (alpha 0.0))
+    (dotimes (i size result) (setf (aref result i) alpha) (incf alpha unit))))
+
+(defun some-instance-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (gl:enable :blend)
+        (gl:blend-func :src-alpha :one-minus-src-alpha)
+        (fude-gl:with-shader ((some-instances-demo
+                                (:vertices quad-buffer-var *instancing*)
+                                (:instances (fude-gl::offset *translations*)
+                                            (fude-gl::a
+                                             (make-random-alpha-array
+                                               (array-dimension *translations*
+                                                                0))))))
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)

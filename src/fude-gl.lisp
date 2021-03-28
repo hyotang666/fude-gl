@@ -116,6 +116,11 @@
 (defun vertex-attribute-p (thing)
   (and (symbolp thing) (values (gethash thing *vertex-attributes*))))
 
+(defun instanced-array-p (thing)
+  (and (symbolp thing)
+       (typep (find-class (gethash thing *vertex-attributes*) nil)
+              'instanced-array)))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun class-list (class)
     "Return class list specified to abstract oder, superclasses are reverse order."
@@ -245,7 +250,7 @@
                    :for i :upfrom 0
                    :when slots
                      :collect (format nil "layout (location = ~A) " i)
-                     :and :collect (format nil "vec~D" (length slots))
+                     :and :collect (format nil "~[~;float~:;~:*vec~D~]" (length slots))
                      :and :collect (change-case:camel-case
                                      (symbol-name (class-name c))))
              nil)))))
@@ -699,13 +704,13 @@
                                    (* (length slots)
                                       (cffi:foreign-type-size type))
                                    0)
-         (%gl:vertex-attrib-divisor 2 1))))))
+         (%gl:vertex-attrib-divisor index 1))))))
 
-(defun link-attributes (class instance-buffer)
+(defun link-attributes (class instance-buffers)
   (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
         :when (typep c 'instanced-array)
-          :if instance-buffer
-            :do (in-buffer instance-buffer)
+          :if instance-buffers
+            :do (in-buffer (cdr (eassoc (class-name c) instance-buffers)))
           :else
             :do (error "Missing instace buffer for ~S." class)
         :do (link-attribute (class-name c) class)))
@@ -787,32 +792,39 @@
                       (vbo
                        `(,(or (cadr (assoc :buffer (cdar bind*)))
                               (gensym "VBO"))
-                         ,@(uiop:remove-plist-key :instances (cdddr
-                                                               (assoc :vertices (cdar
-                                                                                  bind*))))))
+                         ,@(cdddr (assoc :vertices (cdar bind*)))))
                       (uniforms (uniform-bind bind* prog))
                       (attr (second (eassoc :attributes (cdar bind*))))
-                      (instances (getf (cdr verts) :instances))
-                      (instances-bind
-                       (when instances
-                         `((,(gensym "INSTANCES") ,instances))))
+                      (instances (assoc :instances (cdar bind*)))
+                      (instances-binds
+                       (mapcar
+                         (lambda (bind)
+                           `(,(gensym "INSTANCES") ,(second bind)))
+                         (cdr instances)))
                       (instances-buffer
-                       (when instances
-                         `((,(gensym "INSTANCES-BUFFER"))))))
+                       (mapcar
+                         (lambda (bind) `(,(gensym "BUFFER") ,@(cddr bind)))
+                         (cdr instances))))
                  `(with-gl-vector ((,vertices ,(third verts)) ,@indices-bind
-                                   ,@instances-bind)
+                                   ,@instances-binds)
                     (with-buffer ,(append (list vbo) instances-buffer ebo-bind)
                       (with-vertex-array ((,(caar bind*)
                                            ,@(<init-buffer> (car vbo) vertices)
-                                           ,@(when instances
-                                               (<init-buffer>
-                                                 (caar instances-buffer)
-                                                 (caar instances-bind)))
+                                           ,@(mapcan
+                                               (lambda (buf vec)
+                                                 (<init-buffer> (car buf)
+                                                                (car vec)))
+                                               instances-buffer
+                                               instances-binds)
                                            (in-shader ,prog)
                                            (in-buffer ,(car vbo))
                                            (link-attributes ,attr
-                                                            ,(caar
-                                                               instances-buffer))
+                                                            (pairlis
+                                                              ',(mapcar #'car
+                                                                        (cdr instances))
+                                                              (list
+                                                                ,@(mapcar #'car
+                                                                          instances-buffer))))
                                            ,@ebo-inits))
                         ,@(<may-uniform-bind> uniforms bind*))))))
              (<may-uniform-bind> (uniforms bind*)
@@ -833,11 +845,11 @@
           uniform-clause
           buffer-clause
           attributes-clause
+          instances-clause
           shader-clause))
      ;; When this VAR is specified, it is bound by gl-array pointer.
      (vertices-clause ((eql :vertices) var init-form vertices-option*))
-     (vertices-option* (member :usage :target :size :instances)
-      check-bnf:expression)
+     (vertices-option* (member :usage :target :size) check-bnf:expression)
      ;;
      (indices-clause ((eql :indices) init-form indices-option*))
      (indices-option* keyword check-bnf:expression)
@@ -853,6 +865,10 @@
      (shader-clause ((eql :shader) var vertex-shader fragment-shader))
      (vertex-shader check-bnf:expression)
      (fragment-shader check-bnf:expression)
+     ;;
+     (instances-clause ((eql :instances) instances-bind*))
+     (instances-bind
+      ((satisfies instanced-array-p) check-bnf:expression vertices-option*))
      ;;
      (var symbol)
      (init-form check-bnf:expression)))
@@ -874,7 +890,7 @@
       (member :vertices
               :indices :uniform
               :buffer :attributes
-              :shader :vertex-array))
+              :shader :vertex-array :instances))
      (option-form+ check-bnf:expression)))
   `(with-vao ,(mapcar
                 (lambda (bind)
