@@ -142,7 +142,9 @@
   (define-vertex-attribute xyz ())
   (define-vertex-attribute st ())
   (define-vertex-attribute rgb ())
-  (define-vertex-attribute offset (x y) (:instances t)))
+  (define-vertex-attribute offset (x y) (:instances t))
+  (define-vertex-attribute frag (bool) (:instances t))
+  (define-vertex-attribute a () (:instances t)))
 
 ;;;; CONSTRUCTOR
 
