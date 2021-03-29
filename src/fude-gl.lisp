@@ -552,7 +552,7 @@
                :bgr-integer :rgba-integer
                :bgra-integer :stencil-index)))
 
-(defparameter *textures* (make-hash-table :test #'eq))
+(defvar *textures* (make-hash-table :test #'eq))
 
 (defstruct texture
   (id nil :type (or null unsigned-byte))
