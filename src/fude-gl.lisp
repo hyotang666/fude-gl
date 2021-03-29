@@ -637,9 +637,8 @@
             texture))))
 
 (defmacro in-texture (name)
-  `(let ((texture (find-texture ',name)))
-     (gl:bind-texture (texture-target texture)
-                       (texture-id texture))))
+  `(let ((texture (find-texture ,name)))
+     (gl:bind-texture (texture-target texture) (texture-id texture))))
 
 (defmacro with-textures (() &body body)
   `(unwind-protect (progn ,@body)

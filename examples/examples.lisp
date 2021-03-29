@@ -243,7 +243,7 @@
                             (:vertex-array vao))))
     (fude-gl:with-textures ()
       (fude-gl::in-shader texture-demo)
-      (fude-gl::in-texture lisp-alien))
+      (fude-gl::in-texture 'lisp-alien))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
