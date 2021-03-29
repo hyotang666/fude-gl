@@ -10,6 +10,8 @@
            #:xyz
            #:st
            #:rgb
+           #:offset
+           #:a
            ;;;; TEXT-RENDERING
            #:with-text-renderer
            #:render-text
@@ -20,19 +22,31 @@
            ;;;; GL-OBJECTS
            ;; texture
            #:texture
+           #:texture-target
            #:texture-id
+           #:in-texture
+           #:deftexture
+           #:connect
            ;; program
+           #:program
            #:in-shader
            ;; vertex-array
+           #:vertex-array
            #:in-vertex-array
+           ;; buffer
+           #:buffer
+           #:in-buffer
+           #:buffer-target
            ;;;; UTILITIES
            #:radians
            #:with-gl-vector
            #:with-textures
            #:with-2d-textures
            #:with-clear
+           #:with-text-renderer
            #:foreign-type
            #:indices-of
+           #:send
            #:draw-elements
            #:tex-image-2d))
 
