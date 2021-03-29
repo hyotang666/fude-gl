@@ -833,7 +833,7 @@
                     (with-buffer ,(append (list vbo) instances-buf-bind
                                           ebo-bind)
                       (with-vertex-array ((,(caar bind*)
-                                           `(send ,vertices ,(car vbo))
+                                           (send ,vertices ,(car vbo))
                                            ,@(mapcar
                                                (lambda (buf vec)
                                                  `(send ,(car vec) ,(car buf)))
