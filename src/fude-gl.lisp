@@ -751,8 +751,6 @@
       (second thing)
       thing))
 
-(defun <init-buffer> (buf vec) `(send ,vec ,buf))
-
 (defun prog-name (prog bind*)
   (or (and (symbol-package prog) prog) (caar bind*)))
 
@@ -790,7 +788,7 @@
                                        `((,ebo
                                           ,@(uiop:remove-plist-key :size (cddr
                                                                            clause))))
-                                       (list (<init-buffer> ebo indices))))))))
+                                       (list `(send ,indices ,ebo))))))))
              (<body-form> (bind* prog &optional indices-bind ebo-bind ebo-inits)
                (let* ((verts (eassoc :vertices (cdar bind*)))
                       (vertices (or (second verts) (gensym "VERTICES")))
@@ -821,11 +819,10 @@
                     (with-buffer ,(append (list vbo) instances-buf-bind
                                           ebo-bind)
                       (with-vertex-array ((,(caar bind*)
-                                           ,(<init-buffer> (car vbo) vertices)
+                                           `(send ,vertices ,(car vbo))
                                            ,@(mapcar
                                                (lambda (buf vec)
-                                                 (<init-buffer> (car buf)
-                                                                (car vec)))
+                                                 `(send ,(car vec) ,(car buf)))
                                                instances-buf-bind
                                                instances-vec-bind)
                                            (in-shader ,prog)
