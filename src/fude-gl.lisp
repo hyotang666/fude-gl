@@ -556,7 +556,9 @@
 
 (defstruct texture
   (id nil :type (or null unsigned-byte))
-  (target (alexandria:required-argument :target) :type texture-target :read-only t)
+  (target (alexandria:required-argument :target)
+          :type texture-target
+          :read-only t)
   (constructor (alexandria:required-argument :constructor)
                :type function
                :read-only t)
@@ -605,16 +607,18 @@
      ',name))
 
 (defun pprint-deftexture (stream exp)
-  (funcall (formatter #.(apply #'concatenate 'string
-                               (alexandria:flatten
-                                 (list "~:<" ; pprint-logical-block
-                                       "~W~^ ~1I~@_" ; operator
-                                       "~W~^ ~@_" ; name
-                                       "~W~^ ~_" ; target
-                                       "~W~^ ~_" ; init-form
-                                       "~@{~W~^ ~@_~W~^ ~_~}" ; k-v pair options.
-                                       "~:>"))))
-           stream exp))
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint-logical-block
+                      "~W~^ ~1I~@_" ; operator
+                      "~W~^ ~@_" ; name
+                      "~W~^ ~_" ; target
+                      "~W~^ ~_" ; init-form
+                      "~@{~W~^ ~@_~W~^ ~_~}" ; k-v pair options.
+                      "~:>"))))
+    stream exp))
 
 (set-pprint-dispatch '(cons (member deftexture)) 'pprint-deftexture)
 
@@ -644,7 +648,7 @@
   `(unwind-protect (progn ,@body)
      (loop :for texture :being :each :hash-value :of *textures*
            :when (texture-id texture)
-           :do (funcall (texture-destructor texture)))))
+             :do (funcall (texture-destructor texture)))))
 
 (defun tex-image-2d (array)
   (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
@@ -658,14 +662,15 @@
                      (make-array (array-total-size array)
                                  :element-type (array-element-type array)
                                  :displaced-to array))))
+
 (defun connect (shader &rest pairs)
   (in-shader shader)
   (loop :for i :upfrom 0
         :for (uniform name) :on pairs :by #'cddr
         :for texture = (find-texture name)
         :do (gl:uniformi uniform i)
-        (gl:active-texture i)
-        (gl:bind-texture (texture-target texture) (texture-id texture))))
+            (gl:active-texture i)
+            (gl:bind-texture (texture-target texture) (texture-id texture))))
 
 ;;;; WITH-VAO
 
