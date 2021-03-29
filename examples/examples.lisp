@@ -12,7 +12,10 @@
                                        element-buffer texture-demo mix-demo
                                        hello double transform-demo translate-x
                                        translate-y scaling rotating coord-demo
-                                       depth-demo cubes cameras walk-around))
+                                       depth-demo cubes cameras walk-around
+                                       text instancing instanced-arrays-demo
+                                       instance-id-demo some-instance-demo
+                                       some-instance-dynamics))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -1372,4 +1375,32 @@
               t)
             (:idle ()
               (fude-gl:with-clear (win (:color-buffer-bit))
+                (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
+
+(defun some-instance-dynamics ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl) :w 800 :h 600)
+      (sdl2:with-gl-context (context win)
+        (gl:enable :blend)
+        (gl:blend-func :src-alpha :one-minus-src-alpha)
+        (fude-gl:with-shader ((some-instances-demo
+                                (:vertices quad-buffer-var *instancing*)
+                                (:instances (fude-gl::offset *translations*)
+                                            (fude-gl::a
+                                             (make-array
+                                               (array-dimension *translations*
+                                                                0)
+                                               :element-type 'single-float
+                                               :initial-element 0.0)
+                                             :usage :dynamic-draw :buffer vbo
+                                             :vector vec))))
+          (sdl2:with-event-loop (:method :poll)
+            (:quit ()
+              t)
+            (:idle ()
+              (fude-gl:with-clear (win (:color-buffer-bit))
+                (setf (gl:glaref vec (random (gl::gl-array-size vec)))
+                        (sin (get-internal-real-time)))
+                (fude-gl::in-buffer vbo)
+                (gl:buffer-sub-data (fude-gl::buffer-target vbo) vec)
                 (%gl:draw-arrays-instanced :triangles 0 6 100)))))))))
