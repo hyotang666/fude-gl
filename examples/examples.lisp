@@ -225,6 +225,8 @@
                        (asdf:system-source-directory
                          (asdf:find-system :fude-gl-examples))))))
 
+(fude-gl::deftexture lisp-alien :texture-2d (fude-gl::tex-image-2d *png*))
+
 (defun texture-demo ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -237,11 +239,11 @@
     (fude-gl:with-shader ((texture-demo
                             (:vertices nil *quad*)
                             (:indices '(0 1 2 2 3 0))
-                            (:uniform (tex-loc tex)))))
-    (fude-gl:with-textures ((tex :texture-2d
-                                 :init (fude-gl:tex-image-2d *png*)))
+                            (:uniform (tex-loc tex))
+                            (:vertex-array vao))))
+    (fude-gl:with-textures ()
       (fude-gl::in-shader texture-demo)
-      (gl:uniformi tex-loc (fude-gl::texture-id tex)))
+      (fude-gl::in-texture lisp-alien))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -275,6 +277,8 @@
                        (asdf:system-source-directory
                          (asdf:find-system :fude-gl-examples))))))
 
+(fude-gl::deftexture lisp-logo :texture-2d (fude-gl:tex-image-2d *logo*))
+
 (defun mix-demo ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -287,19 +291,15 @@
     (fude-gl:with-shader ((mix-demo
                             (:vertices nil *mix-demo*)
                             (:indices '(0 1 2 2 3 0))
-                            (:uniform (tex1-loc tex1) (tex2-loc tex2)))))
-    (fude-gl:with-textures ((tex1 :texture-2d
-                                  :init (fude-gl:tex-image-2d *png*))
-                            (tex2 :texture-2d
-                                  :init (fude-gl:tex-image-2d *logo*)))
-      (fude-gl::in-shader mix-demo)
-      (gl:uniformi tex1-loc (fude-gl::texture-id tex1))
-      (gl:uniformi tex2-loc (fude-gl::texture-id tex2)))
+                            (:uniform tex1 tex2))))
+    (fude-gl:with-textures ())
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
-    (:idle nil (sdl2:gl-swap-window win)
-     (fude-gl:draw-elements :triangles (fude-gl:indices-of mix-demo)))))
+    (:idle nil)
+    (fude-gl::with-clear (win (:color-buffer-bit))
+      (fude-gl::connect mix-demo tex1 'lisp-alien tex2 'lisp-logo)
+      (fude-gl:draw-elements :triangles (fude-gl:indices-of mix-demo)))))
 
 ;;;; HELLO from glut-examples.
 
@@ -386,12 +386,16 @@
                  pathname))
     (opticl:read-jpeg-file pathname)))
 
+(fude-gl::deftexture container :texture-2d (fude-gl:tex-image-2d *image*))
+
 (defparameter *face*
   (let ((pathname (merge-pathnames "awesomeface.png" (user-homedir-pathname))))
     (unless (probe-file pathname)
       (dex:fetch "https://learnopengl.com/img/textures/awesomeface.png"
                  pathname))
     (opticl:vertical-flip-image (opticl:read-png-file pathname))))
+
+(fude-gl::deftexture face :texture-2d (fude-gl:tex-image-2d *face*))
 
 (fude-gl:defshader transform-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (transform :mat4))
@@ -423,18 +427,14 @@
                             (:vertices nil *texture-quad*)
                             (:indices '(0 1 2 2 3 1))
                             (:uniform tex1 tex2 transform))))
-    (fude-gl:with-textures ((image :texture-2d
-                                   :init (fude-gl:tex-image-2d *image*))
-                            (face :texture-2d
-                                  :init (fude-gl:tex-image-2d *face*)))
-      (fude-gl::in-shader transform-demo)
-      (gl:uniformi tex1 (fude-gl::texture-id image))
-      (gl:uniformi tex2 (fude-gl::texture-id face)))
+    (fude-gl:with-textures ()
+      (fude-gl::in-shader transform-demo))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl::connect transform-demo tex1 'container tex2 'face)
       (gl:uniform-matrix transform 4
                          (vector
                            (3d-matrices:marr
@@ -458,18 +458,14 @@
                             (:vertices nil *texture-quad*)
                             (:indices '(0 1 2 2 3 1))
                             (:uniform tex1 tex2 transform))))
-    (fude-gl:with-textures ((image :texture-2d
-                                   :init (fude-gl:tex-image-2d *image*))
-                            (face :texture-2d
-                                  :init (fude-gl:tex-image-2d *face*)))
-      (fude-gl::in-shader transform-demo)
-      (gl:uniformi tex1 (fude-gl::texture-id image))
-      (gl:uniformi tex2 (fude-gl::texture-id face)))
+    (fude-gl:with-textures ()
+      (fude-gl::in-shader transform-demo))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl::connect transform-demo tex1 'container tex2 'face)
       (gl:uniform-matrix transform 4
                          (vector
                            (3d-matrices:marr
@@ -490,18 +486,14 @@
                                 (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader transform-demo)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
+                  (fude-gl::connect transform-demo tex1 'container tex2 'face)
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -525,18 +517,14 @@
                                 (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader transform-demo)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
+                  (fude-gl::connect transform-demo tex1 'container tex2 'face)
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -563,18 +551,14 @@
                                 (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 transform)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader transform-demo)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
+                  (fude-gl::connect transform-demo tex1 'container tex2 'face)
                   (gl:uniform-matrix transform 4
                                      (vector
                                        (3d-matrices:marr
@@ -619,13 +603,8 @@
                                 (:vertices nil *texture-quad*)
                                 (:indices '(0 1 2 2 3 1))
                                 (:uniform tex1 tex2 model view projection)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader coord-demo)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (let ((m
                    (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
                                          (fude-gl:radians -55)))
@@ -643,6 +622,7 @@
                     t)
                   (:idle ()
                     (fude-gl:with-clear (win (:color-buffer-bit))
+                      (fude-gl::connect coord-demo tex1 'container tex2 'face)
                       (send m model)
                       (send v view)
                       (send p projection)
@@ -699,13 +679,8 @@
         (fude-gl:with-shader ((depth-demo
                                 (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader depth-demo)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix uniform 4
                                         (vector (3d-matrices:marr matrix)))))
@@ -715,6 +690,7 @@
                   t)
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                    (fude-gl::connect depth-demo tex1 'container tex2 'face)
                     (let ((m
                            (3d-matrices:nmrotate (3d-matrices:meye 4)
                                                  (3d-vectors:vec 0.5 1 0)
@@ -754,13 +730,8 @@
         (fude-gl:with-shader ((cubes
                                 (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader cubes)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix uniform 4
                                         (vector (3d-matrices:marr matrix)))))
@@ -780,6 +751,7 @@
                     t)
                   (:idle ()
                     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (fude-gl::connect cubes tex1 'container tex2 'face)
                       (loop :for pos :in cube-positions
                             :for i :upfrom 0
                             :do (let ((m
@@ -815,13 +787,8 @@
         (fude-gl:with-shader ((cubes
                                 (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader cubes)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix uniform 4
                                         (vector (3d-matrices:marr matrix)))))
@@ -841,6 +808,7 @@
                     t)
                   (:idle ()
                     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (fude-gl::connect cubes tex1 'container tex2 'face)
                       (let* ((radius 10)
                              (v
                               (3d-matrices:mlookat
@@ -909,13 +877,8 @@
         (fude-gl:with-shader ((cubes
                                 (:vertices nil *depth-demo*)
                                 (:uniform tex1 tex2 model view projection)))
-          (fude-gl:with-textures ((image :texture-2d
-                                         :init (fude-gl:tex-image-2d *image*))
-                                  (face :texture-2d
-                                        :init (fude-gl:tex-image-2d *face*)))
+          (fude-gl:with-textures ()
             (fude-gl::in-shader cubes)
-            (gl:uniformi tex1 (fude-gl::texture-id image))
-            (gl:uniformi tex2 (fude-gl::texture-id face))
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix uniform 4
                                         (vector (3d-matrices:marr matrix)))))
@@ -937,6 +900,7 @@
                                          camera-pos)))
                   (:idle ()
                     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                      (fude-gl::connect cubes tex1 'container tex2 'face)
                       (loop :for pos :in *cube-positions*
                             :for i :upfrom 0
                             :for m
@@ -994,10 +958,7 @@
     (fude-gl:with-shader ((cubes
                             (:vertices nil *depth-demo*)
                             (:uniform tex1 tex2 model view projection))))
-    (fude-gl:with-textures ((image :texture-2d
-                                   :init (fude-gl:tex-image-2d *image*))
-                            (face :texture-2d
-                                  :init (fude-gl:tex-image-2d *face*))))
+    (fude-gl:with-textures ())
     (flet ((send (matrix uniform)
                  (gl:uniform-matrix uniform 4
                                     (vector (3d-matrices:marr matrix))))))
@@ -1011,8 +972,9 @@
                                      0.1 100))))
     (sdl2:with-event-loop (:method :poll)
       (:initialize ()
-        (gl:uniformi tex1 image)
-        (gl:uniformi tex2 face)
+        (gl:uniformi tex1
+                     (fude-gl::texture-id (fude-gl::find-texture 'container)))
+        (gl:uniformi tex2 (fude-gl::texture-id (fude-gl::find-texture 'face)))
         (gl:enable :depth-test))
       (:quit ()
         t)

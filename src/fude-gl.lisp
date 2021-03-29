@@ -537,7 +537,7 @@
 (deftype texture-mag-filter () '(member :linear :nearest))
 
 (deftype texture-min-filter ()
-  '(or textute-mag-filter
+  '(or texture-mag-filter
        (member :nearest-mipmap-nearest :lenear-mipmap-nearest
                :nearest-mipmap-linear :linear-mipmap-linear)))
 
@@ -552,104 +552,100 @@
                :bgr-integer :rgba-integer
                :bgra-integer :stencil-index)))
 
-(defstruct (texture (:include gl-object))
-  (target (alexandria:required-argument :target)
-          :type texture-target
-          :read-only t))
+(defparameter *textures* (make-hash-table :test #'eq))
 
-(defvar *textures* nil)
+(defstruct texture
+  (id nil :type (or null unsigned-byte))
+  (target (alexandria:required-argument :target) :type texture-target :read-only t)
+  (constructor (alexandria:required-argument :constructor)
+               :type function
+               :read-only t)
+  (destructor (alexandria:required-argument :destructor)
+              :type function
+              :read-only t))
 
-(defvar *texture* :uninitialized-texture)
+(defmacro deftexture (name target init-form &body options)
+  (type-assert target 'texture-target)
+  `(flet ((constructor ()
+            (let ((texture (gethash ',name *textures*)))
+              (with-slots (id)
+                  texture
+                (setf id (car (gl:gen-textures 1)))
+                (gl:bind-texture ,target id)
+                (gl:tex-parameter ,target
+                                  :texture-wrap-s ,(type-assert
+                                                     (getf options
+                                                           :wrap-s :repeat)
+                                                     'texture-wrapping))
+                (gl:tex-parameter ,target
+                                  :texture-wrap-t ,(type-assert
+                                                     (getf options
+                                                           :wrap-t :repeat)
+                                                     'texture-wrapping))
+                (gl:tex-parameter ,target
+                                  :texture-mag-filter ,(type-assert
+                                                         (getf options
+                                                               :mag-filter :linear)
+                                                         'texture-mag-filter))
+                (gl:tex-parameter ,target
+                                  :texture-min-filter ,(type-assert
+                                                         (getf options
+                                                               :min-filter :linear)
+                                                         'texture-min-filter))
+                ,init-form)
+              texture))
+          (destructor ()
+            (let ((texture (gethash ',name *textures*)))
+              (gl:delete-textures (list (texture-id texture)))
+              (setf (texture-id texture) nil))))
+     (setf (gethash ',name *textures*)
+             (make-texture :constructor #'constructor
+                           :target ,target
+                           :destructor #'destructor))
+     ',name))
 
-(defun find-texture (thing)
-  (etypecase thing
-    (texture thing)
-    ((or character symbol)
-     (or (find thing *textures* :key #'texture-name)
-         (error "Missing texture named ~S. ~S" thing *textures*)))))
+(defun pprint-deftexture (stream exp)
+  (funcall (formatter #.(apply #'concatenate 'string
+                               (alexandria:flatten
+                                 (list "~:<" ; pprint-logical-block
+                                       "~W~^ ~1I~@_" ; operator
+                                       "~W~^ ~@_" ; name
+                                       "~W~^ ~_" ; target
+                                       "~W~^ ~_" ; init-form
+                                       "~@{~W~^ ~@_~W~^ ~_~}" ; k-v pair options.
+                                       "~:>"))))
+           stream exp))
 
-(defmacro in-texture (form)
-  (let ((texture (gensym "TEXTURE")))
-    `(let ((,texture (find-texture ,form)))
-       (gl:active-texture (texture-id ,texture))
-       (gl:bind-texture (texture-target ,texture) (texture-id ,texture))
-       (setf *texture* ,texture))))
+(set-pprint-dispatch '(cons (member deftexture)) 'pprint-deftexture)
 
-(defmacro with-textures ((&rest bind*) &body body)
-  "Each VAR is bound by openGL texture id."
-  ;; Trivial syntax check.
-  (dolist (b bind*) (the (cons symbol (cons texture-target *)) b))
-  (labels ((vname (k v)
-             (case k
-               ((:texture-wrap-s :texture-wrap-t :texture-wrap-r)
-                (type-assert v 'texture-wrapping))
-               ((:texture-mag-filter) (type-assert v 'texture-mag-filter))
-               ((:texture-min-fileter) (type-assert v 'texture-min-filter))
-               (otherwise v)))
-           (<option-setters> (params target)
-             (destructuring-bind
-                 (&key (texture-wrap-s :repeat) (texture-wrap-t :repeat)
-                  (texture-min-filter :linear) (texture-mag-filter :linear)
-                  &allow-other-keys)
-                 params
-               (let ((params
-                      (list* :texture-wrap-s texture-wrap-s :texture-wrap-t
-                             texture-wrap-t :texture-mag-filter
-                             texture-mag-filter :texture-min-filter
-                             texture-min-filter
-                             (uiop:remove-plist-keys
-                               '(:texture-wrap-s :texture-wrap-t
-                                 :texture-min-filter :texture-mag-filter)
-                               params))))
-                 (loop :for (k v) :on params :by #'cddr
-                       :collect `(gl:tex-parameter ,target
-                                                   ,(type-assert k
-                                                                 'texture-pname)
-                                                   ,(vname k v)))))))
-    ;; The body.
-    `(destructuring-bind
-         ,(mapcar #'car bind*)
-         (loop :for (name target) :in ',bind*
-               :for id :in (gl:gen-textures ,(length bind*))
-               :collect (make-texture :id id :name name :target target))
-       (unwind-protect
-           (let ((*texture* *texture*)
-                 (*textures* (list* ,@(mapcar #'car bind*) *textures*)))
-             ,@(mapcan
-                 (lambda (b)
-                   (destructuring-bind
-                       (var target &key params init)
-                       b
-                     `((in-texture ',var) ,@(<option-setters> params target)
-                       ,@(when init
-                           `(,init)))))
-                 bind*)
-             ,@body)
-         (gl:delete-textures
-           (list
-             ,@(mapcar (lambda (bind) `(texture-id ,(car bind))) bind*)))))))
+(defun list-all-textures ()
+  (loop :for name :being :each :hash-key :of *textures*
+        :collect name))
 
-(defun pprint-with-textures (stream exp)
-  (funcall
-    (formatter
-     #.(apply #'concatenate 'string
-              (alexandria:flatten
-                (list "~:<" ; pprint-logical-block
-                      "~W~^ ~1I~@_" ; operator.
-                      (list "~:<" ; binds
-                            "~@{" ; iterate binds.
-                            (list "~:<" ; each bind
-                                  "~W~^ ~:I~@_" ; var
-                                  "~W~^ ~_" ; target.
-                                  "~@{~W~^ ~@_~W~^ ~_~}" ; k-v options.
-                                  "~:>~^ ~_")
-                            "~}" ; end of iterate.
-                            "~:>~^ ~:@_")
-                      "~@{~W~^ ~_~}" ; the body.
-                      "~:>"))))
-    stream exp))
+(defun find-texture (name &key (construct t) (error t))
+  (let ((texture
+         (or (gethash name *textures*)
+             (if error
+                 (error
+                   "Missing texture named ~S. Eval (fude-gl::list-all-textures)"
+                   name)
+                 (return-from find-texture nil)))))
+    (if (texture-id texture)
+        texture
+        (if construct
+            (funcall (texture-constructor texture))
+            texture))))
 
-(set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
+(defmacro in-texture (name)
+  `(let ((texture (find-texture ',name)))
+     (gl:bind-texture (texture-target texture)
+                       (texture-id texture))))
+
+(defmacro with-textures (() &body body)
+  `(unwind-protect (progn ,@body)
+     (loop :for texture :being :each :hash-value :of *textures*
+           :when (texture-id texture)
+           :do (funcall (texture-destructor texture)))))
 
 (defun tex-image-2d (array)
   (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
@@ -663,6 +659,14 @@
                      (make-array (array-total-size array)
                                  :element-type (array-element-type array)
                                  :displaced-to array))))
+(defun connect (shader &rest pairs)
+  (in-shader shader)
+  (loop :for i :upfrom 0
+        :for (uniform name) :on pairs :by #'cddr
+        :for texture = (find-texture name)
+        :do (gl:uniformi uniform i)
+        (gl:active-texture i)
+        (gl:bind-texture (texture-target texture) (texture-id texture))))
 
 ;;;; WITH-VAO
 
@@ -1084,7 +1088,9 @@
          font-name)))))
 
 (defstruct char-glyph
-  (texture (alexandria:required-argument :texture) :type texture :read-only t)
+  (texture (alexandria:required-argument :texture)
+           :type unsigned-byte
+           :read-only t)
   w
   h
   bearing-x
@@ -1106,7 +1112,7 @@
          (*font-size* ,size))
      (unwind-protect (progn ,@body)
        (loop :for g :being :each :hash-value of *glyphs*
-             :collect (texture-id (char-glyph-texture g)) :into textures
+             :collect (char-glyph-texture g) :into textures
              :finally (gl:delete-textures textures))
        (loop :for v :being :each :hash-value of *fonts*
              :when (typep v 'zpb-ttf::font-loader)
@@ -1171,11 +1177,9 @@
             (multiple-value-bind (image w h bearing-x bearing-y advance)
                 (font-data char loader size)
               (gl:pixel-store :unpack-alignment 1)
-              (let ((texture
-                     (make-texture :id (car (gl:gen-textures 1))
-                                   :name char
-                                   :target :texture-2d)))
-                (in-texture texture)
+              (let ((texture (car (gl:gen-textures 1))))
+                (gl:active-texture 0)
+                (gl:bind-texture :texture-2d texture)
                 (gl:tex-image-2d :texture-2d 0 :red w h 0 :red
                                  :unsigned-byte image)
                 (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
@@ -1232,8 +1236,7 @@
                                  (+ w x-pos) (+ h y-pos) 1 0) ; upper right
                   :for i :upfrom 0
                   :do (setf (gl:glaref vertices i) (float elt)))
-            (gl:bind-texture (texture-target (char-glyph-texture glyph))
-                             (texture-id (char-glyph-texture glyph)))
+            (gl:bind-texture :texture-2d (char-glyph-texture glyph))
             (in-buffer vbo)
             (gl:buffer-sub-data (buffer-target vbo) vertices)
             (gl:draw-arrays :triangles 0 6)
