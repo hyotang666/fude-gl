@@ -618,6 +618,19 @@
   (or (cdr (assoc name (table (find-vertices vertices))))
       (error "Missing vertices ~S in ~S" name vertices)))
 
+(define-compiler-macro uniform (&whole whole name vertices)
+  (when (constantp vertices)
+    (let ((vertices (eval vertices)))
+      (find-vertices vertices :construct nil :error t)
+      (when (constantp name)
+        (let ((name (eval name)))
+          (assert (find (subseq name 0 (position #\[ name)) (uniforms vertices)
+                        :test #'string=
+                        :key (lambda (s) (change-case:camel-case (string s))))
+            ()
+            "Unknown uniform ~S for ~S" name (uniforms vertices))))))
+  whole)
+
 (defun uniform (name vertices)
   (gl:get-uniform-location (program (find-vertices vertices)) name))
 
