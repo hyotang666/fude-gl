@@ -847,6 +847,22 @@
            :when (texture-id texture)
              :do (destruct texture))))
 
+(defun pprint-with-textures (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint logial block.
+                      "~1I~W~^ ~@_" ; operator
+                      (list "~:<" ; dummy
+                            "~@{~W~^ ~:_~}" ; dummy body
+                            "~:>~^ ~_")
+                      "~@{~W~^ ~_~}" ; The body.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
+
 (defun tex-image-2d (array)
   (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
     (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
