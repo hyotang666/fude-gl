@@ -661,13 +661,12 @@
 
 (defmacro with-shader (() &body body)
   (let ((toplevelp (gensym "TOPLEVELP")))
-  `(let ((,toplevelp *toplevel-p*)
-         (*toplevel-p* nil))
-     (unwind-protect (progn ,@body)
-       (when ,toplevelp
-         (loop :for shader :being :each :hash-value :of *vertices*
-               :when (slot-boundp shader 'program)
-                 :do (destruct shader)))))))
+    `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
+       (unwind-protect (progn ,@body)
+         (when ,toplevelp
+           (loop :for shader :being :each :hash-value :of *vertices*
+                 :when (slot-boundp shader 'program)
+                   :do (destruct shader)))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
