@@ -36,6 +36,7 @@
            #:connect
            ;; vertex-array
            #:vertex-array
+           #:in-vertex-array
            ;; BUFFER
            #:buffer
            #:in-buffer
