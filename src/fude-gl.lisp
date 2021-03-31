@@ -656,11 +656,15 @@
 
 ;;;; WITH-SHADER
 
+(defvar *toplevel-p* t)
+
 (defmacro with-shader (() &body body)
-  `(unwind-protect (progn ,@body)
-     (loop :for shader :being :each :hash-value :of *vertices*
-           :when (slot-boundp shader 'program)
-             :do (destruct shader))))
+  `(let ((*toplevel-p* (and *toplevel-p* nil)))
+     (unwind-protect (progn ,@body)
+       (when *toplevel-p*
+         (loop :for shader :being :each :hash-value :of *vertices*
+               :when (slot-boundp shader 'program)
+                 :do (destruct shader))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
