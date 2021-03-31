@@ -233,7 +233,7 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
-    (fude-gl:with-textures nil
+    (fude-gl:with-textures ()
       (fude-gl:in-vertices 'texture-demo)
       (fude-gl:in-texture 'lisp-alien))
     (sdl2:with-event-loop (:method :poll)
@@ -281,7 +281,7 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
-    (fude-gl:with-textures nil)
+    (fude-gl:with-textures ())
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -404,8 +404,7 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
-    (fude-gl:with-textures nil
-      (fude-gl:in-vertices 'transform-demo))
+    (fude-gl:with-textures () (fude-gl:in-vertices 'transform-demo))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -431,8 +430,7 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
-    (fude-gl:with-textures nil
-      (fude-gl:in-vertices 'transform-demo))
+    (fude-gl:with-textures () (fude-gl:in-vertices 'transform-demo))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -455,7 +453,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'transform-demo)
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
@@ -481,7 +479,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'transform-demo)
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
@@ -508,7 +506,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'transform-demo)
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
@@ -556,7 +554,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'coord-demo)
             (let ((m
                    (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
@@ -633,7 +631,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'depth-demo)
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix (fude-gl:uniform uniform 'depth-demo) 4
@@ -684,7 +682,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'cubes)
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix (fude-gl:uniform uniform 'cubes) 4
@@ -738,7 +736,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'cubes)
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix (fude-gl:uniform uniform 'cubes) 4
@@ -824,7 +822,7 @@
                            :h 600)
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:with-textures nil
+          (fude-gl:with-textures ()
             (fude-gl:in-vertices 'cubes)
             (flet ((send (matrix uniform)
                      (gl:uniform-matrix (fude-gl:uniform uniform 'cubes) 4
