@@ -558,6 +558,8 @@
     (slot-makunbound o 'vertex-array))
   (destruct (buffer o)))
 
+(defmethod draw :before ((o vertices)) (in-vertices o))
+
 (defmethod draw ((o vertices))
   (gl:draw-arrays :triangles 0 (length (buffer-original (buffer o)))))
 
