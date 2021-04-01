@@ -315,19 +315,20 @@
         :collect name))
 
 (defun find-vertices (name &key (construct t) (error t))
-  (let ((vertices (gethash name *vertices*)))
-    (cond
-      ((null vertices)
-       (when error
-         (error "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
-                name)))
-      ((slot-boundp vertices 'program) vertices)
-      ((not construct) vertices)
-      (t
-       (restart-case (construct vertices)
-         (continue ()
-             :report "Return vertices without constructing."
-           vertices))))))
+  (let ((vertices))
+    (cond ((typep name 'vertices) name)
+          ((null (setf vertices (gethash name *vertices*)))
+           (when error
+             (error
+               "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
+               name)))
+          ((slot-boundp vertices 'program) vertices)
+          ((not construct) vertices)
+          (t
+           (restart-case (construct vertices)
+             (continue ()
+                 :report "Return vertices without constructing."
+               vertices))))))
 
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
