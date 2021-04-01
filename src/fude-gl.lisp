@@ -21,6 +21,7 @@
            #:instances-buffer
            ;;;; GENERIC-FUNCTIONS
            #:draw
+           #:send
            ;;;; TEXT-RENDERING
            #:deftexture
            #:with-textures
@@ -335,6 +336,8 @@
 
 (defgeneric draw (thing) (:method ((name symbol)) (draw (find-vertices name))))
 
+(defgeneric send (object to &key))
+
 ;;; BUFFER
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
@@ -392,14 +395,27 @@
     (dotimes (i length a)
       (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
 
+(defvar *buffer*)
+
+(defun in-buffer (buffer)
+  (setf *buffer* buffer)
+  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
+
+(defmethod send ((o gl:gl-array) (to buffer) &key (method #'gl:buffer-data))
+  (with-slots (target usage)
+      to
+    (in-buffer to)
+    (cond ((eq #'gl:buffer-data method) (funcall method target usage o))
+          ((eq #'gl:buffer-sub-data method) (funcall method target o))
+          (t (error "Unknown method ~S" method)))))
+
 (defmethod construct ((o buffer))
-  (with-slots (original source buffer target usage)
+  (with-slots (original source buffer)
       o
     (unless source
       (setf source (make-gl-vector original)
             buffer (gl:gen-buffer))
-      (gl:bind-buffer target buffer)
-      (gl:buffer-data target usage source)))
+      (send source o)))
   o)
 
 (defmethod destruct ((o buffer))
@@ -409,12 +425,6 @@
     (and buffer (gl:delete-buffers (list buffer)))
     (setf source nil
           buffer nil)))
-
-(defvar *buffer*)
-
-(defun in-buffer (buffer)
-  (setf *buffer* buffer)
-  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
 
 ;;;; VERTICES
 
@@ -429,6 +439,23 @@
   (setf (slot-value o 'shader) (or shader name)
         (slot-value o 'buffer)
           (apply #'make-buffer :name :vertices :original array buffer)))
+
+(defmethod send
+           ((o 3d-matrices:mat4) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (gl:uniform-matrix (uniform uniform to) 4 (vector (3d-matrices:marr o))))
+
+(defmethod send
+           ((o 3d-vectors:vec3) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (3d-vectors:with-vec3 (x y z)
+      o
+    (gl:uniformf (uniform uniform to) x y z)))
+
+(defmethod send
+           ((o vector) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (gl:uniformfv (uniform uniform to) o))
 
 ;; Trivial readers.
 
@@ -596,6 +623,14 @@
                              (array-dimension
                                (buffer-original (cdar (table o))) 0)))
 
+(defun instances-buffer (vertices name)
+  (or (cdr (assoc name (table (find-vertices vertices))))
+      (error "Missing vertices ~S in ~S" name vertices)))
+
+(defmethod send ((o symbol) (to symbol) &key (method #'gl:buffer-data))
+  (let ((buffer (instances-buffer to o)))
+    (send (buffer-source buffer) buffer :method method)))
+
 (defgeneric create-vertex-array (vertices)
   (:method :around ((o vertices))
     (let ((vao (gl:gen-vertex-array)))
@@ -613,10 +648,6 @@
                          (or (cdr (assoc slot table)) default-buffer))))))
 
 ;;;; HELPERS
-
-(defun instances-buffer (vertices name)
-  (or (cdr (assoc name (table (find-vertices vertices))))
-      (error "Missing vertices ~S in ~S" name vertices)))
 
 (define-compiler-macro uniform (&whole whole name vertices)
   (when (constantp vertices)

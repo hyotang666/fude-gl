@@ -167,8 +167,7 @@
   (setf text (map 'list (lambda (c) (char-glyph c font)) text))
   (with-slots (vertex-array buffer)
       (in-vertices 'glyph)
-    (with-slots (source target)
-        buffer
+    (let ((source (buffer-source buffer)))
       (apply #'gl:uniformf (uniform "textColor" 'glyph) color)
       (gl:active-texture 0)
       (gl:bind-vertex-array vertex-array)
@@ -190,8 +189,7 @@
                       :for i :upfrom 0
                       :do (setf (gl:glaref source i) (float elt)))
                 (gl:bind-texture :texture-2d (char-glyph-texture glyph))
-                (in-buffer buffer)
-                (gl:buffer-sub-data target source)
+                (send source buffer :method #'gl:buffer-sub-data)
                 (gl:draw-arrays :triangles 0 6)
                 (incf x (* scale (char-glyph-advance glyph)))))))
 
