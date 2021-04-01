@@ -618,7 +618,7 @@
 (defmethod destruct ((o instanced-vertices))
   (loop :for (nil . buffer) :in (table o)
         :do (destruct buffer)
-        (call-next-method)))
+            (call-next-method)))
 
 (defun vertex-length (vertices)
   (/ (length (buffer-original (buffer vertices)))
@@ -768,9 +768,9 @@
 (defun ortho (win &optional (direction :bottom-up))
   (multiple-value-bind (w h)
       (sdl2:get-window-size win)
-      (ecase direction
-        (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
-        (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
+    (ecase direction
+      (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
+      (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
 
 (defun model-matrix (x y w h &optional (rotate 0))
   (3d-matrices:nmscale
@@ -779,7 +779,7 @@
         (3d-matrices:nmtranslate
           (3d-matrices:mtranslation (3d-vectors:vec x y 0))
           (3d-vectors:vec (* 0.5 w) (* 0.5 h) 0))
-        3d-vectors:+vz+ (fude-gl:radians rotate))
+        3d-vectors:+vz+ (radians rotate))
       (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
     (3d-vectors:vec w h 1)))
 
