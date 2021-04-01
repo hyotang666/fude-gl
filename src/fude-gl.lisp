@@ -770,6 +770,17 @@
         (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
         (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
 
+(defun model-matrix (x y w h &optional (rotate 0))
+  (3d-matrices:nmscale
+    (3d-matrices:nmtranslate
+      (3d-matrices:nmrotate
+        (3d-matrices:nmtranslate
+          (3d-matrices:mtranslation (3d-vectors:vec x y 0))
+          (3d-vectors:vec (* 0.5 w) (* 0.5 h) 0))
+        3d-vectors:+vz+ (fude-gl:radians rotate))
+      (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
+    (3d-vectors:vec w h 1)))
+
 ;;; WITH-TEXTURES
 
 (deftype texture-wrapping ()
