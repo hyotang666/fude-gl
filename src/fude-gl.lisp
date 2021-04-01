@@ -850,7 +850,8 @@
                                                         :texture-wrap-t :repeat
                                                         :texture-min-filter :linear
                                                         :texture-mag-filter :linear)
-                                          :do (setf (getf spec k) v)
+                                          :do (type-assert k 'texture-pname)
+                                              (setf (getf spec k) v)
                                           :finally (return spec))))
     ',name))
 
