@@ -595,15 +595,6 @@
                           options))
              (table o))))
 
-(defmethod construct ((o instanced))
-  (loop :for (nil . buffer) :in (table o)
-        :do (construct buffer))
-  o)
-
-(defmethod destruct ((o instanced))
-  (loop :for (nil . buffer) :in (table o)
-        :do (destruct buffer)))
-
 (defclass instanced-vertices (vertices instanced) ())
 
 (defmethod construct ((o instanced-vertices))
@@ -614,6 +605,11 @@
     (setf program (create-program shader)
           vertex-array (create-vertex-array o))
     o))
+
+(defmethod destruct ((o instanced-vertices))
+  (loop :for (nil . buffer) :in (table o)
+        :do (destruct buffer)
+        (call-next-method)))
 
 (defun vertex-length (vertices)
   (/ (length (buffer-original (buffer vertices)))
