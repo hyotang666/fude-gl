@@ -766,10 +766,9 @@
 (defun ortho (win &optional (direction :bottom-up))
   (multiple-value-bind (w h)
       (sdl2:get-window-size win)
-    (3d-matrices:marr
       (ecase direction
         (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
-        (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1))))))
+        (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
 
 ;;; WITH-TEXTURES
 
