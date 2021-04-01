@@ -410,6 +410,10 @@
           ((eq #'gl:buffer-sub-data method) (funcall method target o))
           (t (error "Unknown method ~S" method)))))
 
+(defmethod send ((o (eql :buffer)) (to symbol) &key (method #'gl:buffer-data))
+  (let ((buffer (buffer (find-vertices to))))
+    (send (buffer-source buffer) buffer :method method)))
+
 (defmethod construct ((o buffer))
   (with-slots (original source buffer)
       o
