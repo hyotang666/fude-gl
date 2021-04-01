@@ -448,6 +448,7 @@
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
+  (in-vertices to)
   (gl:uniform-matrix (uniform uniform to) 4 (vector (3d-matrices:marr o))))
 
 (defmethod send
