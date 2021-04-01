@@ -47,6 +47,8 @@
            #:list-all-textures
            #:list-all-vertices
            #:radians
+           #:ortho
+           #:model-matrix
            #:with-clear
            #:tex-image-2d))
 

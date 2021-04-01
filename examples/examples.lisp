@@ -569,6 +569,48 @@
                     (fude-gl:send p 'coord-demo :uniform "projection")
                     (fude-gl:draw 'coord-demo)))))))))))
 
+;;;; ORTHO-DEMO
+
+(fude-gl:defshader ortho-demo 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2) &uniform (projection :mat4) (model :mat4))
+    "gl_Position = projection * model * vec4(xy, 0.0, 1.0);"
+    "coord = st;")
+  (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
+    "color = texture(tex, coord);"))
+
+(fude-gl:defvertices ortho-demo
+    (concatenate '(array single-float (*))
+                 (make-instance 'coord-demo :x -0.5 :y 0.5 :s 0.0 :t 1.0) ; top
+                                                                          ; left
+                 (make-instance 'coord-demo :x 0.5 :y 0.5 :s 1.0 :t 1.0) ; top
+                                                                         ; right
+                 (make-instance 'coord-demo :x -0.5 :y -0.5 :s 0.0 :t 0.0) ; bottom
+                                                                           ; left
+                 (make-instance 'coord-demo :x 0.5 :y -0.5 :s 1.0 :t 0.0))
+  :indices `((0 1 2 2 3 1)))
+
+(defun ortho-demo ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Ortho demo"
+                           :w 800
+                           :h 600)
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ()
+          (fude-gl:with-textures ()
+            (fude-gl:in-vertices 'ortho-demo)
+            (let ((p (3d-matrices:mortho 0 800 0 600 -1 1))
+                  (m (fude-gl::model-matrix 0 0 100 100)))
+              (sdl2:with-event-loop (:method :poll)
+                (:quit ()
+                  t)
+                (:idle ()
+                  (fude-gl:with-clear (win (:color-buffer-bit))
+                    (fude-gl:connect 'ortho-demo "tex" 'face)
+                    (fude-gl:send m 'ortho-demo :uniform "model")
+                    (fude-gl:send p 'ortho-demo :uniform "projection")
+                    (fude-gl:draw 'ortho-demo)))))))))))
+
 ;;;; DEPTH-DEMO
 
 (fude-gl:defshader depth-demo 330 (fude-gl:xyz fude-gl:st)
