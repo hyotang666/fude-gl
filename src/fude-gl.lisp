@@ -351,6 +351,19 @@
 
 (defgeneric send (object to &key))
 
+(define-compiler-macro send (&whole whole object to &key &allow-other-keys)
+  (when (constantp to)
+    (let ((value (eval to)))
+      (when (symbolp value)
+        (find-vertices value :construct nil :error t))))
+  whole)
+
+(defmethod send
+           ((o integer) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (in-vertices to)
+  (gl:uniformi (uniform uniform to) o))
+
 ;;; BUFFER
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
@@ -457,6 +470,34 @@
         (slot-value o 'buffer)
           (apply #'make-buffer :name :vertices :original array buffer)))
 
+(define-compiler-macro uniform (&whole whole name vertices)
+  (when (constantp vertices)
+    (let ((vertices (eval vertices)))
+      (find-vertices vertices :construct nil :error t)
+      (when (constantp name)
+        (let ((name (eval name)))
+          (assert (find (subseq name 0 (position #\[ name)) (uniforms vertices)
+                        :test #'string=
+                        :key (lambda (s) (change-case:camel-case (string s))))
+            ()
+            "Unknown uniform ~S for ~S" name (uniforms vertices))))))
+  whole)
+
+(defun uniform (name vertices)
+  (let ((location
+         (gl:get-uniform-location (program (find-vertices vertices)) name)))
+    (assert (not (minusp location)) ()
+      "Not active uniform. ~S in ~A" name
+      (uniforms (shader (find-vertices vertices))))
+    location))
+
+(defmacro in-vertices (form)
+  (when (constantp form)
+    (find-vertices (eval form) :construct nil :error t))
+  `(let ((shader (find-vertices ,form)))
+     (gl:use-program (program shader))
+     shader))
+
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
@@ -547,12 +588,17 @@
       (gl:delete-shader fs)
       (gl:delete-shader vs))))
 
+(defvar *programs* (make-hash-table :test #'eq))
+
 (defun create-program (name)
-  (let ((program (gl:create-program)))
-    (when (zerop program)
-      (error "Fails to create program."))
-    (compile-shader program (vertex-shader name) (fragment-shader name))
-    program))
+  (let ((program (gethash name *programs*)))
+    (or program
+        (let ((program (setf (gethash name *programs*) (gl:create-program))))
+          (when (zerop program)
+            (remhash name *programs*)
+            (error "Fails to create program."))
+          (compile-shader program (vertex-shader name) (fragment-shader name))
+          program))))
 
 (defmethod construct ((o vertices))
   (with-slots (program vertex-array shader)
@@ -563,7 +609,9 @@
 
 (defmethod destruct ((o vertices))
   (when (slot-boundp o 'program)
-    (gl:delete-program (program o))
+    (when (gethash (shader o) *programs*)
+      (gl:delete-program (program o))
+      (remhash (shader o) *programs*))
     (slot-makunbound o 'program))
   (when (slot-boundp o 'vertex-array)
     (gl:delete-vertex-arrays (list (vertex-array o)))
@@ -663,23 +711,6 @@
                          (or (cdr (assoc slot table)) default-buffer))))))
 
 ;;;; HELPERS
-
-(define-compiler-macro uniform (&whole whole name vertices)
-  (when (constantp vertices)
-    (let ((vertices (eval vertices)))
-      (find-vertices vertices :construct nil :error t)
-      (when (constantp name)
-        (let ((name (eval name)))
-          (assert (find (subseq name 0 (position #\[ name)) (uniforms vertices)
-                        :test #'string=
-                        :key (lambda (s) (change-case:camel-case (string s))))
-            ()
-            "Unknown uniform ~S for ~S" name (uniforms vertices))))))
-  whole)
-
-(defun uniform (name vertices)
-  (gl:get-uniform-location (program (find-vertices vertices)) name))
-
 ;;;; DEFVERTICES
 
 (defmacro defvertices (name array &rest options)
@@ -720,12 +751,16 @@
 
 (defmacro with-shader (() &body body)
   (let ((toplevelp (gensym "TOPLEVELP")))
-    `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
+    `(let ((,toplevelp *toplevel-p*)
+           (*toplevel-p* nil)
+           (*programs* (make-hash-table :test #'eq)))
        (unwind-protect (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
                  :when (slot-boundp shader 'program)
-                   :do (destruct shader)))))))
+                   :do (destruct shader))
+           (loop :for framebuffer :being :each :hash-value :of *framebuffers*
+                 :do (destruct framebuffer)))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
@@ -742,13 +777,6 @@
     stream exp))
 
 (set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
-
-(defmacro in-vertices (form)
-  (when (constantp form)
-    (find-vertices (eval form) :construct nil :error t))
-  `(let ((shader (find-vertices ,form)))
-     (gl:use-program (program shader))
-     shader))
 
 (defun connect (shader &rest pairs)
   (in-vertices shader)
@@ -1001,7 +1029,7 @@
                       "~:>"))))
     stream exp))
 
-(set-pprint-dispatch '(cons (member with-clear)) 'pprint-with-clear)
+(set-pprint-dispatch '(cons (member with-clear with-framebuffer)) 'pprint-with-clear)
 
 ;;;; DRAW-ELEMENTS
 
@@ -1049,6 +1077,92 @@
            :dst-alpha :one-minus-dst-alpha
            :constant-color :one-minus-constant-color
            :constant-alpha :one-minus-constant-alpha))
+
+;;;; FRAME-BUFFER
+
+(defvar *framebuffers* (make-hash-table :test #'eq))
+
+(defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
+
+(defstruct framebuffer id texture width height render-buffer)
+
+(defmethod construct ((o framebuffer))
+  (with-slots (id texture render-buffer width height)
+      o
+    (setf id (car (gl:gen-framebuffers 1))
+          texture (car (gl:gen-textures 1))
+          render-buffer (car (gl:gen-renderbuffers 1)))
+    (gl:bind-framebuffer :framebuffer id)
+    (gl:bind-texture :texture-2d texture)
+    (gl:tex-image-2d :texture-2d 0 :rgb width height 0 :rgb
+                     :unsigned-byte (cffi:null-pointer))
+    (gl:tex-parameter :texture-2d :texture-min-filter :linear)
+    (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+    (gl:framebuffer-texture-2d :framebuffer :color-attachment0 :texture-2d
+                               texture 0)
+    (gl:bind-renderbuffer :renderbuffer render-buffer)
+    (gl:renderbuffer-storage :renderbuffer :depth24-stencil8 width height)
+    (gl:framebuffer-renderbuffer :framebuffer :depth-stencil-attachment
+                                 :renderbuffer render-buffer)
+    (gl:bind-renderbuffer :renderbuffer 0)
+    (let ((result (gl:check-framebuffer-status :framebuffer)))
+      (unless (find result
+                    '(:framebuffer-complete :framebuffer-complete-ext
+                      :framebuffer-complete-oes))
+        (error "Fails to initialize framebuffer. ~S" result)))
+    (gl:bind-framebuffer :framebuffer 0))
+  o)
+
+(defmethod destruct ((o framebuffer))
+  (with-slots (id texture render-buffer)
+      o
+    (when id
+      (gl:delete-framebuffers (list id))
+      (setf id nil))
+    (when texture
+      (gl:delete-textures (list texture))
+      (setf texture nil))
+    (when render-buffer
+      (gl:delete-renderbuffers (list render-buffer))
+      (setf render-buffer nil))))
+
+(defun find-framebuffer (name &key (construct t) (error t))
+  (let ((framebuffer (gethash name *framebuffers*)))
+    (cond
+      ((null framebuffer)
+       (when error
+         (error
+           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
+           name)))
+      ((framebuffer-id framebuffer) framebuffer)
+      ((not construct) framebuffer)
+      (t
+       (restart-case (construct framebuffer)
+         (continue ()
+             :report "Return framebuffer without constructing."
+           framebuffer))))))
+
+(defun in-framebuffer (name)
+  (gl:bind-framebuffer :framebuffer (if name
+                                        (framebuffer-id
+                                          (find-framebuffer name))
+                                        0)))
+
+(defvar *framebuffer-toplevelp* t)
+
+(defmacro with-framebuffer ((name (&rest buffers) &key color ''(0 0 0 1)) &body body)
+  (check-type name symbol)
+  (find-framebuffer name :construct nil :error t)
+  `(progn (in-framebuffer ',name)
+          (apply #'gl:clear-color ,color)
+          (gl:clear ,@buffers)
+          ,@body
+          (in-framebuffer nil)))
+
+(defmacro deframebuf (name &rest params)
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     ;; We need EVAL-WHEN for compile time checkings.
+     (setf (gethash ',name *framebuffers*) (make-framebuffer ,@params))))
 
 ;;;; CAMERA
 

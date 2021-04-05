@@ -1099,3 +1099,109 @@
                           (sin (get-internal-real-time)))
                   (fude-gl:send 'fude-gl:a 'some-instance-dynamics)
                   (fude-gl:draw 'some-instance-dynamics))))))))))
+
+;;;; FRAMEBUFFER
+
+(fude-gl:defshader framebuffer-vertices 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
+    "coord = st;")
+  (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
+    "color = texture(tex, coord);"))
+
+(fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2)) "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;")
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    "color = vec4(texture(screen, coord).rgb, 1.0);"))
+
+(fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
+
+(fude-gl:defvertices framebuffer-quad
+    (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
+                 #(-1.0 -1.0 0.0 0.0) #(1.0 -1.0 1.0 0.0) #(-1.0 1.0 0.0 1.0)
+                 #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
+  :shader 'framebuffer-screen)
+
+(fude-gl:defvertices plane-vertices
+    (concatenate '(array single-float (*)) #(5.0 -0.5 5.0 2.0 0.0)
+                 #(-5.0 -0.5 5.0 0.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0) #()
+                 #(5.0 -0.5 5.0 2.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0)
+                 #(5.0 -0.5 -5.0 2.0 2.0))
+  :shader 'framebuffer-vertices)
+
+(fude-gl::deframebuf step1 :width 800 :height 600)
+
+(defparameter *metal*
+  (let ((pathname (merge-pathnames "metal.png" (user-homedir-pathname))))
+    (unless (probe-file pathname)
+      (dex:fetch
+        "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/metal.png"
+        pathname))
+    (opticl:read-png-file pathname)))
+
+(fude-gl:deftexture metal :texture-2d (fude-gl:tex-image-2d *metal*))
+
+(defun framebuffer-step1 ()
+  (sdl2:with-init (:everything)
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Frame buffer Step1")
+      (sdl2:with-gl-context (context win)
+        (fude-gl:with-shader ()
+          (gl:enable :depth-test)
+          (let* ((camera (fude-gl:make-camera))
+                 (view (fude-gl:view camera))
+                 (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
+            (fude-gl:send 0 'framebuffer-quad :uniform "screen")
+            (fude-gl:send 0 'plane-vertices :uniform "tex")
+            (fude-gl:send view 'plane-vertices :uniform "view")
+            (fude-gl:send projection 'plane-vertices :uniform "projection")
+            (sdl2:with-event-loop (:method :poll)
+              (:quit ()
+                t)
+              (:idle ()
+                (sleep (/ 1 30))
+                ;; bind to framebuffer and draw scene as we normally would to color texture
+                (fude-gl::with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
+                                                  :color '(0.1 0.1 0.1 1))
+                  (gl:enable :depth-test)
+                  ;;; cubes
+                  (fude-gl:in-vertices 'fb-cube)
+                  (fude-gl:in-vertex-array (fude-gl:vertex-array 'fb-cube))
+                  (gl:active-texture 0)
+                  (fude-gl:in-texture 'container)
+                  (fude-gl:send
+                    (3d-matrices:mtranslation (3d-vectors:vec3 -1 0 -1))
+                    'fb-cube
+                    :uniform "model")
+                  (fude-gl:draw 'fb-cube)
+                  (fude-gl:send
+                    (3d-matrices:mtranslation (3d-vectors:vec3 2 0 0)) 'fb-cube
+                    :uniform "model")
+                  (fude-gl:draw 'fb-cube)
+                  ;;; floor
+                  (fude-gl:in-vertices 'plane-vertices)
+                  (fude-gl:in-vertex-array
+                    (fude-gl:vertex-array 'plane-vertices))
+                  (fude-gl:in-texture 'metal)
+                  (fude-gl:send (3d-matrices:meye 4) 'plane-vertices
+                                :uniform "model")
+                  (fude-gl:draw 'plane-vertices))
+                ;; draw a quad plane with the attached framebuffer color texture
+                ;; disable depth test so screen-space quad isn't discarded due to depth test.
+                (gl:disable :depth-test)
+                ;; clear all relevant buffers
+                ;; set clear color to white (not really necessary actually, since
+                ;; we won't be able to see behind the quad anyways)
+                (gl:clear-color 1 1 1 1)
+                (gl:clear :color-buffer-bit)
+                (fude-gl:in-vertices 'framebuffer-quad)
+                (fude-gl:in-vertex-array
+                  (fude-gl:vertex-array 'framebuffer-quad))
+                (gl:bind-texture :texture-2d (fude-gl::framebuffer-texture
+                                               (fude-gl::find-framebuffer
+                                                 'step1)))
+                (fude-gl:draw 'framebuffer-quad)
+                (sdl2:gl-swap-window win)))))))))
