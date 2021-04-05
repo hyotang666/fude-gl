@@ -769,7 +769,8 @@
                          (3d-vectors:vec 1.3 -2 -2.5)
                          (3d-vectors:vec 1.5 2 -2.5)
                          (3d-vectors:vec 1.5 0.2 -1.5)
-                         (3d-vectors:vec -1.3 1 -1.5))))
+                         (3d-vectors:vec -1.3 1 -1.5)))
+                  (camera (fude-gl:make-camera)))
               (gl:enable :depth-test)
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
@@ -779,11 +780,14 @@
                     (fude-gl:connect 'cubes "tex1" 'container "tex2" 'face)
                     (let* ((radius 10)
                            (v
-                            (3d-matrices:mlookat
-                              (3d-vectors:vec
-                                (* (sin (get-internal-real-time)) radius) 0
-                                (* (cos (get-internal-real-time)) radius))
-                              (3d-vectors:vec 0 0 0) (3d-vectors:vec 0 1 0))))
+                            (fude-gl:view
+                              (fude-gl:move camera
+                                            (* (sin (get-internal-real-time))
+                                               radius)
+                                            0
+                                            (* (cos (get-internal-real-time))
+                                               radius))
+                              :target t)))
                       (loop :for pos :in cube-positions
                             :for i :upfrom 0
                             :do (let ((m
@@ -812,26 +816,31 @@
         (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
         (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
 
-(defun move-camera (keysym camera-front camera-up camera-pos)
+(defun move-camera (keysym camera)
   (let ((camera-speed 0.05))
     (case (sdl2:scancode keysym)
       (:scancode-up
-       (3d-vectors:nv+ camera-pos (3d-vectors:v* camera-speed camera-front)))
+       (3d-vectors:nv+ (fude-gl:camera-position camera)
+                       (3d-vectors:v* camera-speed
+                                      (fude-gl:camera-front camera))))
       (:scancode-down
-       (3d-vectors:nv- camera-pos (3d-vectors:v* camera-speed camera-front)))
+       (3d-vectors:nv- (fude-gl:camera-position camera)
+                       (3d-vectors:v* camera-speed
+                                      (fude-gl:camera-front camera))))
       (:scancode-left
-       (3d-vectors:v- camera-pos
-                      (3d-vectors:v*
-                        (3d-vectors:vunit
-                          (3d-vectors:vc camera-front camera-up))
-                        camera-speed)))
+       (3d-vectors:nv- (fude-gl:camera-position camera)
+                       (3d-vectors:v*
+                         (3d-vectors:vunit
+                           (3d-vectors:vc (fude-gl:camera-front camera)
+                                          (fude-gl:camera-up camera)))
+                         camera-speed)))
       (:scancode-right
-       (3d-vectors:v+ camera-pos
-                      (3d-vectors:v*
-                        (3d-vectors:vunit
-                          (3d-vectors:vc camera-front camera-up))
-                        camera-speed)))
-      (otherwise camera-pos))))
+       (3d-vectors:nv+ (fude-gl:camera-position camera)
+                       (3d-vectors:v*
+                         (3d-vectors:vunit
+                           (3d-vectors:vc (fude-gl:camera-front camera)
+                                          (fude-gl:camera-up camera)))
+                         camera-speed))))))
 
 (defun walk-around ()
   (sdl2:with-init (:everything)
@@ -843,9 +852,7 @@
         (fude-gl:with-shader ()
           (fude-gl:with-textures ()
             (fude-gl:in-vertices 'cubes)
-            (let ((camera-pos (3d-vectors:vec 0 0 3))
-                  (camera-front (3d-vectors:vec 0 0 -1))
-                  (camera-up (3d-vectors:vec 0 1 0))
+            (let ((camera (fude-gl:make-camera))
                   (p
                    (3d-matrices:mperspective 45
                                              (multiple-value-call #'/
@@ -856,9 +863,7 @@
                 (:quit ()
                   t)
                 (:keydown (:keysym keysym)
-                  (setf camera-pos
-                          (move-camera keysym camera-front camera-up
-                                       camera-pos)))
+                  (move-camera keysym camera))
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                     (fude-gl:connect 'cubes "tex1" 'container "tex2" 'face)
@@ -870,13 +875,8 @@
                                    (3d-vectors:vec 1 0.3 0.5)
                                    (fude-gl:radians (* 20 i)))
                           :do (fude-gl:send m 'cubes :uniform "model")
-                              (fude-gl:send
-                                (3d-matrices:mlookat camera-pos
-                                                     (3d-vectors:v+ camera-pos
-                                                                    camera-front)
-                                                     camera-up)
-                                'cubes
-                                :uniform "view")
+                              (fude-gl:send (fude-gl:view camera) 'cubes
+                                            :uniform "view")
                               (fude-gl:send p 'cubes :uniform "projection")
                               (fude-gl:draw 'cubes))))))))))))
 

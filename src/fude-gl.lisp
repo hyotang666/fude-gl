@@ -32,6 +32,16 @@
            #:with-glyph
            #:*font-size*
            #:font-loader
+           ;;;; CAMERA
+           ;; constructor
+           #:make-camera
+           ;; readers
+           #:camera-position
+           #:camera-front
+           #:camera-up
+           ;; helpers
+           #:view
+           #:move
            ;;;; GL-OBJECTS
            ;; texture
            #:connect
@@ -1037,3 +1047,42 @@
            :dst-alpha :one-minus-dst-alpha
            :constant-color :one-minus-constant-color
            :constant-alpha :one-minus-constant-alpha))
+
+;;;; CAMERA
+
+(defstruct (camera (:constructor make-camera
+                    (&key (position (3d-vectors:vec3 0 0 3))
+                     (target (3d-vectors:vec3 0 0 0))
+                     (front (3d-vectors:vec3 0 0 -1)) &aux
+                     (direction
+                      (3d-vectors:nvunit (3d-vectors:v- position target)))
+                     (right
+                      (3d-vectors:nvunit
+                        (3d-vectors:vc (3d-vectors:vec3 0 1 0) direction)))
+                     (up (3d-vectors:vc direction right)))))
+  (position (alexandria:required-argument :position)
+            :type 3d-vectors:vec3
+            :read-only t)
+  (target (alexandria:required-argument :target)
+          :type 3d-vectors:vec3
+          :read-only t)
+  (front (alexandria:required-argument :front)
+         :type 3d-vectors:vec3
+         :read-only t)
+  ;; NOTE: This slot may not needed.
+  (right (alexandria:required-argument :right)
+         :type 3d-vectors:vec3
+         :read-only t)
+  (up (alexandria:required-argument :up) :type 3d-vectors:vec3 :read-only t))
+
+(defun view (camera &key target)
+  (3d-matrices:mlookat (camera-position camera)
+                       (if target
+                           (camera-target camera)
+                           (3d-vectors:v+ (camera-position camera)
+                                          (camera-front camera)))
+                       (camera-up camera)))
+
+(defun move (camera x y z)
+  (3d-vectors:vsetf (camera-position camera) x y z)
+  camera)
