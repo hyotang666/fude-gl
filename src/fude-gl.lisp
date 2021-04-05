@@ -334,13 +334,25 @@
              (error
                "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
                name)))
-          ((slot-boundp vertices 'program) vertices)
+          ((slot-boundp vertices 'vertex-array) vertices)
           ((not construct) vertices)
           (t
            (restart-case (construct vertices)
              (continue ()
                  :report "Return vertices without constructing."
                vertices))))))
+
+(defmacro in-vertices (form)
+  (when (constantp form)
+    (find-vertices (eval form) :construct nil :error t))
+  `(let ((vertices (find-vertices ,form)))
+     (gl:use-program (program-id (shader vertices)))
+     vertices))
+
+(defmacro in-program (name)
+  (when (constantp name)
+    (find-program (eval name) :construct nil :error t))
+  `(gl:use-program (find-program ,name :error nil)))
 
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
@@ -351,17 +363,10 @@
 
 (defgeneric send (object to &key))
 
-(define-compiler-macro send (&whole whole object to &key &allow-other-keys)
-  (when (constantp to)
-    (let ((value (eval to)))
-      (when (symbolp value)
-        (find-vertices value :construct nil :error t))))
-  whole)
-
 (defmethod send
            ((o integer) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
-  (in-vertices to)
+  (in-program to)
   (gl:uniformi (uniform uniform to) o))
 
 ;;; BUFFER
@@ -460,7 +465,6 @@
 
 (defclass vertices ()
   ((shader :type symbol :reader shader)
-   (program :type unsigned-byte :reader program)
    (buffer :type buffer :reader buffer)
    (vertex-array :type unsigned-byte :reader vertex-array)))
 
@@ -483,25 +487,16 @@
             "Unknown uniform ~S for ~S" name (uniforms vertices))))))
   whole)
 
-(defun uniform (name vertices)
-  (let ((location
-         (gl:get-uniform-location (program (find-vertices vertices)) name)))
+(defun uniform (name shader)
+  (let ((location (gl:get-uniform-location (program-id shader) name)))
     (assert (not (minusp location)) ()
-      "Not active uniform. ~S in ~A" name
-      (uniforms (shader (find-vertices vertices))))
+      "Not active uniform. ~S in ~A" name (uniforms shader))
     location))
-
-(defmacro in-vertices (form)
-  (when (constantp form)
-    (find-vertices (eval form) :construct nil :error t))
-  `(let ((shader (find-vertices ,form)))
-     (gl:use-program (program shader))
-     shader))
 
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
-  (in-vertices to)
+  (in-program to)
   (gl:uniform-matrix (uniform uniform to) 4 (vector (3d-matrices:marr o))))
 
 (defmethod send
@@ -590,8 +585,17 @@
 
 (defvar *programs* (make-hash-table :test #'eq))
 
+(defun program-id (name &key (error t))
+  (or (gethash name *programs*)
+      (and error (error "Missing shader named ~S" name))))
+
+(defun find-program (name &key (construct t) (error t))
+  (or (program-id name :error error)
+      (when construct
+        (create-program name))))
+
 (defun create-program (name)
-  (let ((program (gethash name *programs*)))
+  (let ((program (program-id name :error nil)))
     (or program
         (let ((program (setf (gethash name *programs*) (gl:create-program))))
           (when (zerop program)
@@ -601,18 +605,13 @@
           program))))
 
 (defmethod construct ((o vertices))
-  (with-slots (program vertex-array shader)
+  (with-slots (vertex-array shader)
       o
-    (setf program (create-program shader)
-          vertex-array (create-vertex-array o))
+    (create-program shader)
+    (setf vertex-array (create-vertex-array o))
     o))
 
 (defmethod destruct ((o vertices))
-  (when (slot-boundp o 'program)
-    (when (gethash (shader o) *programs*)
-      (gl:delete-program (program o))
-      (remhash (shader o) *programs*))
-    (slot-makunbound o 'program))
   (when (slot-boundp o 'vertex-array)
     (gl:delete-vertex-arrays (list (vertex-array o)))
     (slot-makunbound o 'vertex-array))
@@ -634,10 +633,10 @@
                  (append (cdr indices) (list :target :element-array-buffer)))))
 
 (defmethod construct ((o indexed-vertices))
-  (with-slots (program vertex-array shader)
+  (with-slots (vertex-array shader)
       o
-    (setf program (create-program shader)
-          vertex-array (create-vertex-array o))
+    (create-program shader)
+    (setf vertex-array (create-vertex-array o))
     o))
 
 (defmethod destruct ((o indexed-vertices))
@@ -666,10 +665,10 @@
 (defmethod construct ((o instanced-vertices))
   (loop :for (nil . buffer) :in (table o)
         :do (construct buffer))
-  (with-slots (program vertex-array shader)
+  (with-slots (vertex-array shader)
       o
-    (setf program (create-program shader)
-          vertex-array (create-vertex-array o))
+    (create-program shader)
+    (setf vertex-array (create-vertex-array o))
     o))
 
 (defmethod destruct ((o instanced-vertices))
@@ -757,7 +756,7 @@
        (unwind-protect (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
-                 :when (slot-boundp shader 'program)
+                 :when (slot-boundp shader 'vertex-array)
                    :do (destruct shader))
            (loop :for framebuffer :being :each :hash-value :of *framebuffers*
                  :do (destruct framebuffer)))))))
@@ -1029,7 +1028,8 @@
                       "~:>"))))
     stream exp))
 
-(set-pprint-dispatch '(cons (member with-clear with-framebuffer)) 'pprint-with-clear)
+(set-pprint-dispatch '(cons (member with-clear with-framebuffer))
+                     'pprint-with-clear)
 
 ;;;; DRAW-ELEMENTS
 
@@ -1150,14 +1150,16 @@
 
 (defvar *framebuffer-toplevelp* t)
 
-(defmacro with-framebuffer ((name (&rest buffers) &key color ''(0 0 0 1)) &body body)
+(defmacro with-framebuffer
+          ((name (&rest buffers) &key (color ''(0 0 0 1))) &body body)
   (check-type name symbol)
   (find-framebuffer name :construct nil :error t)
-  `(progn (in-framebuffer ',name)
-          (apply #'gl:clear-color ,color)
-          (gl:clear ,@buffers)
-          ,@body
-          (in-framebuffer nil)))
+  `(progn
+    (in-framebuffer ',name)
+    (apply #'gl:clear-color ,color)
+    (gl:clear ,@buffers)
+    ,@body
+    (in-framebuffer nil)))
 
 (defmacro deframebuf (name &rest params)
   `(eval-when (:compile-toplevel :load-toplevel :execute)

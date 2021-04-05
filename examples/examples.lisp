@@ -1154,10 +1154,11 @@
           (let* ((camera (fude-gl:make-camera))
                  (view (fude-gl:view camera))
                  (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
-            (fude-gl:send 0 'framebuffer-quad :uniform "screen")
-            (fude-gl:send 0 'plane-vertices :uniform "tex")
-            (fude-gl:send view 'plane-vertices :uniform "view")
-            (fude-gl:send projection 'plane-vertices :uniform "projection")
+            (fude-gl:send 0 'framebuffer-screen :uniform "screen")
+            (fude-gl:send 0 'framebuffer-vertices :uniform "tex")
+            (fude-gl:send view 'framebuffer-vertices :uniform "view")
+            (fude-gl:send projection 'framebuffer-vertices
+                          :uniform "projection")
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
@@ -1174,11 +1175,12 @@
                   (fude-gl:in-texture 'container)
                   (fude-gl:send
                     (3d-matrices:mtranslation (3d-vectors:vec3 -1 0 -1))
-                    'fb-cube
+                    'framebuffer-vertices
                     :uniform "model")
                   (fude-gl:draw 'fb-cube)
                   (fude-gl:send
-                    (3d-matrices:mtranslation (3d-vectors:vec3 2 0 0)) 'fb-cube
+                    (3d-matrices:mtranslation (3d-vectors:vec3 2 0 0))
+                    'framebuffer-vertices
                     :uniform "model")
                   (fude-gl:draw 'fb-cube)
                   ;;; floor
@@ -1186,7 +1188,7 @@
                   (fude-gl:in-vertex-array
                     (fude-gl:vertex-array 'plane-vertices))
                   (fude-gl:in-texture 'metal)
-                  (fude-gl:send (3d-matrices:meye 4) 'plane-vertices
+                  (fude-gl:send (3d-matrices:meye 4) 'framebuffer-vertices
                                 :uniform "model")
                   (fude-gl:draw 'plane-vertices))
                 ;; draw a quad plane with the attached framebuffer color texture
