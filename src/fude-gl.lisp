@@ -780,7 +780,7 @@
 (set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
 
 (defun connect (shader &rest pairs)
-  (in-vertices shader)
+  (in-program shader)
   (loop :for i :upfrom 0
         :for (uniform name) :on pairs :by #'cddr
         :for texture = (find-texture name)
