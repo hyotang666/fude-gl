@@ -863,20 +863,21 @@
 
 (defmacro deftexture (name target init-form &body options)
   (type-assert target 'texture-target)
-  `(progn
-    (setf (gethash ',name *textures*)
-            (make-texture :target ,target
-                          :initializer (lambda () ,init-form)
-                          :params ',(loop :for (k v) :on options :by #'cddr
-                                          :with spec
-                                                = (list :texture-wrap-s :repeat
-                                                        :texture-wrap-t :repeat
-                                                        :texture-min-filter :linear
-                                                        :texture-mag-filter :linear)
-                                          :do (type-assert k 'texture-pname)
-                                              (setf (getf spec k) v)
-                                          :finally (return spec))))
-    ',name))
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     ;; We need this EVAL-WHEN for compile time checkings.
+     (setf (gethash ',name *textures*)
+             (make-texture :target ,target
+                           :initializer (lambda () ,init-form)
+                           :params ',(loop :for (k v) :on options :by #'cddr
+                                           :with spec
+                                                 = (list :texture-wrap-s :repeat
+                                                         :texture-wrap-t :repeat
+                                                         :texture-min-filter :linear
+                                                         :texture-mag-filter :linear)
+                                           :do (type-assert k 'texture-pname)
+                                               (setf (getf spec k) v)
+                                           :finally (return spec))))
+     ',name))
 
 (defun pprint-deftexture (stream exp)
   (funcall
@@ -914,6 +915,8 @@
            texture))))))
 
 (defmacro in-texture (name)
+  (when (constantp name)
+    (find-texture (eval name) :construct nil :error t))
   `(let ((texture (find-texture ,name)))
      (gl:bind-texture (texture-target texture) (texture-id texture))))
 
