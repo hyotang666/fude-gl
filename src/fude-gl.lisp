@@ -68,6 +68,8 @@
 
 (defparameter *vertex-attributes* (make-hash-table))
 
+(defun list-all-attributes () (alexandria:hash-table-keys *vertex-attributes*))
+
 ;; METACLASS
 
 (defclass vector-class (standard-class) ())
