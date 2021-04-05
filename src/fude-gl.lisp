@@ -572,8 +572,7 @@
 
 (defmethod draw :before ((o vertices)) (in-vertices o))
 
-(defmethod draw ((o vertices))
-  (gl:draw-arrays :triangles 0 (length (buffer-original (buffer o)))))
+(defmethod draw ((o vertices)) (gl:draw-arrays :triangles 0 (vertex-length o)))
 
 ;;;; INDEXED
 
