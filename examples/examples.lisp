@@ -19,6 +19,30 @@
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
+;; Macro DEFSHADER defines shader.
+;;
+;; The first argument (HELLO-TRIANGLE in the example below) must a symbol
+;; which acceptable for CL:DEFCLASS first argument.
+;;
+;; The second argument (330 in the example below) is GLSL version.
+;;
+;; The third argument ((xy) in the example below) is a list
+;; which elements must be attributes.
+;; You can see current defined attributes by evaluating (list-all-attributes).
+;; Any attributes must defined by DEFINE-VERTEX-ATTRIBUTE.
+;;
+;; The rest arguments are shader clauses.
+;;
+;; The first element of the clause must one of :vertex or :fragment.
+;;
+;; The second element of the clause is called shader-lambda-list.
+;; In the shader-lambda-list you can specify output spec.
+;; In the example below, (|outColor| :vec4) is an output spec.
+;;
+;; The first element of the output spec must a symbol.
+;; The second element of the output spec is a keyword symbol that names a GLSL type.
+;;
+;; The rest elements of the clause is GLSL source strings.
 
 (fude-gl:defshader hello-triangle 330 (fude-gl:xy)
   (:vertex () "gl_Position = vec4(xy, 0.0, 1.0);")
@@ -27,9 +51,20 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *triangle*
     (concatenate '(array single-float (*))
+                 ;; The constructors of the ATTRIBUTE class makes vector.
                  (make-instance 'fude-gl:xy :x 0.0 :y 0.5)
                  (make-instance 'fude-gl:xy :x 0.5 :y -0.5)
                  (make-instance 'fude-gl:xy :x -0.5 :y -0.5))))
+
+;; Macro DEFVERTICES defines vertices spec.
+;;
+;; The first argument (HELLO-TRIANGLE in the example below) must be a symbol.
+;;
+;; The second argument (*TRIANGLE* in the example below) must be a (array single-float (*)).
+;;
+;; Macro DEFVERTICES is evaluated in compile time,
+;; so variable *TRIANGLE* needs to be wrapped by EVAL-WHEN.
+;; (you can see above.)
 
 (fude-gl:defvertices hello-triangle *triangle*)
 
@@ -41,12 +76,17 @@
                            :h 600
                            :title "Hello triangle"))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'hello-triangle))
+    ;; For cleanup, macro WITH-SHADER is recommended.
+    (fude-gl:with-shader ()
+      ;; To construct vertices.
+      (fude-gl:in-vertices 'hello-triangle))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
     (:idle nil)
+    ;; To clear window, WITH-CLEAR is recomended.
     (fude-gl:with-clear (win (:color-buffer-bit))
+      ;; To draw vertices, you can use DRAW with passing vertices name.
       (fude-gl:draw 'hello-triangle))))
 
 ;;;; UNIFORM-DEMO
@@ -54,6 +94,10 @@
 (fude-gl:defshader uniform-demo 330 (fude-gl:xy)
   ;; Re-use vertex-shader of HELLO-TRIANGLE.
   (:vertex () 'hello-triangle)
+  ;; To use uniform, you must specify uniform-spec.
+  ;; Lambda-list-keyword &UNIFORM is used to specify uniform-spec in the shader-lambda-list.
+  ;; The first element of the uniform-spec must be a symbol.
+  ;; The second element of the uniform-spec is a keyword symbol that names GLSL type.
   (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
     "outColor = vec4(triangleColor, 1.0);"))
 
@@ -74,11 +118,15 @@
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
           (fude-gl:in-vertices 'uniform-demo)
+          ;; To get an uniform locatioin, you can use a function UNIFORM.
+          ;; The first argument must be a string that names uniform.
+          ;; The second argument must be a symbol that names shader.
           (gl:uniformf (fude-gl:uniform "triangleColor" 'uniform-demo)
                        (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0 0.0)
           (fude-gl:draw 'uniform-demo))))))
 
 ;;;; COLORED-TRIANGLE
+;; You can specify some attributes in the attributes list.
 
 (fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
   (:vertex ((color :vec3)) "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);")
@@ -150,8 +198,12 @@
                                 :r 1.0
                                 :g 1.0
                                 :b 1.0))
+  ;; When vertices name is not same with a shader name,
+  ;; you must specify a shader to use.
   :shader 'colored-triangle
-  :indices (list '(0 1 2 2 3 0)))
+  ;; To enable indices.
+  :indices
+  (list '(0 1 2 2 3 0)))
 
 (defun element-buffer ()
   (uiop:nest
@@ -185,6 +237,14 @@
       (merge-pathnames "examples/lisplogo_alien_128.png"
                        (asdf:system-source-directory
                          (asdf:find-system :fude-gl-examples))))))
+
+;; Macto DEFTEXTURE defines a texture.
+;;
+;; The first argument (LISP-ALIEN in the example below) must be a symbol.
+;;
+;; The second argument (:TEXTURE-2D in the example below) must be a texture-target.
+;;
+;; The third argument is a form to initialize texture.
 
 (fude-gl:deftexture lisp-alien :texture-2d (fude-gl:tex-image-2d *png*))
 
@@ -233,8 +293,10 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
+    ;; For cleanup textures, macro WITH-TEXTURES is recommended.
     (fude-gl:with-textures ()
       (fude-gl:in-vertices 'texture-demo)
+      ;; To initialize texture.
       (fude-gl:in-texture 'lisp-alien))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
@@ -287,6 +349,10 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
+      ;; When a shader needs some textures,
+      ;; you can use a function CONNECT.
+      ;; The first argument is a shader name.
+      ;; The rest arguments are uniform name and texture name pairs.
       (fude-gl:connect 'mix-demo "tex1" 'lisp-alien "tex2" 'lisp-logo)
       (fude-gl:draw 'mix-demo))))
 
@@ -348,6 +414,11 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit) :color '(0.2 0.3 0.3 1.0))
+      ;; To send matrix to the uniform variable,
+      ;; you can use a generic function SEND.
+      ;; In this case, the first argument is 3D-MATRICES:MAT4
+      ;; The second argument is a shader name.
+      ;; Aditinally keyword parameter :UNIFORM with specify an uniform name.
       (fude-gl:send
         (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vz+
                               (fude-gl:radians (get-internal-real-time)))
@@ -606,7 +677,7 @@
                   t)
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit))
-                    (fude-gl:connect 'ortho-demo "tex" 'face)
+                    (fude-gl::in-texture 'face)
                     (fude-gl:send m 'ortho-demo :uniform "model")
                     (fude-gl:send p 'ortho-demo :uniform "projection")
                     (fude-gl:draw 'ortho-demo)))))))))))
@@ -770,6 +841,7 @@
                          (3d-vectors:vec 1.5 2 -2.5)
                          (3d-vectors:vec 1.5 0.2 -1.5)
                          (3d-vectors:vec -1.3 1 -1.5)))
+                  ;; To make camera, you can use a function MAKE-CAMERA.
                   (camera (fude-gl:make-camera)))
               (gl:enable :depth-test)
               (sdl2:with-event-loop (:method :poll)
@@ -779,15 +851,20 @@
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                     (fude-gl:connect 'cubes "tex1" 'container "tex2" 'face)
                     (let* ((radius 10)
-                           (v
-                            (fude-gl:view
-                              (fude-gl:move camera
-                                            (* (sin (get-internal-real-time))
-                                               radius)
-                                            0
-                                            (* (cos (get-internal-real-time))
-                                               radius))
-                              :target t)))
+                           ;; To move camera you can use a function MOVE.
+                           ;; The first argument is a camera object.
+                           ;; The rest arguments are new X, Y and Z.
+                           (moved
+                            (fude-gl:move camera
+                                          (* (sin (get-internal-real-time))
+                                             radius)
+                                          0
+                                          (* (cos (get-internal-real-time))
+                                             radius)))
+                           ;; To get a view matrix, you can use a function VIEW.
+                           ;; The first argument is a camera object.
+                           ;; The keyword parameter :TARGET specifies to look at CAMERA-TARGET.
+                           (v (fude-gl:view moved :target t)))
                       (loop :for pos :in cube-positions
                             :for i :upfrom 0
                             :do (let ((m
@@ -819,6 +896,8 @@
 (defun move-camera (keysym camera)
   (let ((camera-speed 0.05))
     (case (sdl2:scancode keysym)
+      ;; To modify CAMERA-POSITION,
+      ;; you should use 3D-VECTORS's N prefixed functions.
       (:scancode-up
        (3d-vectors:nv+ (fude-gl:camera-position camera)
                        (3d-vectors:v* camera-speed
@@ -892,12 +971,20 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :blend)
       (gl:blend-func :src-alpha :one-minus-src-alpha))
+    ;; To render text, you can use a macro WITH-TEXT-RENDERER.
+    ;; The first argument is spec.
+    ;; The first element of the spec must be a symbol that will be a function.
+    ;; The keyword parameter :SIZE specify font size.
+    ;; The required keyword parameter :WIN specify sdl2 window.
     (fude-gl:with-text-renderer (renderer :size 32 :win win))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
+          ;; The first arument of the text renderer is a string to render.
+          ;; The keyword parameter :X and :Y specifies position.
+          ;; You can use :CENTER to specify centering the text.
           (renderer "Hello world! g" :x 0 :y :center))))))
 
 ;;;; INSTANCING
@@ -915,6 +1002,8 @@
       '(array single-float (*)))))
 
 (fude-gl:defshader instancing 330 (fude-gl:xy fude-gl:rgb)
+  ;; When you want to use array for uniform variable,
+  ;; you can specify its size in the third element of the uniform spec.
   (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
     "vec2 offset = offsets[gl_InstanceID];"
     "gl_Position = vec4(xy + offset, 0.0, 1.0);"
@@ -977,6 +1066,8 @@
                                 :initial-contents result)))))
 
 (fude-gl:defvertices instanced-arrays-demo *instancing*
+  ;; To specify GPU instancing,
+  ;; The value is attribute and array pair alist.
   :instances `((fude-gl:offset ,*translations*)))
 
 (defun instanced-arrays-demo ()
@@ -1073,6 +1164,7 @@
                 ,(make-array (array-dimension *translations* 0)
                              :element-type 'single-float
                              :initial-element 0.0)
+                ;; To specify buffer usage.
                 :usage :dynamic-draw)))
 
 (defun some-instance-dynamics ()
@@ -1087,7 +1179,11 @@
         (fude-gl:with-shader ()
           (fude-gl:in-vertices 'some-instance-dynamics)
           (let ((vec
+                  ;; To get gl-array object.
                  (fude-gl:buffer-source
+                   ;; To get buffer object.
+                   ;; The first argument is a vertices name.
+                   ;; The second argument is an attribute name.
                    (fude-gl:instances-buffer 'some-instance-dynamics
                                              'fude-gl:a))))
             (sdl2:with-event-loop (:method :poll)
@@ -1097,6 +1193,7 @@
                 (fude-gl:with-clear (win (:color-buffer-bit))
                   (setf (gl:glaref vec (random (gl::gl-array-size vec)))
                           (sin (get-internal-real-time)))
+                  ;; To update.
                   (fude-gl:send 'fude-gl:a 'some-instance-dynamics)
                   (fude-gl:draw 'some-instance-dynamics))))))))))
 
@@ -1110,6 +1207,12 @@
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
     "color = texture(tex, coord);"))
 
+(fude-gl:defvertices framebuffer-quad
+    (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
+                 #(-1.0 -1.0 0.0 0.0) #(1.0 -1.0 1.0 0.0) #(-1.0 1.0 0.0 1.0)
+                 #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
+  :shader 'framebuffer-screen)
+
 (fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2)) "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;")
   (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
@@ -1117,18 +1220,16 @@
 
 (fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
 
-(fude-gl:defvertices framebuffer-quad
-    (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
-                 #(-1.0 -1.0 0.0 0.0) #(1.0 -1.0 1.0 0.0) #(-1.0 1.0 0.0 1.0)
-                 #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
-  :shader 'framebuffer-screen)
-
 (fude-gl:defvertices plane-vertices
     (concatenate '(array single-float (*)) #(5.0 -0.5 5.0 2.0 0.0)
                  #(-5.0 -0.5 5.0 0.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0) #()
                  #(5.0 -0.5 5.0 2.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0)
                  #(5.0 -0.5 -5.0 2.0 2.0))
   :shader 'framebuffer-vertices)
+
+;; Macro DEFRAMEBUF defines framebuffer.
+;;
+;; The first argument (STEP1 in the example below) must be a symbol names framebuffer.
 
 (fude-gl::deframebuf step1 :width 800 :height 600)
 
@@ -1165,6 +1266,7 @@
               (:idle ()
                 (sleep (/ 1 30))
                 ;; bind to framebuffer and draw scene as we normally would to color texture
+                ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
                 (fude-gl::with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
                                                   :color '(0.1 0.1 0.1 1))
                   (gl:enable :depth-test)
