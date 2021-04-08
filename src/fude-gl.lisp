@@ -550,7 +550,7 @@
 
 (defmacro in-program (name)
   (when (constantp name)
-    (find-program (eval name) :construct nil :error t))
+    (find-class (eval name)))
   `(gl:use-program (find-program ,name :error nil)))
 
 (define-compiler-macro draw (&whole whole thing)
