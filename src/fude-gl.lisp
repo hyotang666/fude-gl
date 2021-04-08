@@ -66,6 +66,200 @@
 
 (in-package :fude-gl)
 
+;;;; VERBOSE OPENGL
+
+(deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
+
+(deftype buffer-target ()
+  '(member :array-buffer :element-array-buffer
+           :copy-read-buffer :copy-write-buffer
+           :pixel-unpack-buffer :pixel-pack-buffer
+           :query-buffer :texture-buffer
+           :transform-feedback-buffer :uniform-buffer
+           :draw-indirect-buffer :atomic-counter-buffer
+           :dispatch-indirect-buffer :shader-storage-buffer))
+
+(deftype texture-wrapping ()
+  '(member :repeat :mirrored-repeat :clamp-to-edge :clamp-to-border))
+
+(deftype texture-target ()
+  '(member :texture-1d :texture-1d-array
+           :texture-2d :texture-2d-array
+           :texture-2d-multisample :texture-2d-multisample-array
+           :texture-3d :texture-cube-map
+           :texture-cube-map-array :texture-rectangle))
+
+(deftype texture-pname ()
+  '(member :depth-stencil-texture-mode
+           :texture-base-level :texture-compare-func
+           :texture-compare-mode :texture-lod-bias
+           :texture-min-filter :texture-mag-filter
+           :texture-min-lod :texture-max-lod
+           :texture-max-level :texture-swizzle-r
+           :texture-swizzle-g :texture-swizzle-b
+           :texture-swizzle-a :texture-wrap-s
+           :texture-wrap-t :texture-wrap-r))
+
+(deftype texture-mag-filter () '(member :linear :nearest))
+
+(deftype texture-min-filter ()
+  '(or texture-mag-filter
+       (member :nearest-mipmap-nearest :lenear-mipmap-nearest
+               :nearest-mipmap-linear :linear-mipmap-linear)))
+
+(deftype base-internal-format ()
+  '(member :depth-component :depth-stencil :red :rg :rgb :rgba))
+
+(deftype pixel-format ()
+  '(or base-internal-format
+       (member :bgr
+               :bgra :red-integer
+               :rg-integer :rgb-integer
+               :bgr-integer :rgba-integer
+               :bgra-integer :stencil-index)))
+
+(deftype pixel-type ()
+  '(member :unsigned-byte :byte
+           :unsigned-short :short
+           :unsigned-int :int
+           :half-float :float
+           :unsigned-byte-3-3-2 :unsigned-byte-2-3-3-rev
+           :unsigned-short-5-6-5 :unsigned-short-5-6-5-rev
+           :unsigned-short-4-4-4-4 :unsigned-short-4-4-4-4-rev
+           :unsigned-short-5-5-5-1 :unsigned-short-1-5-5-5-rev
+           :unsigned-int-8-8-8-8 :unsigned-int-8-8-8-8-rev
+           :unsigned-int-10-10-10-2 :unsigned-int-2-10-10-10-rev))
+
+(deftype buffer-bit ()
+  '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
+
+(deftype draw-mode ()
+  '(member :points :line-strip
+           :line-loop :lines
+           :line-strip-adjacency :lines-adjacency
+           :triangle-strip :triangle-fan
+           :triangles :tiangle-strip-adjacency
+           :triangles-adjacency :patches))
+
+(deftype enable-capabilities ()
+  '(member :blend :clip-distance
+           :color-logic-op :cull-face
+           :debug-output :debug-output-synchronous
+           :depth-clamp :depth-test
+           :dither :framebuffer-srgb
+           :line-smooth :multisample
+           :polygon-offset-fill :polygon-offset-line
+           :polygon-offset-point :polygon-smooth
+           :primitive-restart :primitive-restart-fixed-index
+           :rastarizer-discard :sample-alpha-to-coverage
+           :sample-alpha-to-one :sample-coverage
+           :sample-shading :sample-mask
+           :scissor-test :stencil-test
+           :texture-cube-map-seamless :program-point-size))
+
+(deftype source-factor ()
+  '(or dest-factor
+       (member :src-alpha-saturate
+               :src1-color :one-minus-src1-color
+               :src1-alpha :one-minus-src1-alpha)))
+
+(deftype dest-factor ()
+  '(member :zero :one
+           :src-color :one-minus-src-color
+           :dst-color :one-minus-dst-color
+           :src-alpha :one-minus-src-alpha
+           :dst-alpha :one-minus-dst-alpha
+           :constant-color :one-minus-constant-color
+           :constant-alpha :one-minus-constant-alpha))
+
+(deftype attachment ()
+  '(member :color-attachment0 :depth-attachment :stencil-attachment))
+
+(deftype framebuffer-texture-target ()
+  '(member :texture-2d
+           :texture-cube-map-positive-x :texture-cube-map-negative-x
+           :texture-cube-map-positive-y :texture-cube-map-negative-y
+           :texture-cube-map-positive-z :texture-cube-map-negative-z))
+
+(deftype get-program-pname ()
+  '(member :delete-status :link-status
+           :validate-status :info-log-length
+           :attached-shaders :active-atomic-counter-buffers
+           :active-attributes :active-attribute-max-length
+           :active-uniforms :active-uniform-blocks
+           :active-uniform-block-max-name-length :active-uniform-max-length
+           :compute-work-group-size :program-binary-length
+           :transform-feedback-buffer-mode :transform-feedback-varyings
+           :transform-feedback-varying-max-length :geometry-vertices-out
+           :geometry-input-type :geometry-output-type))
+
+(define-condition fude-gl-error (error) ())
+
+(define-condition uniform-error (fude-gl-error)
+  ((program :initarg :program :reader program)
+   (uniform :initarg :uniform :reader error-uniform))
+  (:report
+   (lambda (condition stream)
+     (format stream "Uniform ~S is not active in ~S" (error-uniform condition)
+             (program condition)))))
+
+(defvar *condition*) ; For debug use.
+
+(declaim
+ (ftype (function
+         ((eql :framebuffer) attachment framebuffer-texture-target
+          unsigned-byte integer)
+         (values &optional))
+        framebuffer-texture-2d))
+
+(defun framebuffer-texture-2d (target attachment textarget texture level)
+  (handler-bind ((condition (lambda (c) (print (setf *condition* c)))))
+    (gl:framebuffer-texture-2d target attachment textarget texture level)))
+
+(defun get-uniform-location (program name)
+  (let ((location (gl:get-uniform-location program name)))
+    (assert (not (minusp location)) ()
+      'uniform-error :program program
+                     :uniform name)
+    location))
+
+(defun foreign-type (cl-type &key cffi)
+  (cond ((and cffi (subtypep cl-type 'single-float)) :float)
+        ((and cffi (subtypep cl-type 'double-float)) :double)
+        ((subtypep cl-type 'float) :float)
+        ((subtypep cl-type '(unsigned-byte 8))
+         (if cffi
+             :unsigned-char
+             :unsigned-byte))
+        ((subtypep cl-type '(signed-byte 8))
+         (if cffi
+             :char
+             :byte))
+        ((subtypep cl-type '(unsigned-byte 16)) :unsigned-short)
+        ((subtypep cl-type '(signed-byte 16)) :short)
+        ((subtypep cl-type '(unsigned-byte 32)) :unsigned-int)
+        ((subtypep cl-type '(signed-byte 32)) :int)
+        ((and cffi (subtypep cl-type '(unsigned-byte 64))) :unsigned-long)
+        ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
+        (t (error "Not supported type. ~S" cl-type))))
+
+(defun tex-image-2d (array)
+  (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
+    (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
+                     (the base-internal-format format)
+                     (array-dimension array 0) ; width
+                     (array-dimension array 1) ; height
+                     0 ; legacy stuff.
+                     (the pixel-format format)
+                     (foreign-type (array-element-type array))
+                     (make-array (array-total-size array)
+                                 :element-type (array-element-type array)
+                                 :displaced-to array))))
+
+(defun draw-elements (mode cl-vector &key (offset 0))
+  (%gl:draw-elements mode (length cl-vector)
+                     (foreign-type (array-element-type cl-vector)) offset))
+
 ;;;; VERTEX-ATTRIBUTE-CLASSES
 
 (defparameter *vertex-attributes* (make-hash-table))
@@ -373,18 +567,8 @@
   (in-program to)
   (gl:uniformi (uniform uniform to) o))
 
+
 ;;; BUFFER
-
-(deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
-
-(deftype buffer-target ()
-  '(member :array-buffer :element-array-buffer
-           :copy-read-buffer :copy-write-buffer
-           :pixel-unpack-buffer :pixel-pack-buffer
-           :query-buffer :texture-buffer
-           :transform-feedback-buffer :uniform-buffer
-           :draw-indirect-buffer :atomic-counter-buffer
-           :dispatch-indirect-buffer :shader-storage-buffer))
 
 (defstruct buffer
   name
@@ -400,26 +584,6 @@
         (format stream "~S ~:[unconstructed~;~:*~A~] ~S ~S" (buffer-name o)
                 (buffer-buffer o) (buffer-target o) (buffer-usage o)))
       (call-next-method)))
-
-(defun foreign-type (cl-type &key cffi)
-  (cond ((and cffi (subtypep cl-type 'single-float)) :float)
-        ((and cffi (subtypep cl-type 'double-float)) :double)
-        ((subtypep cl-type 'float) :float)
-        ((subtypep cl-type '(unsigned-byte 8))
-         (if cffi
-             :unsigned-char
-             :unsigned-byte))
-        ((subtypep cl-type '(signed-byte 8))
-         (if cffi
-             :char
-             :byte))
-        ((subtypep cl-type '(unsigned-byte 16)) :unsigned-short)
-        ((subtypep cl-type '(signed-byte 16)) :short)
-        ((subtypep cl-type '(unsigned-byte 32)) :unsigned-int)
-        ((subtypep cl-type '(signed-byte 32)) :int)
-        ((and cffi (subtypep cl-type '(unsigned-byte 64))) :unsigned-long)
-        ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
-        (t (error "Not supported type. ~S" cl-type))))
 
 (defun make-gl-vector (initial-contents)
   (let* ((length (array-total-size initial-contents))
@@ -866,45 +1030,6 @@
 
 ;;; WITH-TEXTURES
 
-(deftype texture-wrapping ()
-  '(member :repeat :mirrored-repeat :clamp-to-edge :clamp-to-border))
-
-(deftype texture-target ()
-  '(member :texture-1d :texture-1d-array
-           :texture-2d :texture-2d-array
-           :texture-2d-multisample :texture-2d-multisample-array
-           :texture-3d :texture-cube-map
-           :texture-cube-map-array :texture-rectangle))
-
-(deftype texture-pname ()
-  '(member :depth-stencil-texture-mode
-           :texture-base-level :texture-compare-func
-           :texture-compare-mode :texture-lod-bias
-           :texture-min-filter :texture-mag-filter
-           :texture-min-lod :texture-max-lod
-           :texture-max-level :texture-swizzle-r
-           :texture-swizzle-g :texture-swizzle-b
-           :texture-swizzle-a :texture-wrap-s
-           :texture-wrap-t :texture-wrap-r))
-
-(deftype texture-mag-filter () '(member :linear :nearest))
-
-(deftype texture-min-filter ()
-  '(or texture-mag-filter
-       (member :nearest-mipmap-nearest :lenear-mipmap-nearest
-               :nearest-mipmap-linear :linear-mipmap-linear)))
-
-(deftype base-internal-format ()
-  '(member :depth-component :depth-stencil :red :rg :rgb :rgba))
-
-(deftype pixel-format ()
-  '(or base-internal-format
-       (member :bgr
-               :bgra :red-integer
-               :rg-integer :rgb-integer
-               :bgr-integer :rgba-integer
-               :bgra-integer :stencil-index)))
-
 (defvar *textures* (make-hash-table :test #'eq))
 
 (defstruct texture
@@ -1014,24 +1139,7 @@
 
 (set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
 
-(defun tex-image-2d (array)
-  (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
-    (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
-                     (the base-internal-format format)
-                     (array-dimension array 0) ; width
-                     (array-dimension array 1) ; height
-                     0 ; legacy stuff.
-                     (the pixel-format format)
-                     (foreign-type (array-element-type array))
-                     (make-array (array-total-size array)
-                                 :element-type (array-element-type array)
-                                 :displaced-to array))))
-
-;;;; WITH-VAO
 ;;;; WITH-CLEAR
-
-(deftype buffer-bit ()
-  '(member :color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
 
 (defmacro with-clear
           (&whole whole
@@ -1075,53 +1183,6 @@
 
 (set-pprint-dispatch '(cons (member with-clear with-framebuffer))
                      'pprint-with-clear)
-
-;;;; DRAW-ELEMENTS
-
-(deftype draw-mode ()
-  '(member :points :line-strip
-           :line-loop :lines
-           :line-strip-adjacency :lines-adjacency
-           :triangle-strip :triangle-fan
-           :triangles :tiangle-strip-adjacency
-           :triangles-adjacency :patches))
-
-(defun draw-elements (mode cl-vector &key (offset 0))
-  (%gl:draw-elements mode (length cl-vector)
-                     (foreign-type (array-element-type cl-vector)) offset))
-
-;;;; ENABLE-CAPABILITIES
-
-(deftype enable-capabilities ()
-  '(member :blend :clip-distance
-           :color-logic-op :cull-face
-           :debug-output :debug-output-synchronous
-           :depth-clamp :depth-test
-           :dither :framebuffer-srgb
-           :line-smooth :multisample
-           :polygon-offset-fill :polygon-offset-line
-           :polygon-offset-point :polygon-smooth
-           :primitive-restart :primitive-restart-fixed-index
-           :rastarizer-discard :sample-alpha-to-coverage
-           :sample-alpha-to-one :sample-coverage
-           :sample-shading :sample-mask
-           :scissor-test :stencil-test
-           :texture-cube-map-seamless :program-point-size))
-
-(deftype source-factor ()
-  '(or dest-factor
-       (member :src-alpha-saturate
-               :src1-color :one-minus-src1-color
-               :src1-alpha :one-minus-src1-alpha)))
-
-(deftype dest-factor ()
-  '(member :zero :one
-           :src-color :one-minus-src-color
-           :dst-color :one-minus-dst-color
-           :src-alpha :one-minus-src-alpha
-           :dst-alpha :one-minus-dst-alpha
-           :constant-color :one-minus-constant-color
-           :constant-alpha :one-minus-constant-alpha))
 
 ;;;; FRAME-BUFFER
 
