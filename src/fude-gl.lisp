@@ -5,6 +5,7 @@
   (:export ;;;; DEFSHADER
            #:defshader
            ;;;; FUNDAMENTAL-CLASSES
+           #:define-vertex-attribute
            #:xy
            #:xyz
            #:st
@@ -15,6 +16,13 @@
            #:defvertices
            #:in-vertices
            #:with-shader
+           #:shader
+           #:find-vertices
+           ;;;; FRAMEBUFFER
+           #:deframebuf
+           #:with-framebuffer
+           #:framebuffer-texture
+           #:find-framebuffer
            ;;;; HELPERS
            #:uniform
            #:find-shader

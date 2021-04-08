@@ -727,13 +727,13 @@
           (fude-gl:with-textures ()
             (fude-gl:in-vertices 'ortho-demo)
             (let ((p (3d-matrices:mortho 0 800 0 600 -1 1))
-                  (m (fude-gl::model-matrix 0 0 100 100)))
+                  (m (fude-gl:model-matrix 0 0 100 100)))
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
                   t)
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit))
-                    (fude-gl::in-texture 'face)
+                    (fude-gl:in-texture 'face)
                     (fude-gl:send m 'ortho-demo :uniform "model")
                     (fude-gl:send p 'ortho-demo :uniform "projection")
                     (fude-gl:draw 'ortho-demo)))))))))))
@@ -1321,7 +1321,7 @@
 ;;
 ;; The first argument (STEP1 in the example below) must be a symbol names framebuffer.
 
-(fude-gl::deframebuf step1 :width 800 :height 600)
+(fude-gl:deframebuf step1 :width 800 :height 600)
 
 (defun framebuffer-step1 ()
   (sdl2:with-init (:everything)
@@ -1343,9 +1343,8 @@
                 (fude-gl:with-clear (win (:color-buffer-bit))
                   ;; bind to framebuffer and draw scene as we normally would to color texture
                   ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
-                  (fude-gl::with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
-                                                    :color '(0.1 0.1 0.1 1)
-                                                    :win win)
+                  (fude-gl:with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
+                                                   :color '(0.1 0.1 0.1 1) :win win)
                     (gl:enable :depth-test)
                     (fude-gl:with-uniforms ((tex :unit 0) (v "view")
                                             (p "projection") model)
@@ -1372,13 +1371,13 @@
                   (gl:disable :depth-test)
                   (fude-gl:in-vertices 'framebuffer-quad)
                   (fude-gl:in-texture
-                   (fude-gl::framebuffer-texture
-                     (fude-gl::find-framebuffer 'step1)))
+                   (fude-gl:framebuffer-texture
+                     (fude-gl:find-framebuffer 'step1)))
                   (fude-gl:draw 'framebuffer-quad))))))))))
 
 ;;;; DEPTH-MAP-DEMO
 
-(fude-gl::deframebuf depth-map
+(fude-gl:deframebuf depth-map
   :width 1024
   :height 1024
   :format :depth-component
@@ -1522,8 +1521,8 @@
                               :color '(0.1 0.1 0.1 1))
        ;; 1. render depth of scene to texture (from light's perspective)
        ;; render scene from light's point of view
-       (fude-gl::with-framebuffer (depth-map (:depth-buffer-bit)
-                                             :color nil :win win)
+       (fude-gl:with-framebuffer (depth-map (:depth-buffer-bit)
+                                            :color nil :win win)
          (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
                  (3d-matrices:m*
                    (3d-matrices:mortho -10 10 -10 10 near-plane far-plane)
@@ -1537,14 +1536,14 @@
        (fude-gl:send far-plane 'debug-quad :uniform "farPlane")
        |#
        (setf (fude-gl:uniform 'debug-quad "depthMap" :unit 0)
-               (fude-gl::framebuffer-texture
-                 (fude-gl::find-framebuffer 'depth-map)))
+               (fude-gl:framebuffer-texture
+                 (fude-gl:find-framebuffer 'depth-map)))
        (fude-gl:draw 'shadow-quad)))))
 
 (defun render-scene (vertices)
   ;; floor
   (fude-gl:in-vertices vertices)
-  (let ((shader (fude-gl::shader (fude-gl::find-vertices vertices))))
+  (let ((shader (fude-gl:shader (fude-gl:find-vertices vertices))))
     (fude-gl:with-uniforms (model)
         shader
       (setf model (3d-matrices:meye 4))
@@ -1568,7 +1567,7 @@
 
 ;;;; SHADOW
 
-(fude-gl::define-vertex-attribute normal (a b c))
+(fude-gl:define-vertex-attribute normal (a b c))
 
 (fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
   (:vertex ((argset
@@ -1704,8 +1703,8 @@
                              :color '(0.1 0.1 0.1 1))
       ;; 1. render depth of scene to texture (from light's perspective)
       ;; render scene from light's point of view
-      (fude-gl::with-framebuffer (depth-map (:depth-buffer-bit)
-                                            :color nil :win win)
+      (fude-gl:with-framebuffer (depth-map (:depth-buffer-bit)
+                                           :color nil :win win)
         (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
                 light-space-matrix)
         (render-scene 'plane-vao))
@@ -1726,8 +1725,8 @@
               light-pos light-position
               diffuse-texture (fude-gl:find-texture 'wood)
               shadow-map
-                (fude-gl::framebuffer-texture
-                  (fude-gl::find-framebuffer 'depth-map)))
+                (fude-gl:framebuffer-texture
+                  (fude-gl:find-framebuffer 'depth-map)))
         (render-scene 'plane-base-vao))
       ;; render Depth map to quad for visual debugging
       (fude-gl:with-uniforms (#++ (np "nearPlane")
@@ -1737,7 +1736,7 @@
               np near-plane
               fp far-plane ;|#
                 depth-map
-              (fude-gl::framebuffer-texture
-                (fude-gl::find-framebuffer 'depth-map)))
+              (fude-gl:framebuffer-texture
+                (fude-gl:find-framebuffer 'depth-map)))
         #++
         (fude-gl:draw 'shadow-quad)))))
