@@ -1273,6 +1273,20 @@
      ;; We need EVAL-WHEN for compile time checkings.
      (setf (gethash ',name *framebuffers*) (make-framebuffer ,@params))))
 
+(defun pprint-deframebuf (stream exp)
+  (funcall
+    (formatter
+     #.(apply #'concatenate 'string
+              (alexandria:flatten
+                (list "~:<" ; pprint-logical-block.
+                      "~W~^ ~1I~@_" ; operator DEFRAMEBUF
+                      "~W~^ ~_" ; name
+                      "~@{~W~^ ~@_~W~^ ~_~}" ; k-v options.
+                      "~:>"))))
+    stream exp))
+
+(set-pprint-dispatch '(cons (member deframebuf)) 'pprint-deframebuf)
+
 ;;;; CAMERA
 
 (defstruct (camera (:constructor make-camera
