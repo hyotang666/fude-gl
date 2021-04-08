@@ -309,18 +309,19 @@
 ;;;; DEFINE-VERTEX-ATTRIBUTE
 
 (defmacro define-vertex-attribute (name (&rest slot*) &body option*)
-  `(progn
-    (defclass ,name ()
-      ,(mapcar
-         (lambda (slot)
-           `(,(intern (format nil "%~A" slot) :fude-gl) :initarg
-             ,(intern (string slot) :keyword) :type single-float))
-         (or slot* (coerce (symbol-name name) 'list)))
-      (:metaclass
-       ,(if (second (assoc :instances option*))
-            'instanced-array
-            'attributes)))
-    (setf (gethash ',name *vertex-attributes*) ',name)))
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     ;; check-bnf needs this eval-when.
+     (defclass ,name ()
+       ,(mapcar
+          (lambda (slot)
+            `(,(intern (format nil "%~A" slot) :fude-gl) :initarg
+              ,(intern (string slot) :keyword) :type single-float))
+          (or slot* (coerce (symbol-name name) 'list)))
+       (:metaclass
+        ,(if (second (assoc :instances option*))
+             'instanced-array
+             'attributes)))
+     (setf (gethash ',name *vertex-attributes*) ',name)))
 
 (defun pprint-define-vertex-attribute (stream exp)
   (funcall
