@@ -391,6 +391,60 @@
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
 
+(defun glsl-flet (stream exp &rest noise)
+  (declare (ignore noise))
+  (destructuring-bind
+      (return name arg . body)
+      (cdr exp)
+    (funcall
+      (formatter
+       #.(apply #'concatenate 'string
+                (alexandria:flatten
+                  (list "~(~A~)~^ ~@_" ; return type
+                        "~A~^ ~@_" ; function name.
+                        (list "~:<" ; logical block for args.
+                              "~@{~{~(~A~)~^ ~A~^, ~}~}" ; argbody.
+                              "~:>~^ ~%")
+                        "~:<{~;~3I~:@_" ; function body.
+                        "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
+      stream return (change-case:camel-case (string name))
+      (loop :for (var type) :in arg
+            :collect `(,type ,(change-case:camel-case (string var))))
+      body)))
+
+(defun class-shader-inputs (superclasses)
+  (loop :for c :in (mapcar #'find-class superclasses)
+        :for slots = (c2mop:class-direct-slots c)
+        :for i :upfrom 0
+        :when slots
+          :collect (format nil "layout (location = ~A) " i)
+          :and :collect (format nil "~[~;float~:;~:*vec~D~]" (length slots))
+          :and :collect (change-case:camel-case (symbol-name (class-name c)))))
+
+(defun parse-shader-lambda-list (spec*)
+  (loop :for (name type . vector-size) :in spec*
+        :collect nil
+        :collect (etypecase type
+                   (symbol (change-case:camel-case (symbol-name type)))
+                   (list
+                    (format nil "~:@(~A~) ~A" name
+                            (format nil
+                                    #.(apply #'concatenate 'string
+                                             (alexandria:flatten
+                                               (list "~:<{~;~3I~:@_" ; pprint-logical-block.
+                                                     "~@{~A~^ ~@_~A;~^~:@_~}"
+                                                     "~%~;}~:> ")))
+                                    (loop :for (name type) :in type
+                                          :collect (change-case:camel-case
+                                                     (symbol-name type))
+                                          :collect (change-case:camel-case
+                                                     (symbol-name name)))))))
+        :collect (if vector-size
+                     (format nil "~A[~A]"
+                             (change-case:camel-case (symbol-name name))
+                             (car vector-size))
+                     (change-case:camel-case (symbol-name name)))))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
          (formatter
@@ -398,20 +452,9 @@
                          "~{~@[~A~]in ~A ~A;~%~}~&" ; in
                          "~{out ~A ~A;~%~}~&" ; out
                          "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
-                         "void main () {~%~{~A~^~%~}~%}" ; the body.
+                         "~@[~{~/fude-gl::glsl-flet/~^~%~}~]" ; functions.
                          ))))
-    (labels ((defs (list)
-               (loop :for (name type . vector-size) :in list
-                     :collect nil
-                     :collect (change-case:camel-case (symbol-name type))
-                     :collect (if vector-size
-                                  (format nil "~A[~A]"
-                                          (change-case:camel-case
-                                            (symbol-name name))
-                                          (car vector-size))
-                                  (change-case:camel-case
-                                    (symbol-name name)))))
-             (rec (shaders in acc)
+    (labels ((rec (shaders in acc)
                (if (endp shaders)
                    (nreverse acc)
                    (body (car shaders) (cdr shaders) in acc)))
@@ -423,7 +466,8 @@
                          (position-if #'uniform-keywordp shader-lambda-list))
                         (vars
                          (and shader-lambda-list
-                              (defs (subseq shader-lambda-list 0 &uniform)))))
+                              (parse-shader-lambda-list
+                                (subseq shader-lambda-list 0 &uniform)))))
                    (rec rest vars
                         (cons
                           (<shader-method>
@@ -432,22 +476,22 @@
                             (format nil format version in (remove nil vars)
                                     (and &uniform
                                          (delete nil
-                                                 (defs
+                                                 (parse-shader-lambda-list
                                                    (subseq shader-lambda-list
                                                            (1+ &uniform)))))
-                                    main))
+                                    (loop :for x :in main
+                                          :if (typep x '(cons (member flet)))
+                                            :collect x :into flets
+                                          :else
+                                            :collect x :into main
+                                          :finally (return
+                                                    `(,@flets
+                                                      (flet :void
+                                                        main
+                                                        nil
+                                                        ,@main))))))
                           acc))))))
-      (rec shader-clause*
-           (loop :for c :in (mapcar #'find-class superclasses)
-                 :for slots = (c2mop:class-direct-slots c)
-                 :for i :upfrom 0
-                 :when slots
-                   :collect (format nil "layout (location = ~A) " i)
-                   :and :collect (format nil "~[~;float~:;~:*vec~D~]"
-                                         (length slots))
-                   :and :collect (change-case:camel-case
-                                   (symbol-name (class-name c))))
-           nil))))
+      (rec shader-clause* (class-shader-inputs superclasses) nil))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; NOTE: CHECK-BNF in DEFSHADER needs this eval-when.
@@ -472,7 +516,7 @@
      (vector-size unsigned-byte)
      ;;
      (var symbol)
-     (type-key keyword)
+     (type-key (or t #|KLUDGE|# keyword))
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
@@ -500,11 +544,31 @@
                                   (list "~:<" ; out lambda list.
                                         "~@{~W~^ ~:_~}" ; out lambda var.
                                         "~:>~^ ~_")
-                                  "~@{~W~^ ~_~}" ; clause body.
+                                  "~@{~/fude-gl::pprint-shader-clause-body/~^ ~_~}" ; clause
+                                                                                    ; body.
                                   "~:>~^ ~_")
                             "~}")
                       "~:>"))))
     stream exp))
+
+(defun pprint-shader-clause-body (stream exp &rest noise)
+  (declare (ignore noise))
+  (if (not (typep exp '(cons (member flet))))
+      (write exp :stream stream)
+      (funcall
+        (formatter
+         #.(apply #'concatenate 'string
+                  (alexandria:flatten
+                    (list "~:<" ; pprint-logical-block
+                          "~W~^~1I ~@_" ; operator FLET.
+                          "~W~^ ~@_" ; return type.
+                          "~W~^ ~@_" ; function name.
+                          (list "~:<" ; logical block for lambda list.
+                                "~@{~W~^ ~:_~}" ; lambda list elts.
+                                "~:>~^ ~_")
+                          "~@{~W~^ ~_~}" ; clause body.
+                          "~:>"))))
+        stream exp)))
 
 (set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
 
@@ -541,11 +605,13 @@
                  :report "Return vertices without constructing."
                vertices))))))
 
-(defmacro in-vertices (form)
+(defmacro in-vertices (form &key (with-vertex-array t))
   (when (constantp form)
     (find-vertices (eval form) :construct nil :error t))
   `(let ((vertices (find-vertices ,form)))
      (gl:use-program (program-id (shader vertices)))
+     ,@(when with-vertex-array
+         `((in-vertex-array (vertex-array vertices))))
      vertices))
 
 (defmacro in-program (name)
@@ -568,6 +634,11 @@
   (in-program to)
   (gl:uniformi (uniform uniform to) o))
 
+(defmethod send
+           ((o float) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (in-program to)
+  (gl:uniformf (uniform uniform to) o))
 
 ;;; BUFFER
 
@@ -635,13 +706,20 @@
 (defclass vertices ()
   ((shader :type symbol :reader shader)
    (buffer :type buffer :reader buffer)
+   (attributes :type list :reader attributes)
+   (draw-mode :type draw-mode :reader draw-mode)
    (vertex-array :type unsigned-byte :reader vertex-array)))
 
 (defmethod initialize-instance :after
-           ((o vertices) &key name buffer array shader)
+           ((o vertices)
+            &key name buffer array shader attributes (draw-mode :triangles))
   (setf (slot-value o 'shader) (or shader name)
         (slot-value o 'buffer)
-          (apply #'make-buffer :name :vertices :original array buffer)))
+          (apply #'make-buffer :name :vertices :original array buffer)
+        (slot-value o 'draw-mode) draw-mode
+        (slot-value o 'attributes)
+          (or (mapcar #'find-class attributes)
+              (c2mop:class-direct-superclasses (find-class (or shader name))))))
 
 (define-compiler-macro uniform (&whole whole name vertices)
   (when (constantp vertices)
@@ -657,23 +735,26 @@
   whole)
 
 (defun uniform (name shader)
-  (let ((location (gl:get-uniform-location (program-id shader) name)))
-    (assert (not (minusp location)) ()
-      "Not active uniform. ~S in ~A" name (uniforms shader))
-    location))
+  (handler-case (get-uniform-location (program-id shader) name)
+    (uniform-error (c)
+      (error
+        "Uniform ~S is not active in ~A~:@_Program id = ~S~:@_Active uniforms are ~S"
+        (error-uniform c) (uniforms shader) (program c)
+        (gl:get-program (program c) :active-uniforms)))))
 
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
   (when (constantp shader)
-    (let ((uniforms (mapcar (lambda (s)
-                              (change-case:camel-case(symbol-name s)))
-                            (uniforms (eval shader)))))
+    (let ((uniforms
+           (mapcar (lambda (s) (change-case:camel-case (symbol-name s)))
+                   (uniforms (eval shader)))))
       (dolist (var var*)
-        (let ((name (if (symbolp var)
-                      (change-case:camel-case (symbol-name var))
-                      (if (stringp (cadr var))
-                        (cadr var)
-                        (change-case:camel-case (symbol-name (car var)))))))
+        (let ((name
+               (if (symbolp var)
+                   (change-case:camel-case (symbol-name var))
+                   (if (stringp (cadr var))
+                       (cadr var)
+                       (change-case:camel-case (symbol-name (car var)))))))
           (assert (find name uniforms :test #'string=))))))
   (let ((s (gensym "SHADER")))
     `(let ((,s ,shader))
@@ -690,7 +771,8 @@
                                  :collect `(,(car spec)
                                             (uniform ,s
                                                      ,(change-case:camel-case
-                                                        (symbol-name (car spec)))
+                                                        (symbol-name
+                                                          (car spec)))
                                                      ,@(cdr spec))))
          ,@body))))
 
@@ -730,40 +812,40 @@
         :finally (error "Missing attribute ~S in ~S" attribute
                         (c2mop:class-direct-superclasses (find-class class)))))
 
-(defun count-attributes (class)
-  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+(defun count-attributes (attributes)
+  (loop :for c :in attributes
         :when (typep c 'attributes)
           :sum (length (c2mop:class-slots (c2mop:ensure-finalized c)))))
 
-(defun attribute-offset (attribute class)
-  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+(defun attribute-offset (attribute attributes)
+  (loop :for c :in attributes
         :until (eq attribute (class-name c))
         :sum (length (c2mop:class-slots c))))
 
-(defun link-attribute (attribute class)
-  (multiple-value-bind (c index)
-      (find-attribute attribute class)
-    (let* ((slots (c2mop:class-slots (c2mop:ensure-finalized c)))
-           (type (foreign-type (c2mop:slot-definition-type (car slots)))))
-      (gl:enable-vertex-attrib-array index)
-      (etypecase c
-        (attributes
-         (gl:vertex-attrib-pointer index (length slots) type nil
-                                   (* (count-attributes class)
-                                      (cffi:foreign-type-size type))
-                                   (* (attribute-offset attribute class)
-                                      (cffi:foreign-type-size type))))
-        (instanced-array
-         (gl:vertex-attrib-pointer index (length slots) type nil
-                                   (* (length slots)
-                                      (cffi:foreign-type-size type))
-                                   0)
-         (%gl:vertex-attrib-divisor index 1))))))
+(defun link-attribute (a index attributes)
+  (let* ((slots (c2mop:class-slots (c2mop:ensure-finalized a)))
+         (type (foreign-type (c2mop:slot-definition-type (car slots)))))
+    (gl:enable-vertex-attrib-array index)
+    (etypecase a
+      (attributes
+       (gl:vertex-attrib-pointer index (length slots) type nil
+                                 (* (count-attributes attributes)
+                                    (cffi:foreign-type-size type))
+                                 (*
+                                   (attribute-offset (class-name a) attributes)
+                                   (cffi:foreign-type-size type))))
+      (instanced-array
+       (gl:vertex-attrib-pointer index (length slots) type nil
+                                 (* (length slots)
+                                    (cffi:foreign-type-size type))
+                                 0)
+       (%gl:vertex-attrib-divisor index 1)))))
 
-(defun link-attributes (class instance-buffers)
-  (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
+(defun link-attributes (superclasses instance-buffers)
+  (loop :for c :in superclasses
+        :for i :upfrom 0
         :do (in-buffer (construct (funcall instance-buffers (class-name c))))
-            (link-attribute (class-name c) class)))
+            (link-attribute c i superclasses)))
 
 (defvar *vertex-array*)
 
@@ -824,7 +906,8 @@
 
 (defmethod draw :before ((o vertices)) (in-vertices o))
 
-(defmethod draw ((o vertices)) (gl:draw-arrays :triangles 0 (vertex-length o)))
+(defmethod draw ((o vertices))
+  (gl:draw-arrays (draw-mode o) 0 (vertex-length o)))
 
 ;;;; INDEXED
 
@@ -849,7 +932,7 @@
   (destruct (indices o)))
 
 (defmethod draw ((o indexed-vertices))
-  (draw-elements :triangles (buffer-original (indices o))))
+  (draw-elements (draw-mode o) (buffer-original (indices o))))
 
 ;; CONSTRUCTOR
 ;;;; INSTANCED-SHADER
@@ -883,10 +966,10 @@
 
 (defun vertex-length (vertices)
   (/ (length (buffer-original (buffer vertices)))
-     (count-attributes (shader vertices))))
+     (count-attributes (attributes vertices))))
 
 (defmethod draw ((o instanced-vertices))
-  (%gl:draw-arrays-instanced :triangles 0 (vertex-length o)
+  (%gl:draw-arrays-instanced (draw-mode o) 0 (vertex-length o)
                              (array-dimension
                                (buffer-original (cdar (table o))) 0)))
 
@@ -904,12 +987,13 @@
       (in-vertex-array vao)
       (call-next-method)
       vao))
-  (:method ((o vertices)) (link-attributes (shader o) (constantly (buffer o))))
+  (:method ((o vertices))
+    (link-attributes (attributes o) (constantly (buffer o))))
   (:method ((o indexed-vertices)) (construct (indices o)) (call-next-method))
   (:method ((o instanced-vertices))
     (loop :for (nil . buffer) :in (table o)
           :do (construct buffer))
-    (link-attributes (shader o)
+    (link-attributes (attributes o)
                      (let ((table (table o)) (default-buffer (buffer o)))
                        (lambda (slot)
                          (or (cdr (assoc slot table)) default-buffer))))))
@@ -1098,19 +1182,22 @@
         :collect name))
 
 (defun find-texture (name &key (construct t) (error t))
-  (let ((texture (or (gethash name *textures*))))
-    (cond
-      ((null texture)
-       (when error
-         (error "Missing texture named ~S. Eval (fude-gl:list-all-textures)"
-                name)))
-      ((texture-id texture) texture)
-      ((not construct) texture)
-      (t
-       (restart-case (construct texture)
-         (continue ()
-             :report "Return texture without constructing."
-           texture))))))
+  (if (typep name 'texture)
+      name
+      (let ((texture (or (gethash name *textures*))))
+        (cond
+          ((null texture)
+           (when error
+             (error
+               "Missing texture named ~S. Eval (fude-gl:list-all-textures)"
+               name)))
+          ((texture-id texture) texture)
+          ((not construct) texture)
+          (t
+           (restart-case (construct texture)
+             (continue ()
+                 :report "Return texture without constructing."
+               texture)))))))
 
 (defmacro in-texture (name)
   (when (constantp name)
@@ -1191,27 +1278,58 @@
 
 (defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
 
-(defstruct framebuffer id texture width height render-buffer)
-
-(defmethod construct ((o framebuffer))
-  (with-slots (id texture render-buffer width height)
-      o
-    (setf id (car (gl:gen-framebuffers 1))
-          texture (car (gl:gen-textures 1))
-          render-buffer (car (gl:gen-renderbuffers 1)))
-    (gl:bind-framebuffer :framebuffer id)
-    (gl:bind-texture :texture-2d texture)
-    (gl:tex-image-2d :texture-2d 0 :rgb width height 0 :rgb
-                     :unsigned-byte (cffi:null-pointer))
-    (gl:tex-parameter :texture-2d :texture-min-filter :linear)
-    (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-    (gl:framebuffer-texture-2d :framebuffer :color-attachment0 :texture-2d
-                               texture 0)
+(defun default-renderbuffer-initializer (framebuffer)
+  (with-slots (render-buffer width height)
+      framebuffer
     (gl:bind-renderbuffer :renderbuffer render-buffer)
     (gl:renderbuffer-storage :renderbuffer :depth24-stencil8 width height)
     (gl:framebuffer-renderbuffer :framebuffer :depth-stencil-attachment
                                  :renderbuffer render-buffer)
-    (gl:bind-renderbuffer :renderbuffer 0)
+    (gl:bind-renderbuffer :renderbuffer 0))
+  (values))
+
+(defstruct framebuffer
+  id
+  texture
+  render-buffer
+  (format :rgb :type base-internal-format :read-only t)
+  (pixel-type :unsigned-byte :type pixel-type :read-only t)
+  (options nil :type list :read-only t)
+  (attachment :color-attachment0 :read-only t)
+  (renderbuffer-initializer #'default-renderbuffer-initializer
+                            :type function
+                            :read-only t)
+  (width (alexandria:required-argument :width)
+         :type unsigned-byte
+         :read-only t)
+  (height (alexandria:required-argument :height)
+          :type unsigned-byte
+          :read-only t))
+
+(defmethod construct ((o framebuffer))
+  (with-slots (id texture render-buffer format width height pixel-type options
+               attachment renderbuffer-initializer)
+      o
+    (setf id (car (gl:gen-framebuffers 1))
+          texture
+            (construct
+              (make-texture :target :texture-2d
+                            :params (loop :with default
+                                                = (list :texture-min-filter :linear
+                                                        :texture-mag-filter :linear)
+                                          :for (k v) :on options :by #'cddr
+                                          :do (setf (getf default k) v)
+                                          :finally (return default))
+                            :initializer (lambda ()
+                                           (gl:tex-image-2d :texture-2d 0
+                                                            format width height
+                                                            0 format pixel-type
+                                                            (cffi:null-pointer)))))
+          render-buffer (car (gl:gen-renderbuffers 1)))
+    (gl:bind-framebuffer :framebuffer id)
+    (framebuffer-texture-2d :framebuffer attachment (texture-target texture)
+                            (texture-id texture) 0)
+    (funcall renderbuffer-initializer o)
     (let ((result (gl:check-framebuffer-status :framebuffer)))
       (unless (find result
                     '(:framebuffer-complete :framebuffer-complete-ext
@@ -1227,8 +1345,7 @@
       (gl:delete-framebuffers (list id))
       (setf id nil))
     (when texture
-      (gl:delete-textures (list texture))
-      (setf texture nil))
+      (destruct texture))
     (when render-buffer
       (gl:delete-renderbuffers (list render-buffer))
       (setf render-buffer nil))))
@@ -1258,15 +1375,25 @@
 (defvar *framebuffer-toplevelp* t)
 
 (defmacro with-framebuffer
-          ((name (&rest buffers) &key (color ''(0 0 0 1))) &body body)
+          ((name
+            (&rest buffers)
+            &key
+            (color ''(0 0 0 1))
+            (win (alexandria:required-argument :win)))
+           &body body)
   (check-type name symbol)
   (find-framebuffer name :construct nil :error t)
   `(progn
     (in-framebuffer ',name)
-    (apply #'gl:clear-color ,color)
+    (with-slots (width height)
+        (find-framebuffer ',name)
+      (gl:viewport 0 0 width height))
+    ,@(when color
+        `((apply #'gl:clear-color ,color)))
     (gl:clear ,@buffers)
     ,@body
-    (in-framebuffer nil)))
+    (in-framebuffer nil)
+    (multiple-value-call #'gl:viewport 0 0 (sdl2:get-window-size ,win))))
 
 (defmacro deframebuf (name &rest params)
   `(eval-when (:compile-toplevel :load-toplevel :execute)

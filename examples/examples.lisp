@@ -1307,12 +1307,6 @@
                  #(5.0 -0.5 -5.0 2.0 2.0))
   :shader 'framebuffer-vertices)
 
-;; Macro DEFRAMEBUF defines framebuffer.
-;;
-;; The first argument (STEP1 in the example below) must be a symbol names framebuffer.
-
-(fude-gl::deframebuf step1 :width 800 :height 600)
-
 (defparameter *metal*
   (let ((pathname (merge-pathnames "metal.png" (user-homedir-pathname))))
     (unless (probe-file pathname)
@@ -1322,6 +1316,12 @@
     (opticl:read-png-file pathname)))
 
 (fude-gl:deftexture metal :texture-2d (fude-gl:tex-image-2d *metal*))
+
+;; Macro DEFRAMEBUF defines framebuffer.
+;;
+;; The first argument (STEP1 in the example below) must be a symbol names framebuffer.
+
+(fude-gl::deframebuf step1 :width 800 :height 600)
 
 (defun framebuffer-step1 ()
   (sdl2:with-init (:everything)
@@ -1336,57 +1336,408 @@
                  (view (fude-gl:view camera))
                  (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
             (fude-gl:send 0 'framebuffer-screen :uniform "screen")
-            (fude-gl:with-uniforms (tex (v "view") (p "projection"))
-                'framebuffer-vertices
-              (setf tex 0
-                    v view
-                    p projection))
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
               (:idle ()
-                (sleep (/ 1 30))
-                ;; bind to framebuffer and draw scene as we normally would to color texture
-                ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
-                (fude-gl::with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
-                                                  :color '(0.1 0.1 0.1 1))
-                  (gl:enable :depth-test)
-                  ;;; cubes
-                  (fude-gl:in-vertices 'fb-cube)
-                  (fude-gl:in-vertex-array (fude-gl:vertex-array 'fb-cube))
-                  (gl:active-texture 0)
-                  (fude-gl:in-texture 'container)
-                  (fude-gl:send
-                    (3d-matrices:mtranslation (3d-vectors:vec3 -1 0 -1))
-                    'framebuffer-vertices
-                    :uniform "model")
-                  (fude-gl:draw 'fb-cube)
-                  (fude-gl:send
-                    (3d-matrices:mtranslation (3d-vectors:vec3 2 0 0))
-                    'framebuffer-vertices
-                    :uniform "model")
-                  (fude-gl:draw 'fb-cube)
-                  ;;; floor
-                  (fude-gl:in-vertices 'plane-vertices)
-                  (fude-gl:in-vertex-array
-                    (fude-gl:vertex-array 'plane-vertices))
-                  (fude-gl:in-texture 'metal)
-                  (fude-gl:send (3d-matrices:meye 4) 'framebuffer-vertices
-                                :uniform "model")
-                  (fude-gl:draw 'plane-vertices))
-                ;; draw a quad plane with the attached framebuffer color texture
-                ;; disable depth test so screen-space quad isn't discarded due to depth test.
-                (gl:disable :depth-test)
-                ;; clear all relevant buffers
-                ;; set clear color to white (not really necessary actually, since
-                ;; we won't be able to see behind the quad anyways)
-                (gl:clear-color 1 1 1 1)
-                (gl:clear :color-buffer-bit)
-                (fude-gl:in-vertices 'framebuffer-quad)
-                (fude-gl:in-vertex-array
-                  (fude-gl:vertex-array 'framebuffer-quad))
-                (gl:bind-texture :texture-2d (fude-gl::framebuffer-texture
-                                               (fude-gl::find-framebuffer
-                                                 'step1)))
-                (fude-gl:draw 'framebuffer-quad)
-                (sdl2:gl-swap-window win)))))))))
+                (fude-gl:with-clear (win (:color-buffer-bit))
+                  ;; bind to framebuffer and draw scene as we normally would to color texture
+                  ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
+                  (fude-gl::with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
+                                                    :color '(0.1 0.1 0.1 1)
+                                                    :win win)
+                    (gl:enable :depth-test)
+                    (fude-gl:with-uniforms ((tex :unit 0) (v "view")
+                                            (p "projection") model)
+                        'framebuffer-vertices
+                      (fude-gl:in-vertices 'fb-cube)
+                      (setf tex (fude-gl:find-texture 'container)
+                            v view
+                            p projection
+                            model
+                              (3d-matrices:mtranslation
+                                (3d-vectors:vec3 -1 0 -1)))
+                      (fude-gl:draw 'fb-cube)
+                      (setf model
+                              (3d-matrices:mtranslation
+                                (3d-vectors:vec3 2 0 0)))
+                      (fude-gl:draw 'fb-cube)
+                      ;;; floor
+                      (fude-gl:in-vertices 'plane-vertices)
+                      (fude-gl:in-texture 'metal)
+                      (setf model (3d-matrices:meye 4))
+                      (fude-gl:draw 'plane-vertices)))
+                  ;; draw a quad plane with the attached framebuffer color texture
+                  ;; disable depth test so screen-space quad isn't discarded due to depth test.
+                  (gl:disable :depth-test)
+                  (fude-gl:in-vertices 'framebuffer-quad)
+                  (fude-gl:in-texture
+                   (fude-gl::framebuffer-texture
+                     (fude-gl::find-framebuffer 'step1)))
+                  (fude-gl:draw 'framebuffer-quad))))))))))
+
+;;;; DEPTH-MAP-DEMO
+
+(fude-gl::deframebuf depth-map
+  :width 1024
+  :height 1024
+  :format :depth-component
+  :pixel-type :float
+  :options `(:texture-wrap-s :repeat :texture-wrap-t :repeat)
+  :attachment :depth-attachment
+  :renderbuffer-initializer (lambda (this)
+                              (declare (ignore this))
+                              (gl:draw-buffer :none)
+                              (gl:read-buffer :none)))
+
+(fude-gl:defshader simple-depth 330 (fude-gl:xyz)
+  (:vertex (&uniform (|lightSpaceMatrix| :mat4) (model :mat4))
+    "gl_Position = lightSpaceMatrix * model * vec4(xyz, 1.0);")
+  (:fragment ()))
+
+(fude-gl:defshader debug-quad 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((coord :vec2)) "coord = st;" "gl_Position = vec4(xyz, 1.0);")
+  (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
+              (|nearPlane| :float) (|farPlane| :float))
+    ;; You can specify local function for shader with flet clause.
+    (flet :float |linearizeDepth| ((depth :float))
+      "float z = depth * 2.0 - 1.0; // Back to NDC"
+      "return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));")
+    "float depthValue = texture(depthMap, coord).r;"
+    "// color = vec4(vec3(linearizeDepth(depthValue) / farPlane), 1.0); // Perspective."
+    "color = vec4(vec3(depthValue), 1.0); // orthographic.")
+  #++
+  (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
+              (|nearPlane| :float) (|farPlane| :float))
+    ;; You can specify local function for shader with flet clause.
+    (flet :float |linearizeDepth| ((depth :float))
+      (let ((z :float (- (* depth 2.0) 1.0)))
+        (return
+         (/ (* 2.0 near-plane far-plane)
+            (* (- (+ far-plane near-plane) z) (- far-plane near-plane))))))
+    (let ((depth-value :float (r (texture depth-map coord))))
+      (setf color (vec4 (vec3 depth-value) 1.0)))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defvar *framebuffer-plane-vertices*
+    (coerce ;; positions            ;; normals         ;; texcoords
+            #(25.0 -0.5 25.0 0.0 1.0 0.0 25.0 0.0 ; first
+              -25.0 -0.5 25.0 0.0 1.0 0.0 0.0 0.0 ; second
+              -25.0 -0.5 -25.0 0.0 1.0 0.0 0.0 25.0 ; third
+              25.0 -0.5 25.0 0.0 1.0 0.0 25.0 0.0 ; fourth
+              -25.0 -0.5 -25.0 0.0 1.0 0.0 0.0 25.0 ; fifth
+              25.0 -0.5 -25.0 0.0 1.0 0.0 25.0 10.0) ; sixth
+            '(array single-float (*)))))
+
+(fude-gl:defvertices plane-vao *framebuffer-plane-vertices*
+  :shader 'simple-depth
+  :attributes '(fude-gl:xyz fude-gl:rgb fude-gl:st))
+
+(fude-gl:defvertices shadow-cube
+    (coerce ;; back face
+            #(-1.0 -1.0 -1.0 0.0 0.0 -1.0 0.0 0.0 ; bottom-left
+              1.0 1.0 -1.0 0.0 0.0 -1.0 1.0 1.0 ; top-right
+              1.0 -1.0 -1.0 0.0 0.0 -1.0 1.0 0.0 ; bottom-right
+              1.0 1.0 -1.0 0.0 0.0 -1.0 1.0 1.0 ; top-right
+              -1.0 -1.0 -1.0 0.0 0.0 -1.0 0.0 0.0 ; bottom-left
+              -1.0 1.0 -1.0 0.0 0.0 -1.0 0.0 1.0 ; top-left
+              ;; front face
+              -1.0 -1.0 1.0 0.0 0.0 1.0 0.0 0.0 ; bottom-left
+              1.0 -1.0 1.0 0.0 0.0 1.0 1.0 0.0 ; bottom-right
+              1.0 1.0 1.0 0.0 0.0 1.0 1.0 1.0 ; top-right
+              1.0 1.0 1.0 0.0 0.0 1.0 1.0 1.0 ; top-right
+              -1.0 1.0 1.0 0.0 0.0 1.0 0.0 1.0 ; top-left
+              -1.0 -1.0 1.0 0.0 0.0 1.0 0.0 0.0 ; bottom-left
+              ;; left face
+              -1.0 1.0 1.0 -1.0 0.0 0.0 1.0 0.0 ; top-right
+              -1.0 1.0 -1.0 -1.0 0.0 0.0 1.0 1.0 ; top-left
+              -1.0 -1.0 -1.0 -1.0 0.0 0.0 0.0 1.0 ; bottom-left
+              -1.0 -1.0 -1.0 -1.0 0.0 0.0 0.0 1.0 ; bottom-left
+              -1.0 -1.0 1.0 -1.0 0.0 0.0 0.0 0.0 ; bottom-right
+              -1.0 1.0 1.0 -1.0 0.0 0.0 1.0 0.0 ; top-right
+              ;; right face
+              1.0 1.0 1.0 1.0 0.0 0.0 1.0 0.0 ; top-left
+              1.0 -1.0 -1.0 1.0 0.0 0.0 0.0 1.0 ; bottom-right
+              1.0 1.0 -1.0 1.0 0.0 0.0 1.0 1.0 ; top-right
+              1.0 -1.0 -1.0 1.0 0.0 0.0 0.0 1.0 ; bottom-right
+              1.0 1.0 1.0 1.0 0.0 0.0 1.0 0.0 ; top-left
+              1.0 -1.0 1.0 1.0 0.0 0.0 0.0 0.0 ; bottom-left
+              ;; bottom face
+              -1.0 -1.0 -1.0 0.0 -1.0 0.0 0.0 1.0 ; top-right
+              1.0 -1.0 -1.0 0.0 -1.0 0.0 1.0 1.0 ; top-left
+              1.0 -1.0 1.0 0.0 -1.0 0.0 1.0 0.0 ; bottom-left
+              1.0 -1.0 1.0 0.0 -1.0 0.0 1.0 0.0 ; bottom-left
+              -1.0 -1.0 1.0 0.0 -1.0 0.0 0.0 0.0 ; bottom-right
+              -1.0 -1.0 -1.0 0.0 -1.0 0.0 0.0 1.0 ; top-right
+              ;; top face
+              -1.0 1.0 -1.0 0.0 1.0 0.0 0.0 1.0 ; top-left
+              1.0 1.0 1.0 0.0 1.0 0.0 1.0 0.0 ; bottom-right
+              1.0 1.0 -1.0 0.0 1.0 0.0 1.0 1.0 ; top-right
+              1.0 1.0 1.0 0.0 1.0 0.0 1.0 0.0 ; bottom-right
+              -1.0 1.0 -1.0 0.0 1.0 0.0 0.0 1.0 ; top-left
+              -1.0 1.0 1.0 0.0 1.0 0.0 0.0 0.0 ; bottom-left
+              )
+            '(array single-float (*)))
+  :shader 'simple-depth
+  :attributes '(fude-gl:xyz fude-gl:rgb fude-gl:st))
+
+(fude-gl:defvertices shadow-quad
+    (coerce ;; positions        // texture Coords
+            #(-1.0 1.0 0.0 0.0 1.0 ; first
+              -1.0 -1.0 0.0 0.0 0.0 ; second
+              1.0 1.0 0.0 1.0 1.0 ; third
+              1.0 -1.0 0.0 1.0 0.0 ; fourth
+              )
+            '(array single-float (*)))
+  :shader 'debug-quad
+  :draw-mode :triangle-strip)
+
+(fude-gl:deftexture wood :texture-2d
+  (fude-gl:tex-image-2d
+    (let ((pathname (merge-pathnames "wood.png" (user-homedir-pathname))))
+      (unless (probe-file pathname)
+        (dex:fetch
+          "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/wood.png"
+          pathname))
+      (opticl:read-png-file pathname))))
+
+(defun framebuffer-shadow ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Framebuffer depth-map"))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader () (gl:enable :depth-test))
+    (let ((light-position (3d-vectors:vec3 -2 4 -1))
+          (near-plane 1.0) ; When projection is perspective,
+          (far-plane 7.5) ; these vars will be refered.
+          ))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil
+     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                              :color '(0.1 0.1 0.1 1))
+       ;; 1. render depth of scene to texture (from light's perspective)
+       ;; render scene from light's point of view
+       (fude-gl::with-framebuffer (depth-map (:depth-buffer-bit)
+                                             :color nil :win win)
+         (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
+                 (3d-matrices:m*
+                   (3d-matrices:mortho -10 10 -10 10 near-plane far-plane)
+                   (3d-matrices:mlookat light-position (3d-vectors:vec3 0 0 0)
+                                        (3d-vectors:vec3 0 1 0))))
+         (render-scene 'plane-vao))
+       (gl:clear :color-buffer-bit :depth-buffer-bit)
+       ;; render Depth map to quad for visual debugging
+       #| Comment outted, only need with perspective projection.
+       (fude-gl:send near-plane 'debug-quad :uniform "nearPlane")
+       (fude-gl:send far-plane 'debug-quad :uniform "farPlane")
+       |#
+       (setf (fude-gl:uniform 'debug-quad "depthMap" :unit 0)
+               (fude-gl::framebuffer-texture
+                 (fude-gl::find-framebuffer 'depth-map)))
+       (fude-gl:draw 'shadow-quad)))))
+
+(defun render-scene (vertices)
+  ;; floor
+  (fude-gl:in-vertices vertices)
+  (let ((shader (fude-gl::shader (fude-gl::find-vertices vertices))))
+    (fude-gl:with-uniforms (model)
+        shader
+      (setf model (3d-matrices:meye 4))
+      (fude-gl:draw vertices)
+      (let ((m (3d-matrices:meye 4)))
+        (3d-matrices:nmtranslate m (3d-vectors:vec3 0 1.5 0))
+        (3d-matrices:nmscale m (3d-vectors:vec3 0.5 0.5 0.5))
+        (setf model m)
+        (fude-gl:draw 'shadow-cube))
+      (let ((m (3d-matrices:meye 4)))
+        (3d-matrices:nmtranslate m (3d-vectors:vec3 2 0 1))
+        (3d-matrices:nmscale m (3d-vectors:vec3 0.5 0.5 0.5))
+        (setf model m)
+        (fude-gl:draw 'shadow-cube))
+      (let ((m (3d-matrices:meye 4)))
+        (3d-matrices:nmtranslate m (3d-vectors:vec3 -1 0 2))
+        (3d-matrices:nmrotate m (3d-vectors:vunit (3d-vectors:vec3 1 0 1)) 60)
+        (3d-matrices:nmscale m (3d-vectors:vec3 0.25 0.25 0.25))
+        (setf model m)
+        (fude-gl:draw 'shadow-cube)))))
+
+;;;; SHADOW
+
+(fude-gl::define-vertex-attribute normal (a b c))
+
+(fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
+  (:vertex ((argset
+             ((|fragPos| :vec3) (normal :vec3) (coord :vec2)
+              (|fragPosLightSpace| :vec4)))
+            &uniform (projection :mat4) (view :mat4) (model :mat4)
+            (|lightSpaceMatrix| :mat4))
+    "argset.fragPos = vec3(model * vec4(xyz, 1.0));"
+    "argset.normal = transpose(inverse(mat3(model))) * normal;"
+    "argset.coord = st;"
+    "argset.fragPosLightSpace = lightSpaceMatrix * vec4(argset.fragPos, 1.0);"
+    "gl_Position = projection * view * model * vec4(xyz, 1.0);")
+  (:fragment ((|outColor| :vec4) &uniform (|diffuseTexture| :|sampler2D|)
+              (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
+    (flet :float |calculateShadow| ((|fragPosLightSpace| :vec4))
+      "// Perform perspective divide"
+      "vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;"
+      "// Transform to [0,1] range."
+      "projCoords = projCoords * 0.5 + 0.5;"
+      "// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)"
+      "float closestDepth = texture(shadowMap, projCoords.xy).r;"
+      "// get depth of current fragment from light's perspective"
+      "float currentDepth = projCoords.z;"
+      "// check whether current frag pos is in shadow"
+      "float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;"
+      "return shadow;")
+    "vec3 color = texture(diffuseTexture, argset.coord).rgb;"
+    "vec3 normal = normalize(argset.normal);"
+    "vec3 lightColor = vec3(0.3);"
+    "// ambient"
+    "vec3 ambient = 0.3 * color;"
+    "// diffuse"
+    "vec3 lightDir = normalize(lightPos - argset.fragPos);"
+    "float diff = max(dot(lightDir, normal), 0.0);"
+    "vec3 diffuse = diff * lightColor;"
+    "// specular"
+    "vec3 viewDir = normalize(viewPos - argset.fragPos);"
+    "vec3 reflectDir = reflect(-lightDir, normal);"
+    "float spec = 0.0;"
+    "vec3 halfwayDir = normalize(lightDir + viewDir);"
+    "spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);"
+    "vec3 specular = spec * lightColor;"
+    "// calculate shadow"
+    "float shadow = calculateShadow(argset.fragPosLightSpace);"
+    "vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;"
+    "outColor = vec4(lighting, 1.0);"))
+
+(fude-gl:defvertices plane-base-vao *framebuffer-plane-vertices*
+  :shader 'shadow-mapping
+  :attributes '(fude-gl:xyz fude-gl:rgb fude-gl:st))
+
+#++
+(fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
+  (:vertex ((argset
+             ((|fragPos| :vec3) (normal :vec3) (coord :vec2)
+              (|fragPosLightSpace| :vec4)))
+            &uniform (projection :mat4) (view :mat4) (model :mat4)
+            (|lightSpaceMatrix| :mat4))
+    (with-slots (frag-pos normal coord frag-pos-light-space)
+        argset
+      (setf frag-pos (vec3 (* model (vec4 xyz 1.0)))
+            normal (* (transpose (inverse (mat3 model))) normal)
+            coord st
+            frag-pos-light-space (* light-space-matrix (vec4 frag-pos 1.0))
+            gl-position (* projection view model (vec4 xyz 1.0)))))
+  (:fragment ((color :vec4) &uniform (|diffuseTexture| :|sampler2D|)
+              (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
+    (flet :float |calculateShadow| ((|fragPosLightSpace| :vec4))
+      (let ((proj-coords
+             :vec3
+             (/ (xyz frag-pos-light-space) (w frag-pos-light-space))))
+        (setf proj-coords (+ (* proj-coords 0.5) 0.5))
+        (let ((closest-depth :float (r (texture shadow-map (xy proj.coords))))
+              (current-depth :float (z proj-coords))
+              (shadow
+               :float
+               (if (< closest-depth current-depth)
+                   1.0
+                   0.0)))
+          (return shadow))))
+    (with-slots (coord (norm normal) frag-pos frag-pos-light-space)
+        argset
+      (let ((color :vec3 (rgb (texture diffuse-texture coord)))
+            (normal :vec3 (normalize norm))
+            (light-color :vec3 (vec3 0.3))
+            #++ ; have side effect?
+            (reflect-dir :vec3 (reflect (- light-dir) normal)))
+        (setf color
+                (vec4
+                 (* color
+                    (+ (* 0.3 color)
+                       (* (- 1.0 (calculate-shadow frag-pos-light-space))
+                          (+
+                            (*
+                              (max
+                                (dot (normalize (- light-pos frag-pos)) normal)
+                                0.0)
+                              light-color)
+                            (*
+                              (pow
+                               (max
+                                 (dot normal
+                                  (normalize light-dir
+                                   (normalize (- view-pos frag-pos))))
+                                 0.0)
+                               64.0)
+                              light-color)))))
+                 1.0))))))
+
+(defun framebuffer-shadow-base ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Framebuffer shadow base"))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader () (gl:enable :depth-test))
+    (let* ((camera (fude-gl:make-camera))
+           (light-position (3d-vectors:vec3 -2 4 -1))
+           (near-plane 1.0) ; When projection is perspective,
+           (far-plane 7.5) ; these vars will be refered.
+           (light-space-matrix
+            (3d-matrices:m*
+              (3d-matrices:mortho -10 10 -10 10 near-plane far-plane)
+              (3d-matrices:mlookat light-position (3d-vectors:vec3 0 0 0)
+                                   (3d-vectors:vec3 0 1 0))))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1))
+      ;; 1. render depth of scene to texture (from light's perspective)
+      ;; render scene from light's point of view
+      (fude-gl::with-framebuffer (depth-map (:depth-buffer-bit)
+                                            :color nil :win win)
+        (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
+                light-space-matrix)
+        (render-scene 'plane-vao))
+      (gl:clear :color-buffer-bit :depth-buffer-bit)
+      ;; 2. render scene as normal using the generated depth/shadow map
+      (fude-gl:with-uniforms (projection view view-pos light-pos
+                              (lsm "lightSpaceMatrix")
+                              (diffuse-texture :unit 0) (shadow-map :unit 1))
+          'shadow-mapping
+        (setf lsm light-space-matrix
+              view (fude-gl:view camera)
+              projection
+                (3d-matrices:mperspective 60
+                                          (multiple-value-call #'/
+                                            (sdl2:get-window-size win))
+                                          0.1 100)
+              view-pos (fude-gl:camera-position camera)
+              light-pos light-position
+              diffuse-texture (fude-gl:find-texture 'wood)
+              shadow-map
+                (fude-gl::framebuffer-texture
+                  (fude-gl::find-framebuffer 'depth-map)))
+        (render-scene 'plane-base-vao))
+      ;; render Depth map to quad for visual debugging
+      (fude-gl:with-uniforms (#++ (np "nearPlane")
+                              #++ (fp "farPlane") (depth-map :unit 0))
+          'debug-quad
+        (setf #| Comment outted, only need with perspective projection.
+              np near-plane
+              fp far-plane ;|#
+                depth-map
+              (fude-gl::framebuffer-texture
+                (fude-gl::find-framebuffer 'depth-map)))
+        #++
+        (fude-gl:draw 'shadow-quad)))))
