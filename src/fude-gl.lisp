@@ -56,6 +56,8 @@
            ;;;; UTILITIES
            #:list-all-textures
            #:list-all-vertices
+           #:with-uniforms
+           #:find-texture
            #:radians
            #:ortho
            #:model-matrix
@@ -495,6 +497,42 @@
       "Not active uniform. ~S in ~A" name (uniforms shader))
     location))
 
+(defmacro with-uniforms ((&rest var*) shader &body body)
+  ;; Trivial-syntax-check
+  (when (constantp shader)
+    (let ((uniforms (mapcar (lambda (s)
+                              (change-case:camel-case(symbol-name s)))
+                            (uniforms (eval shader)))))
+      (dolist (var var*)
+        (let ((name (if (symbolp var)
+                      (change-case:camel-case (symbol-name var))
+                      (if (stringp (cadr var))
+                        (cadr var)
+                        (change-case:camel-case (symbol-name (car var)))))))
+          (assert (find name uniforms :test #'string=))))))
+  (let ((s (gensym "SHADER")))
+    `(let ((,s ,shader))
+       (symbol-macrolet ,(loop :for spec :in var*
+                               :if (symbolp spec)
+                                 :collect `(,spec
+                                            (uniform ,s
+                                                     ,(change-case:camel-case
+                                                        (symbol-name spec))))
+                               :else :if (stringp (cadr spec))
+                                 :collect `(,(car spec)
+                                            (uniform ,s ,@(cdr spec)))
+                               :else
+                                 :collect `(,(car spec)
+                                            (uniform ,s
+                                                     ,(change-case:camel-case
+                                                        (symbol-name (car spec)))
+                                                     ,@(cdr spec))))
+         ,@body))))
+
+(defun (setf uniform) (value shader name &rest args)
+  (apply #'send value shader :uniform name args)
+  value)
+
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
@@ -779,14 +817,19 @@
 
 (set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
 
+(defmethod send
+           ((o texture) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform))
+            (unit (alexandria:required-argument :unit)))
+  (in-program to)
+  (gl:uniformi (uniform uniform to) unit)
+  (gl:active-texture unit)
+  (gl:bind-texture (texture-target o) (texture-id o)))
+
 (defun connect (shader &rest pairs)
-  (in-program shader)
   (loop :for i :upfrom 0
         :for (uniform name) :on pairs :by #'cddr
-        :for texture = (find-texture name)
-        :do (gl:uniformi (uniform uniform shader) i)
-            (gl:active-texture i)
-            (gl:bind-texture (texture-target texture) (texture-id texture))))
+        :do (send (find-texture name) shader :uniform uniform :unit i)))
 
 ;;;; UTILITIES
 ;; MACROS
