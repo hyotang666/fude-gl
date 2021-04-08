@@ -46,7 +46,11 @@
 
 (fude-gl:defshader hello-triangle 330 (fude-gl:xy)
   (:vertex () "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4)) "outColor = vec4(1.0, 1.0, 1.0, 1.0);"))
+  #++
+  (:vertex () (setf gl-position (vec4 xy 0.0 1.0)))
+  (:fragment ((|outColor| :vec4)) "outColor = vec4(1.0, 1.0, 1.0, 1.0);")
+  #++
+  (:fragment ((out-color :vec4)) (setf out-color (vec4 1.0 1.0 1.0 1.0))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *triangle*
@@ -99,7 +103,10 @@
   ;; The first element of the uniform-spec must be a symbol.
   ;; The second element of the uniform-spec is a keyword symbol that names GLSL type.
   (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
-    "outColor = vec4(triangleColor, 1.0);"))
+    "outColor = vec4(triangleColor, 1.0);")
+  #++
+  (:fragment ((out-color :vec4) &uniform (triangle-color :vec3))
+    (setf out-color (vec4 triangle-color 1.0))))
 
 (fude-gl:defvertices uniform-demo *triangle*)
 
@@ -130,7 +137,13 @@
 
 (fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
   (:vertex ((color :vec3)) "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);")
-  (:fragment ((|outColor| :vec4)) "outColor = vec4(color, 1.0);"))
+  #++
+  (:vertex ((color :vec3))
+    (setf color rgb
+          |gl_Position| (vec4 xy 0.0 1.0)))
+  (:fragment ((|outColor| :vec4)) "outColor = vec4(color, 1.0);")
+  #++
+  (:fragment ((out-color :vec4)) (setf out-color (vec4 color 1.0))))
 
 (fude-gl:defvertices colored-triangle
     (concatenate '(array single-float (*))
@@ -228,8 +241,16 @@
     "texcoord = st;"
     "color = rgb;"
     "gl_Position = vec4(xy, 0.0, 1.0);")
+  #++
+  (:vertex ((color :vec3) (texcoord :vec2))
+    (setf texcoord st
+          color rgb
+          |gl_Position| (vec4 xy 0.0 1.0)))
   (:fragment ((|outColor| :vec4) &uniform (tex :|sampler2D|))
-    "outColor = texture(tex, texcoord) * vec4(color, 1.0);"))
+    "outColor = texture(tex, texcoord) * vec4(color, 1.0);")
+  #++
+  (:fragment ((out-color :vec4) &uniform (tex :|sampler2D|))
+    (setf out-color (* (texture tex texcoord) (vec4 color 1.0)))))
 
 (defparameter *png*
   (opticl:read-png-file
@@ -311,11 +332,19 @@
   (:vertex ((texcoord :vec2))
     "texcoord = st;"
     "gl_Position = vec4(xy, 0.0, 1.0);")
+  #++
+  (:vertex ((texcoord :vec2))
+    (setf texcoord st
+          |gl_Position| (vec4 xy 0.0 1.0)))
   (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|)
               (tex2 :|sampler2D|))
     "outColor = mix(texture(tex1, texcoord),
                      texture(tex2, texcoord),
-                     0.5);"))
+                     0.5);")
+  #++
+  (:fragment ((out-color :vec4) &uniform (tex1 :|sampler2D|)
+              (tex2 :|sampler2D|))
+    (setf out-color (mix (texture tex1 texcoord) (texture tex2 texcoord) 0.5))))
 
 (defparameter *logo*
   (opticl:read-png-file
@@ -361,7 +390,11 @@
 
 (fude-gl:defshader hello 330 (fude-gl:xy)
   (:vertex () "gl_Position = vec4(xy,0.0,1.0);")
-  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);"))
+  #++
+  (:vertex () (setf |gl_Position| (vec4 xy 0.0 1.0)))
+  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);")
+  #++
+  (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
 
 (fude-gl:defvertices hello
     (concatenate '(array single-float (*))
@@ -389,9 +422,14 @@
 ;;;; DOUBLE from glut-examples.
 
 (fude-gl:defshader double 330 (fude-gl:xyz)
-  (:vertex ((|texCoord| :vec2) &uniform (transform :mat4))
+  (:vertex (&uniform (transform :mat4))
     "gl_Position = transform * vec4(xyz, 1.0);")
-  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);"))
+  #++
+  (:vertex ((tex-coord :vec2) &uniform (transform :mat4))
+    (setf |gl_Position| (* transform (vec4 xyz 1.0))))
+  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);")
+  #++
+  (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
 
 (fude-gl:defvertices double
     (concatenate '(array single-float (*))
@@ -449,8 +487,15 @@
   (:vertex ((coord :vec2) &uniform (transform :mat4))
     "gl_Position = transform * vec4(xy, 0.0, 1.0);"
     "coord = st;")
+  #++
+  (:vertex ((coord :vec2) &uniform (transform :mat4))
+    (setf |gl_Position| (* transform (vec4 xy 0.0 1.0))
+          coord st))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
+    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")
+  #++
+  (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
+    (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2))))
 
 (fude-gl:defvertices transform-demo
     (concatenate '(array single-float (*))
@@ -1028,6 +1073,11 @@
     "vec2 offset = offsets[gl_InstanceID];"
     "gl_Position = vec4(xy + offset, 0.0, 1.0);"
     "fColor = rgb;")
+  #++
+  (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
+    (let ((offset :vec2 (aref offsets |gl_instanceID|)))
+      (setf gl-position (vec4 (+ xy offset) 0.0 1.0)
+            f-color rgb)))
   (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
 
 (fude-gl:defvertices instancing *instancing*)
@@ -1115,6 +1165,11 @@
   (:vertex ((|fColor| :vec3))
     "gl_Position = vec4(xy * (gl_InstanceID / 100.0) + offset, 0.0, 1.0);"
     "fColor = rgb;")
+  #++
+  (:vertex ((|fColor| :vec3))
+    (setf gl-position
+            (vec4 (+ (* xy (/ |gl_InstanceID| 100.0)) offset) 0.0 1.0)
+          f-color rgb))
   (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
 
 (fude-gl:defvertices instance-id-demo *instancing*
@@ -1221,13 +1276,13 @@
 
 ;;;; FRAMEBUFFER
 
-(fude-gl:defshader framebuffer-vertices 330 (fude-gl:xyz fude-gl:st)
-  (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
-            (projection :mat4))
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-    "coord = st;")
-  (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
-    "color = texture(tex, coord);"))
+(fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2)) "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;")
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    "color = vec4(texture(screen, coord).rgb, 1.0);")
+  #++
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (setf color (vec4 (rgb (texture screen coord)) 1.0))))
 
 (fude-gl:defvertices framebuffer-quad
     (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
@@ -1235,10 +1290,13 @@
                  #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
   :shader 'framebuffer-screen)
 
-(fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
-  (:vertex ((coord :vec2)) "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;")
-  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
-    "color = vec4(texture(screen, coord).rgb, 1.0);"))
+(fude-gl:defshader framebuffer-vertices 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
+    "coord = st;")
+  (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
+    "color = texture(tex, coord);"))
 
 (fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
 

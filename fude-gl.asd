@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "2.12.0"
+  "2.13.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -25,7 +25,8 @@
   "src/"
   :components
   ((:file "fude-gl")
-   (:file "text" :depends-on ("fude-gl"))))
+   (:file "text" :depends-on ("fude-gl"))
+   (:file "glsl" :depends-on ("fude-gl"))))
 
 ;;; These forms below are added by JINGOH.GENERATOR.
 ;; Ensure in ASDF for pretty printings.
