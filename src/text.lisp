@@ -168,7 +168,7 @@
   (with-slots (vertex-array buffer)
       (in-vertices 'glyph)
     (let ((source (buffer-source buffer)))
-      (apply #'gl:uniformf (uniform "textColor" 'glyph) color)
+      (apply #'gl:uniformf (uniform 'glyph "textColor") color)
       (gl:active-texture 0)
       (gl:bind-vertex-array vertex-array)
       (loop :for glyph :in text

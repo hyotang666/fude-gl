@@ -652,7 +652,7 @@
 
 ;;;; UNIFORM
 
-(define-compiler-macro uniform (&whole whole name shader)
+(define-compiler-macro uniform (&whole whole shader name)
   (when (constantp shader)
     (let ((shader (eval shader)))
       (find-class shader)
@@ -665,7 +665,7 @@
             "Unknown uniform ~S for ~S" name (uniforms shader))))))
   whole)
 
-(defun uniform (name shader)
+(defun uniform (shader name)
   (handler-case (get-uniform-location (program-id shader) name)
     (uniform-error (c)
       (error
@@ -715,31 +715,31 @@
            ((o integer) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
   (in-program to)
-  (gl:uniformi (uniform uniform to) o))
+  (gl:uniformi (uniform to uniform) o))
 
 (defmethod send
            ((o float) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
   (in-program to)
-  (gl:uniformf (uniform uniform to) o))
+  (gl:uniformf (uniform to uniform) o))
 
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
   (in-program to)
-  (gl:uniform-matrix (uniform uniform to) 4 (vector (3d-matrices:marr o))))
+  (gl:uniform-matrix (uniform to uniform) 4 (vector (3d-matrices:marr o))))
 
 (defmethod send
            ((o 3d-vectors:vec3) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
   (3d-vectors:with-vec3 (x y z)
       o
-    (gl:uniformf (uniform uniform to) x y z)))
+    (gl:uniformf (uniform to uniform) x y z)))
 
 (defmethod send
            ((o vector) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
-  (gl:uniformfv (uniform uniform to) o))
+  (gl:uniformfv (uniform to uniform) o))
 
 ;;;; BUFFER
 
@@ -1147,7 +1147,7 @@
             &key (uniform (alexandria:required-argument :uniform))
             (unit (alexandria:required-argument :unit)))
   (in-program to)
-  (gl:uniformi (uniform uniform to) unit)
+  (gl:uniformi (uniform to uniform) unit)
   (gl:active-texture unit)
   (gl:bind-texture (texture-target o) (texture-id o)))
 
