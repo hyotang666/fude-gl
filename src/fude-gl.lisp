@@ -1065,7 +1065,7 @@
   (let ((toplevelp (gensym "TOPLEVELP")))
     `(let ((,toplevelp *toplevel-p*)
            (*toplevel-p* nil)
-           (*programs* (make-hash-table :test #'eq)))
+           (*programs* (alexandria:copy-hash-table *programs*)))
        (unwind-protect (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
