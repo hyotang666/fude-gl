@@ -2,38 +2,56 @@
 
 (defpackage :fude-gl
   (:use :cl)
-  (:export ;;;; DEFSHADER
-           #:defshader
-           ;;;; FUNDAMENTAL-CLASSES
-           #:define-vertex-attribute
+  (:export ;;;; VERTEX-ATTRIBUTES
+           #:define-vertex-attribute ; dsl macro.
+           #:list-all-attributes ; dev helper.
+           ;; Attributes classes.
            #:xy
            #:xyz
            #:st
            #:rgb
            #:offset
            #:a
-           ;;;; DEFVERTICES
-           #:defvertices
+           ;;;; SHADERS
+           #:defshader ; dsl macro.
+           ;; Dev helper generic functions.
+           #:vertex-shader
+           #:fragment-shader
+           #:uniforms
+           ;; UNIFORM
+           #:uniform
+           #:with-uniforms
+           #:send
+           ;;;; BUFFER
+           #:buffer ; object
+           #:in-buffer
+           ;; readers.
+           #:buffer-target
+           #:buffer-source
+           ;;;; VERTEX-ARRAY
+           #:vertex-array
+           #:in-vertex-array
+           ;;;; VERTICES
+           #:defvertices ; dsl macro.
+           #:with-shader ; cleanup.
            #:in-vertices
-           #:with-shader
-           #:shader
            #:find-vertices
+           #:shader ; reader
+           #:instances-buffer ; reader
+           #:draw
+           #:list-all-vertices ; dev helpers.
+           ;;;; TEXTURE
+           #:deftexture ; dsl macro.
+           #:with-textures ; cleanup.
+           #:in-texture
+           #:list-all-textures
+           #:find-texture
            ;;;; FRAMEBUFFER
-           #:deframebuf
-           #:with-framebuffer
+           #:deframebuf ; dsl macro.
+           #:with-framebuffer ; cleanup.
            #:framebuffer-texture
            #:find-framebuffer
-           ;;;; HELPERS
-           #:uniform
-           #:find-shader
-           #:instances-buffer
-           ;;;; GENERIC-FUNCTIONS
-           #:draw
-           #:send
            ;;;; TEXT-RENDERING
-           #:deftexture
-           #:with-textures
-           #:in-texture
            #:with-text-renderer
            #:render-text
            #:glyph ; shader-class
@@ -50,27 +68,13 @@
            ;; helpers
            #:view
            #:move
-           ;;;; GL-OBJECTS
-           ;; texture
-           #:connect
-           ;; vertex-array
-           #:vertex-array
-           #:in-vertex-array
-           ;; BUFFER
-           #:buffer
-           #:in-buffer
-           #:buffer-target
-           #:buffer-source
            ;;;; UTILITIES
-           #:list-all-textures
-           #:list-all-vertices
-           #:with-uniforms
-           #:find-texture
+           #:with-clear
+           #:tex-image-2d
+           ;;;; MATRIX
            #:radians
            #:ortho
-           #:model-matrix
-           #:with-clear
-           #:tex-image-2d))
+           #:model-matrix))
 
 (in-package :fude-gl)
 
@@ -270,23 +274,25 @@
 
 ;;;; VERTEX-ATTRIBUTE-CLASSES
 
-(defparameter *vertex-attributes* (make-hash-table))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; NOTE: CHECK-BNF in DEFSHADER needs this eval-when.
+  ;; Additionally define-vertex-attribute below needs this too.
+  (defparameter *vertex-attributes* (make-hash-table))
+  (defun vertex-attribute-p (thing)
+    (and (symbolp thing) (values (gethash thing *vertex-attributes*)))))
 
 (defun list-all-attributes () (alexandria:hash-table-keys *vertex-attributes*))
 
 ;; METACLASS
 
-(defclass vector-class (standard-class) ())
-
-(defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
-
-;; METACLASS for attributes.
-
-(defclass attributes (vector-class) ())
-
-;; METACLASS for instanced-array.
-
-(defclass instanced-array (vector-class) ())
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; NOTE: DEFINE-VERTEX-ATTRIBUTE below needs this eval-when.
+  (defclass vector-class (standard-class) ())
+  (defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
+  ;; METACLASS for attributes.
+  (defclass attributes (vector-class) ())
+  ;; METACLASS for instanced-array.
+  (defclass instanced-array (vector-class) ()))
 
 ;; CONSTRUCTOR
 
@@ -501,11 +507,6 @@
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; NOTE: CHECK-BNF in DEFSHADER needs this eval-when.
-  (defun vertex-attribute-p (thing)
-    (and (symbolp thing) (values (gethash thing *vertex-attributes*)))))
-
 (defmacro defshader (&whole whole name version superclasses &body shader*)
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
@@ -580,6 +581,53 @@
 
 (set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
 
+;;;; *PROGRAMS*
+
+(defvar *programs* (make-hash-table :test #'eq))
+
+(defun program-id (name &key (error t))
+  (or (gethash name *programs*)
+      (and error (error "Missing shader named ~S" name))))
+
+(defun compile-shader (prog vertex-shader fragment-shader)
+  (let ((vs (gl:create-shader :vertex-shader))
+        (fs (gl:create-shader :fragment-shader)))
+    (unwind-protect
+        (labels ((compile-s (prog id source)
+                   (gl:shader-source id source)
+                   (gl:compile-shader id)
+                   (may-warn (gl:get-shader-info-log id))
+                   (gl:attach-shader prog id))
+                 (may-warn (log)
+                   (unless (equal "" log)
+                     (warn log))))
+          (compile-s prog vs vertex-shader)
+          (compile-s prog fs fragment-shader)
+          (gl:link-program prog)
+          (may-warn (gl:get-program-info-log prog)))
+      (gl:delete-shader fs)
+      (gl:delete-shader vs))))
+
+(defun create-program (name)
+  (let ((program (program-id name :error nil)))
+    (or program
+        (let ((program (setf (gethash name *programs*) (gl:create-program))))
+          (when (zerop program)
+            (remhash name *programs*)
+            (error "Fails to create program."))
+          (compile-shader program (vertex-shader name) (fragment-shader name))
+          program))))
+
+(defun find-program (name &key (construct t) (error t))
+  (or (program-id name :error error)
+      (when construct
+        (create-program name))))
+
+(defmacro in-program (name)
+  (when (constantp name)
+    (find-class (eval name)))
+  `(gl:use-program (find-program ,name :error nil)))
+
 ;;;; GENERIC-FUNCTIONS
 
 (defgeneric construct (thing)
@@ -591,155 +639,30 @@
   ;; DESTRUCT may be called before bound slot.
   (:documentation "Requesting openGL to destruct objects."))
 
-(defvar *vertices* (make-hash-table :test #'eq))
-
-(defun list-all-vertices ()
-  (loop :for name :being :each :hash-key :of *vertices*
-        :collect name))
-
-(defun find-vertices (name &key (construct t) (error t))
-  (let ((vertices))
-    (cond ((typep name 'vertices) name)
-          ((null (setf vertices (gethash name *vertices*)))
-           (when error
-             (error
-               "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
-               name)))
-          ((slot-boundp vertices 'vertex-array) vertices)
-          ((not construct) vertices)
-          (t
-           (restart-case (construct vertices)
-             (continue ()
-                 :report "Return vertices without constructing."
-               vertices))))))
-
-(defmacro in-vertices (form &key (with-vertex-array t))
-  (when (constantp form)
-    (find-vertices (eval form) :construct nil :error t))
-  `(let ((vertices (find-vertices ,form)))
-     (gl:use-program (program-id (shader vertices)))
-     ,@(when with-vertex-array
-         `((in-vertex-array (vertex-array vertices))))
-     vertices))
-
-(defmacro in-program (name)
-  (when (constantp name)
-    (find-class (eval name)))
-  `(gl:use-program (find-program ,name :error nil)))
+(defgeneric create-vertex-array (vertices))
 
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
     (find-vertices (eval thing) :construct nil :error t))
   whole)
 
-(defgeneric draw (thing) (:method ((name symbol)) (draw (find-vertices name))))
+(defgeneric draw (thing))
 
 (defgeneric send (object to &key))
 
-(defmethod send
-           ((o integer) (to symbol)
-            &key (uniform (alexandria:required-argument :uniform)))
-  (in-program to)
-  (gl:uniformi (uniform uniform to) o))
+;;;; UNIFORM
 
-(defmethod send
-           ((o float) (to symbol)
-            &key (uniform (alexandria:required-argument :uniform)))
-  (in-program to)
-  (gl:uniformf (uniform uniform to) o))
-
-;;; BUFFER
-
-(defstruct buffer
-  name
-  original
-  source
-  buffer
-  (target :array-buffer :type buffer-target :read-only t)
-  (usage :static-draw :type buffer-usage :read-only t))
-
-(defmethod print-object ((o buffer) stream)
-  (if *print-escape*
-      (print-unreadable-object (o stream :type t)
-        (format stream "~S ~:[unconstructed~;~:*~A~] ~S ~S" (buffer-name o)
-                (buffer-buffer o) (buffer-target o) (buffer-usage o)))
-      (call-next-method)))
-
-(defun make-gl-vector (initial-contents)
-  (let* ((length (array-total-size initial-contents))
-         (a
-          (gl:alloc-gl-array
-            (foreign-type (array-element-type initial-contents) :cffi t)
-            length)))
-    (dotimes (i length a)
-      (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
-
-(defvar *buffer*)
-
-(defun in-buffer (buffer)
-  (setf *buffer* buffer)
-  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
-
-(defmethod send ((o gl:gl-array) (to buffer) &key (method #'gl:buffer-data))
-  (with-slots (target usage)
-      to
-    (in-buffer to)
-    (cond ((eq #'gl:buffer-data method) (funcall method target usage o))
-          ((eq #'gl:buffer-sub-data method) (funcall method target o))
-          (t (error "Unknown method ~S" method)))))
-
-(defmethod send ((o (eql :buffer)) (to symbol) &key (method #'gl:buffer-data))
-  (let ((buffer (buffer (find-vertices to))))
-    (send (buffer-source buffer) buffer :method method)))
-
-(defmethod construct ((o buffer))
-  (with-slots (original source buffer)
-      o
-    (unless source
-      (setf source (make-gl-vector original)
-            buffer (gl:gen-buffer))
-      (send source o)))
-  o)
-
-(defmethod destruct ((o buffer))
-  (with-slots (source buffer)
-      o
-    (and source (gl:free-gl-array source))
-    (and buffer (gl:delete-buffers (list buffer)))
-    (setf source nil
-          buffer nil)))
-
-;;;; VERTICES
-
-(defclass vertices ()
-  ((shader :type symbol :reader shader)
-   (buffer :type buffer :reader buffer)
-   (attributes :type list :reader attributes)
-   (draw-mode :type draw-mode :reader draw-mode)
-   (vertex-array :type unsigned-byte :reader vertex-array)))
-
-(defmethod initialize-instance :after
-           ((o vertices)
-            &key name buffer array shader attributes (draw-mode :triangles))
-  (setf (slot-value o 'shader) (or shader name)
-        (slot-value o 'buffer)
-          (apply #'make-buffer :name :vertices :original array buffer)
-        (slot-value o 'draw-mode) draw-mode
-        (slot-value o 'attributes)
-          (or (mapcar #'find-class attributes)
-              (c2mop:class-direct-superclasses (find-class (or shader name))))))
-
-(define-compiler-macro uniform (&whole whole name vertices)
-  (when (constantp vertices)
-    (let ((vertices (eval vertices)))
-      (find-vertices vertices :construct nil :error t)
+(define-compiler-macro uniform (&whole whole name shader)
+  (when (constantp shader)
+    (let ((shader (eval shader)))
+      (find-class shader)
       (when (constantp name)
         (let ((name (eval name)))
-          (assert (find (subseq name 0 (position #\[ name)) (uniforms vertices)
+          (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
                         :test #'string=
                         :key (lambda (s) (change-case:camel-case (string s))))
             ()
-            "Unknown uniform ~S for ~S" name (uniforms vertices))))))
+            "Unknown uniform ~S for ~S" name (uniforms shader))))))
   whole)
 
 (defun uniform (name shader)
@@ -749,6 +672,10 @@
         "Uniform ~S is not active in ~A~:@_Program id = ~S~:@_Active uniforms are ~S"
         (error-uniform c) (uniforms shader) (program c)
         (gl:get-program (program c) :active-uniforms)))))
+
+(defun (setf uniform) (value shader name &rest args)
+  (apply #'send value shader :uniform name args)
+  value)
 
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
@@ -784,9 +711,17 @@
                                                      ,@(cdr spec))))
          ,@body))))
 
-(defun (setf uniform) (value shader name &rest args)
-  (apply #'send value shader :uniform name args)
-  value)
+(defmethod send
+           ((o integer) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (in-program to)
+  (gl:uniformi (uniform uniform to) o))
+
+(defmethod send
+           ((o float) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (in-program to)
+  (gl:uniformf (uniform uniform to) o))
 
 (defmethod send
            ((o 3d-matrices:mat4) (to symbol)
@@ -806,11 +741,128 @@
             &key (uniform (alexandria:required-argument :uniform)))
   (gl:uniformfv (uniform uniform to) o))
 
+;;;; BUFFER
+
+(defstruct buffer
+  name
+  original
+  source
+  buffer
+  (target :array-buffer :type buffer-target :read-only t)
+  (usage :static-draw :type buffer-usage :read-only t))
+
+(defmethod print-object ((o buffer) stream)
+  (if *print-escape*
+      (print-unreadable-object (o stream :type t)
+        (format stream "~S ~:[unconstructed~;~:*~A~] ~S ~S" (buffer-name o)
+                (buffer-buffer o) (buffer-target o) (buffer-usage o)))
+      (call-next-method)))
+
+(defun make-gl-vector (initial-contents)
+  (let* ((length (array-total-size initial-contents))
+         (a
+          (gl:alloc-gl-array
+            (foreign-type (array-element-type initial-contents) :cffi t)
+            length)))
+    (dotimes (i length a)
+      (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
+
+(defvar *buffer*)
+
+(defun in-buffer (buffer)
+  (setf *buffer* buffer)
+  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
+
+(defmethod construct ((o buffer))
+  (with-slots (original source buffer)
+      o
+    (unless source
+      (setf source (make-gl-vector original)
+            buffer (gl:gen-buffer))
+      (send source o)))
+  o)
+
+(defmethod destruct ((o buffer))
+  (with-slots (source buffer)
+      o
+    (and source (gl:free-gl-array source))
+    (and buffer (gl:delete-buffers (list buffer)))
+    (setf source nil
+          buffer nil)))
+
+(defmethod send ((o gl:gl-array) (to buffer) &key (method #'gl:buffer-data))
+  (with-slots (target usage)
+      to
+    (in-buffer to)
+    (cond ((eq #'gl:buffer-data method) (funcall method target usage o))
+          ((eq #'gl:buffer-sub-data method) (funcall method target o))
+          (t (error "Unknown method ~S" method)))))
+
+;;;; VERTICES
+;; *VERTICES*
+
+(defvar *vertices* (make-hash-table :test #'eq))
+
+(defun list-all-vertices ()
+  (loop :for name :being :each :hash-key :of *vertices*
+        :collect name))
+
+(defun find-vertices (name &key (construct t) (error t))
+  (let ((vertices))
+    (cond ((typep name 'vertices) name)
+          ((null (setf vertices (gethash name *vertices*)))
+           (when error
+             (error
+               "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
+               name)))
+          ((slot-boundp vertices 'vertex-array) vertices)
+          ((not construct) vertices)
+          (t
+           (restart-case (construct vertices)
+             (continue ()
+                 :report "Return vertices without constructing."
+               vertices))))))
+
+;; *VERTEX-ARRAY*
+
+(defvar *vertex-array*)
+
+(defun in-vertex-array (vao) (gl:bind-vertex-array (setf *vertex-array* vao)))
+
+(defmacro in-vertices (form &key (with-vertex-array t))
+  (when (constantp form)
+    (find-vertices (eval form) :construct nil :error t))
+  `(let ((vertices (find-vertices ,form)))
+     (gl:use-program (program-id (shader vertices)))
+     ,@(when with-vertex-array
+         `((in-vertex-array (vertex-array vertices))))
+     vertices))
+
+;; VERTICES
+
+(defclass vertices ()
+  ((shader :type symbol :reader shader)
+   (buffer :type buffer :reader buffer)
+   (attributes :type list :reader attributes)
+   (draw-mode :type draw-mode :reader draw-mode)
+   (vertex-array :type unsigned-byte :reader vertex-array)))
+
+(defmethod initialize-instance :after
+           ((o vertices)
+            &key name buffer array shader attributes (draw-mode :triangles))
+  (setf (slot-value o 'shader) (or shader name)
+        (slot-value o 'buffer)
+          (apply #'make-buffer :name :vertices :original array buffer)
+        (slot-value o 'draw-mode) draw-mode
+        (slot-value o 'attributes)
+          (or (mapcar #'find-class attributes)
+              (c2mop:class-direct-superclasses (find-class (or shader name))))))
+
 ;; Trivial readers.
 
 (defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
 
-;; CONSTRUCTOR
+;; CONSTRUCT helpers
 
 (defun find-attribute (attribute class)
   (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
@@ -855,49 +907,14 @@
         :do (in-buffer (construct (funcall instance-buffers (class-name c))))
             (link-attribute c i superclasses)))
 
-(defvar *vertex-array*)
+(defmethod create-vertex-array :around ((o vertices))
+  (let ((vao (gl:gen-vertex-array)))
+    (in-vertex-array vao)
+    (call-next-method)
+    vao))
 
-(defun in-vertex-array (vao) (gl:bind-vertex-array (setf *vertex-array* vao)))
-
-(defun compile-shader (prog vertex-shader fragment-shader)
-  (let ((vs (gl:create-shader :vertex-shader))
-        (fs (gl:create-shader :fragment-shader)))
-    (unwind-protect
-        (labels ((compile-s (prog id source)
-                   (gl:shader-source id source)
-                   (gl:compile-shader id)
-                   (may-warn (gl:get-shader-info-log id))
-                   (gl:attach-shader prog id))
-                 (may-warn (log)
-                   (unless (equal "" log)
-                     (warn log))))
-          (compile-s prog vs vertex-shader)
-          (compile-s prog fs fragment-shader)
-          (gl:link-program prog)
-          (may-warn (gl:get-program-info-log prog)))
-      (gl:delete-shader fs)
-      (gl:delete-shader vs))))
-
-(defvar *programs* (make-hash-table :test #'eq))
-
-(defun program-id (name &key (error t))
-  (or (gethash name *programs*)
-      (and error (error "Missing shader named ~S" name))))
-
-(defun find-program (name &key (construct t) (error t))
-  (or (program-id name :error error)
-      (when construct
-        (create-program name))))
-
-(defun create-program (name)
-  (let ((program (program-id name :error nil)))
-    (or program
-        (let ((program (setf (gethash name *programs*) (gl:create-program))))
-          (when (zerop program)
-            (remhash name *programs*)
-            (error "Fails to create program."))
-          (compile-shader program (vertex-shader name) (fragment-shader name))
-          program))))
+(defmethod create-vertex-array ((o vertices))
+  (link-attributes (attributes o) (constantly (buffer o))))
 
 (defmethod construct ((o vertices))
   (with-slots (vertex-array shader)
@@ -912,12 +929,18 @@
     (slot-makunbound o 'vertex-array))
   (destruct (buffer o)))
 
+(defmethod send ((o (eql :buffer)) (to symbol) &key (method #'gl:buffer-data))
+  (let ((buffer (buffer (find-vertices to))))
+    (send (buffer-source buffer) buffer :method method)))
+
+(defmethod draw ((name symbol)) (draw (find-vertices name)))
+
 (defmethod draw :before ((o vertices)) (in-vertices o))
 
 (defmethod draw ((o vertices))
   (gl:draw-arrays (draw-mode o) 0 (vertex-length o)))
 
-;;;; INDEXED
+;; INDEXED
 
 (defclass indexed-vertices (vertices) ((indices :type buffer :reader indices)))
 
@@ -927,6 +950,10 @@
           (apply #'make-buffer :name :indices :original
                  (coerce (car indices) '(array (unsigned-byte 8) (*)))
                  (append (cdr indices) (list :target :element-array-buffer)))))
+
+(defmethod create-vertex-array ((o indexed-vertices))
+  (construct (indices o))
+  (call-next-method))
 
 (defmethod construct ((o indexed-vertices))
   (with-slots (vertex-array shader)
@@ -942,8 +969,7 @@
 (defmethod draw ((o indexed-vertices))
   (draw-elements (draw-mode o) (buffer-original (indices o))))
 
-;; CONSTRUCTOR
-;;;; INSTANCED-SHADER
+;; INSTANCED
 
 (defclass instanced () ((table :initform nil :accessor table)))
 
@@ -957,6 +983,14 @@
              (table o))))
 
 (defclass instanced-vertices (vertices instanced) ())
+
+(defmethod create-vertex-array ((o instanced-vertices))
+  (loop :for (nil . buffer) :in (table o)
+        :do (construct buffer))
+  (link-attributes (attributes o)
+                   (let ((table (table o)) (default-buffer (buffer o)))
+                     (lambda (slot)
+                       (or (cdr (assoc slot table)) default-buffer)))))
 
 (defmethod construct ((o instanced-vertices))
   (loop :for (nil . buffer) :in (table o)
@@ -989,24 +1023,6 @@
   (let ((buffer (instances-buffer to o)))
     (send (buffer-source buffer) buffer :method method)))
 
-(defgeneric create-vertex-array (vertices)
-  (:method :around ((o vertices))
-    (let ((vao (gl:gen-vertex-array)))
-      (in-vertex-array vao)
-      (call-next-method)
-      vao))
-  (:method ((o vertices))
-    (link-attributes (attributes o) (constantly (buffer o))))
-  (:method ((o indexed-vertices)) (construct (indices o)) (call-next-method))
-  (:method ((o instanced-vertices))
-    (loop :for (nil . buffer) :in (table o)
-          :do (construct buffer))
-    (link-attributes (attributes o)
-                     (let ((table (table o)) (default-buffer (buffer o)))
-                       (lambda (slot)
-                         (or (cdr (assoc slot table)) default-buffer))))))
-
-;;;; HELPERS
 ;;;; DEFVERTICES
 
 (defmacro defvertices (name array &rest options)
@@ -1074,56 +1090,31 @@
 
 (set-pprint-dispatch '(cons (member with-shader)) 'pprint-with-shader)
 
-(defmethod send
-           ((o texture) (to symbol)
-            &key (uniform (alexandria:required-argument :uniform))
-            (unit (alexandria:required-argument :unit)))
-  (in-program to)
-  (gl:uniformi (uniform uniform to) unit)
-  (gl:active-texture unit)
-  (gl:bind-texture (texture-target o) (texture-id o)))
-
-(defun connect (shader &rest pairs)
-  (loop :for i :upfrom 0
-        :for (uniform name) :on pairs :by #'cddr
-        :do (send (find-texture name) shader :uniform uniform :unit i)))
-
-;;;; UTILITIES
-;; MACROS
-
-(defun type-assert (form type)
-  (if (constantp form)
-      (progn
-       (assert (typep form type) ()
-         "~S is not type of ~S" form (millet:type-expand type))
-       form)
-      `(the ,type ,form)))
-
-;; MATRIX
-
-(defun radians (degrees) (* degrees (/ pi 180)))
-
-(defun ortho (win &optional (direction :bottom-up))
-  (multiple-value-bind (w h)
-      (sdl2:get-window-size win)
-    (ecase direction
-      (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
-      (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
-
-(defun model-matrix (x y w h &optional (rotate 0))
-  (3d-matrices:nmscale
-    (3d-matrices:nmtranslate
-      (3d-matrices:nmrotate
-        (3d-matrices:nmtranslate
-          (3d-matrices:mtranslation (3d-vectors:vec x y 0))
-          (3d-vectors:vec (* 0.5 w) (* 0.5 h) 0))
-        3d-vectors:+vz+ (radians rotate))
-      (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
-    (3d-vectors:vec w h 1)))
-
-;;; WITH-TEXTURES
+;;; TEXTURE
 
 (defvar *textures* (make-hash-table :test #'eq))
+
+(defun list-all-textures ()
+  (loop :for name :being :each :hash-key :of *textures*
+        :collect name))
+
+(defun find-texture (name &key (construct t) (error t))
+  (if (typep name 'texture)
+      name
+      (let ((texture (or (gethash name *textures*))))
+        (cond
+          ((null texture)
+           (when error
+             (error
+               "Missing texture named ~S. Eval (fude-gl:list-all-textures)"
+               name)))
+          ((texture-id texture) texture)
+          ((not construct) texture)
+          (t
+           (restart-case (construct texture)
+             (continue ()
+                 :report "Return texture without constructing."
+               texture)))))))
 
 (defstruct texture
   (id nil :type (or null unsigned-byte))
@@ -1150,6 +1141,28 @@
   (when (texture-id o)
     (gl:delete-textures (list (texture-id o)))
     (setf (texture-id o) nil)))
+
+(defmethod send
+           ((o texture) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform))
+            (unit (alexandria:required-argument :unit)))
+  (in-program to)
+  (gl:uniformi (uniform uniform to) unit)
+  (gl:active-texture unit)
+  (gl:bind-texture (texture-target o) (texture-id o)))
+
+(defun connect (shader &rest pairs)
+  (loop :for i :upfrom 0
+        :for (uniform name) :on pairs :by #'cddr
+        :do (send (find-texture name) shader :uniform uniform :unit i)))
+
+(defun type-assert (form type)
+  (if (constantp form)
+      (progn
+       (assert (typep form type) ()
+         "~S is not type of ~S" form (millet:type-expand type))
+       form)
+      `(the ,type ,form)))
 
 (defmacro deftexture (name target init-form &body options)
   (type-assert target 'texture-target)
@@ -1184,28 +1197,6 @@
     stream exp))
 
 (set-pprint-dispatch '(cons (member deftexture)) 'pprint-deftexture)
-
-(defun list-all-textures ()
-  (loop :for name :being :each :hash-key :of *textures*
-        :collect name))
-
-(defun find-texture (name &key (construct t) (error t))
-  (if (typep name 'texture)
-      name
-      (let ((texture (or (gethash name *textures*))))
-        (cond
-          ((null texture)
-           (when error
-             (error
-               "Missing texture named ~S. Eval (fude-gl:list-all-textures)"
-               name)))
-          ((texture-id texture) texture)
-          ((not construct) texture)
-          (t
-           (restart-case (construct texture)
-             (continue ()
-                 :report "Return texture without constructing."
-               texture)))))))
 
 (defmacro in-texture (name)
   (when (constantp name)
@@ -1286,6 +1277,22 @@
 
 (defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
 
+(defun find-framebuffer (name &key (construct t) (error t))
+  (let ((framebuffer (gethash name *framebuffers*)))
+    (cond
+      ((null framebuffer)
+       (when error
+         (error
+           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
+           name)))
+      ((framebuffer-id framebuffer) framebuffer)
+      ((not construct) framebuffer)
+      (t
+       (restart-case (construct framebuffer)
+         (continue ()
+             :report "Return framebuffer without constructing."
+           framebuffer))))))
+
 (defun default-renderbuffer-initializer (framebuffer)
   (with-slots (render-buffer width height)
       framebuffer
@@ -1357,22 +1364,6 @@
     (when render-buffer
       (gl:delete-renderbuffers (list render-buffer))
       (setf render-buffer nil))))
-
-(defun find-framebuffer (name &key (construct t) (error t))
-  (let ((framebuffer (gethash name *framebuffers*)))
-    (cond
-      ((null framebuffer)
-       (when error
-         (error
-           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
-           name)))
-      ((framebuffer-id framebuffer) framebuffer)
-      ((not construct) framebuffer)
-      (t
-       (restart-case (construct framebuffer)
-         (continue ()
-             :report "Return framebuffer without constructing."
-           framebuffer))))))
 
 (defun in-framebuffer (name)
   (gl:bind-framebuffer :framebuffer (if name
@@ -1460,3 +1451,25 @@
 (defun move (camera x y z)
   (3d-vectors:vsetf (camera-position camera) x y z)
   camera)
+
+;; MATRIX
+
+(defun radians (degrees) (* degrees (/ pi 180)))
+
+(defun ortho (win &optional (direction :bottom-up))
+  (multiple-value-bind (w h)
+      (sdl2:get-window-size win)
+    (ecase direction
+      (:top-down (3d-matrices:mortho 0 w h 0 -1 1))
+      (:bottom-up (3d-matrices:mortho 0 w 0 h -1 1)))))
+
+(defun model-matrix (x y w h &optional (rotate 0))
+  (3d-matrices:nmscale
+    (3d-matrices:nmtranslate
+      (3d-matrices:nmrotate
+        (3d-matrices:nmtranslate
+          (3d-matrices:mtranslation (3d-vectors:vec x y 0))
+          (3d-vectors:vec (* 0.5 w) (* 0.5 h) 0))
+        3d-vectors:+vz+ (radians rotate))
+      (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
+    (3d-vectors:vec w h 1)))
