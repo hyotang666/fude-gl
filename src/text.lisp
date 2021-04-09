@@ -197,7 +197,7 @@
           ((name &key (size 16) (win (alexandria:required-argument :win)))
            &body body)
   `(with-shader ()
-     (send (ortho ,win) 'glyph :uniform "projection")
+     (setf (uniform 'glyph "projection") (ortho ,win))
      (with-glyph (:size ,size)
        (flet ((,name (string &key (x 0) (y 0) (scale 1))
                 (render-text string :scale scale :x x :y y :win ,win)))
