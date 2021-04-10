@@ -405,6 +405,8 @@
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
 
+(defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
+
 (defun glsl-flet (stream exp &rest noise)
   (declare (ignore noise))
   (destructuring-bind
@@ -421,9 +423,9 @@
                               "~:>~^ ~%")
                         "~:<{~;~3I~:@_" ; function body.
                         "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
-      stream return (change-case:camel-case (string name))
+      stream return (symbol-camel-case name)
       (loop :for (var type) :in arg
-            :collect `(,type ,(change-case:camel-case (string var))))
+            :collect `(,type ,(symbol-camel-case var)))
       body)))
 
 (defun class-shader-inputs (superclasses)
@@ -433,13 +435,13 @@
         :when slots
           :collect (format nil "layout (location = ~A) " i)
           :and :collect (format nil "~[~;float~:;~:*vec~D~]" (length slots))
-          :and :collect (change-case:camel-case (symbol-name (class-name c)))))
+          :and :collect (symbol-camel-case (class-name c))))
 
 (defun parse-shader-lambda-list (spec*)
   (loop :for (name type . vector-size) :in spec*
         :collect nil
         :collect (etypecase type
-                   (symbol (change-case:camel-case (symbol-name type)))
+                   (symbol (symbol-camel-case type))
                    (list
                     (format nil "~:@(~A~) ~A" name
                             (format nil
@@ -449,15 +451,12 @@
                                                      "~@{~A~^ ~@_~A;~^~:@_~}"
                                                      "~%~;}~:> ")))
                                     (loop :for (name type) :in type
-                                          :collect (change-case:camel-case
-                                                     (symbol-name type))
-                                          :collect (change-case:camel-case
-                                                     (symbol-name name)))))))
+                                          :collect (symbol-camel-case type)
+                                          :collect (symbol-camel-case name))))))
         :collect (if vector-size
-                     (format nil "~A[~A]"
-                             (change-case:camel-case (symbol-name name))
+                     (format nil "~A[~A]" (symbol-camel-case name)
                              (car vector-size))
-                     (change-case:camel-case (symbol-name name)))))
+                     (symbol-camel-case name))))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
@@ -660,7 +659,7 @@
         (let ((name (eval name)))
           (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
                         :test #'string=
-                        :key (lambda (s) (change-case:camel-case (string s))))
+                        :key #'symbol-camel-case)
             ()
             "Unknown uniform ~S for ~S" name (uniforms shader))))))
   whole)
@@ -680,16 +679,14 @@
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
   (when (constantp shader)
-    (let ((uniforms
-           (mapcar (lambda (s) (change-case:camel-case (symbol-name s)))
-                   (uniforms (eval shader)))))
+    (let ((uniforms (mapcar #'symbol-camel-case (uniforms (eval shader)))))
       (dolist (var var*)
         (let ((name
                (if (symbolp var)
-                   (change-case:camel-case (symbol-name var))
+                   (symbol-camel-case var)
                    (if (stringp (cadr var))
                        (cadr var)
-                       (change-case:camel-case (symbol-name (car var)))))))
+                       (symbol-camel-case (car var))))))
           (assert (find name uniforms :test #'string=))))))
   (let ((s (gensym "SHADER")))
     `(let ((,s ,shader))
@@ -697,17 +694,15 @@
                                :if (symbolp spec)
                                  :collect `(,spec
                                             (uniform ,s
-                                                     ,(change-case:camel-case
-                                                        (symbol-name spec))))
+                                                     ,(symbol-camel-case spec)))
                                :else :if (stringp (cadr spec))
                                  :collect `(,(car spec)
                                             (uniform ,s ,@(cdr spec)))
                                :else
                                  :collect `(,(car spec)
                                             (uniform ,s
-                                                     ,(change-case:camel-case
-                                                        (symbol-name
-                                                          (car spec)))
+                                                     ,(symbol-camel-case
+                                                        (car spec))
                                                      ,@(cdr spec))))
          ,@body))))
 
