@@ -126,8 +126,8 @@
         (fude-gl:with-clear (win (:color-buffer-bit))
           (fude-gl:in-vertices 'uniform-demo)
           ;; To get an uniform locatioin, you can use a function UNIFORM.
-          ;; The first argument must be a string that names uniform.
-          ;; The second argument must be a symbol that names shader.
+          ;; The first argument must be a symbol that names shader.
+          ;; The second argument must be a string that names uniform.
           (gl:uniformf (fude-gl:uniform 'uniform-demo "triangleColor")
                        (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0 0.0)
           (fude-gl:draw 'uniform-demo))))))
