@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl-examples"
   :version
-  "0.21.4"
+  "0.22.0"
   :depends-on
   (
    "fude-gl"

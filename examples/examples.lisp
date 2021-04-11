@@ -1274,6 +1274,93 @@
                   (fude-gl:send 'fude-gl:a 'some-instance-dynamics)
                   (fude-gl:draw 'some-instance-dynamics))))))))))
 
+;;;; DEPTH-TESTING
+
+(fude-gl:defshader depth-testing 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    "coord = st;"
+    "gl_Position = projection * view * model * vec4(xyz, 1.0);")
+  (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
+    "color = texture(tex, coord);"))
+
+(defparameter *marble*
+  (let ((pathname (merge-pathnames "marble.jpg" (user-homedir-pathname))))
+    (unless (probe-file pathname)
+      (dex:fetch
+        "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/marble.jpg"
+        pathname))
+    (opticl:read-jpeg-file pathname)))
+
+(fude-gl:deftexture cube-texture :texture-2d (fude-gl:tex-image-2d *marble*))
+
+(defparameter *metal*
+  (let ((pathname (merge-pathnames "metal.png" (user-homedir-pathname))))
+    (unless (probe-file pathname)
+      (dex:fetch
+        "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/metal.png"
+        pathname))
+    (opticl:read-png-file pathname)))
+
+(fude-gl:deftexture metal :texture-2d (fude-gl:tex-image-2d *metal*))
+
+(fude-gl:defvertices depth-testing-cubes *depth-demo* :shader 'depth-testing)
+
+(fude-gl:defvertices depth-testing-plane
+    (coerce
+      #(5.0 -0.5 5.0 2.0 0.0 ; first
+        -5.0 -0.5 5.0 0.0 0.0 ; second
+        -5.0 -0.5 -5.0 0.0 2.0 ; third
+        5.0 -0.5 5.0 2.0 0.0 ; fourth
+        -5.0 -0.5 -5.0 0.0 2.0 ; fifth
+        5.0 -0.5 -5.0 2.0 2.0) ; sixth
+      '(array single-float (*)))
+  :shader 'depth-testing)
+
+(defun depth-testing ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Depth testing"))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test)
+      (gl:depth-func :less))
+    (fude-gl:with-shader ())
+    (let* ((camera (fude-gl:make-camera))
+           (v (fude-gl:view camera))
+           (p
+            (3d-matrices:mperspective 60
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100)))
+      (fude-gl:with-uniforms (view projection)
+          'depth-testing
+        (setf view v
+              projection p)))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+      (fude-gl:with-uniforms (model (tex :unit 0))
+          'depth-testing
+        (fude-gl:in-vertices 'depth-testing-cubes)
+        (setf tex (fude-gl:find-texture 'cube-texture)
+              model
+                (3d-matrices:nmtranslate (3d-matrices:meye 4)
+                                         (3d-vectors:vec3 -1 0 -1)))
+        (fude-gl:draw 'depth-testing-cubes)
+        (setf model
+                (3d-matrices:nmtranslate (3d-matrices:meye 4)
+                                         (3d-vectors:vec3 2 0 0)))
+        (fude-gl:draw 'depth-testing-cubes)
+        (fude-gl:in-vertices 'depth-testing-plane)
+        (setf tex (fude-gl:find-texture 'metal)
+              model (3d-matrices:meye 4))
+        (fude-gl:draw 'depth-testing-plane)))))
+
 ;;;; FRAMEBUFFER
 
 (fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
@@ -1306,16 +1393,6 @@
                  #(5.0 -0.5 5.0 2.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0)
                  #(5.0 -0.5 -5.0 2.0 2.0))
   :shader 'framebuffer-vertices)
-
-(defparameter *metal*
-  (let ((pathname (merge-pathnames "metal.png" (user-homedir-pathname))))
-    (unless (probe-file pathname)
-      (dex:fetch
-        "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/metal.png"
-        pathname))
-    (opticl:read-png-file pathname)))
-
-(fude-gl:deftexture metal :texture-2d (fude-gl:tex-image-2d *metal*))
 
 ;; Macro DEFRAMEBUF defines framebuffer.
 ;;
