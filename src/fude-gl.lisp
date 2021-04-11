@@ -651,30 +651,45 @@
 
 ;;;; UNIFORM
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; Compiler macro and setf expander below needs this eval-when.
+  (defun check-uniform-args (shader name)
+    "Compile time argument validation for UNIFORM."
+    (when (constantp shader)
+      (let ((shader (eval shader)))
+        (find-class shader)
+        (when (constantp name)
+          (let ((name (eval name)))
+            (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
+                          :test #'string=
+                          :key #'symbol-camel-case)
+              ()
+              "Unknown uniform ~S for ~S" name (uniforms shader))))))))
+
 (define-compiler-macro uniform (&whole whole shader name)
-  (when (constantp shader)
-    (let ((shader (eval shader)))
-      (find-class shader)
-      (when (constantp name)
-        (let ((name (eval name)))
-          (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
-                        :test #'string=
-                        :key #'symbol-camel-case)
-            ()
-            "Unknown uniform ~S for ~S" name (uniforms shader))))))
+  (check-uniform-args shader name)
   whole)
 
 (defun uniform (shader name)
   (handler-case (get-uniform-location (program-id shader) name)
     (uniform-error (c)
-      (error
-        "Uniform ~S is not active in ~A~:@_Program id = ~S~:@_Active uniforms are ~S"
-        (error-uniform c) (uniforms shader) (program c)
-        (gl:get-program (program c) :active-uniforms)))))
+      (if (find (error-uniform c) (uniforms shader)
+                :key #'symbol-camel-case
+                :test #'equal)
+          (error "Uniform ~S is not used in shader ~S? ~A" (error-uniform c)
+                 shader (uniforms shader))
+          (error
+            "Uniform ~S is not active in ~A~:@_Program id = ~S~:@_Active uniforms are ~S"
+            (error-uniform c) (uniforms shader) (program c)
+            (gl:get-program (program c) :active-uniforms))))))
 
-(defun (setf uniform) (value shader name &rest args)
-  (apply #'send value shader :uniform name args)
-  value)
+(define-setf-expander uniform (shader name &rest args)
+  (check-uniform-args shader name)
+  (let ((new (gensym "NEW")))
+    (values nil
+            nil
+            (list new)
+            `(progn (send ,new ,shader :uniform ,name ,@args) ,new))))
 
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
