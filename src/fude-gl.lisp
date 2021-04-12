@@ -1,81 +1,3 @@
-(in-package :cl-user)
-
-(defpackage :fude-gl
-  (:use :cl)
-  (:export ;;;; VERTEX-ATTRIBUTES
-           #:define-vertex-attribute ; dsl macro.
-           #:list-all-attributes ; dev helper.
-           ;; Attributes classes.
-           #:xy
-           #:xyz
-           #:st
-           #:rgb
-           #:offset
-           #:a
-           ;;;; SHADERS
-           #:defshader ; dsl macro.
-           ;; Dev helper generic functions.
-           #:vertex-shader
-           #:fragment-shader
-           #:uniforms
-           ;; UNIFORM
-           #:uniform
-           #:with-uniforms
-           #:send
-           ;;;; BUFFER
-           #:buffer ; object
-           #:in-buffer
-           ;; readers.
-           #:buffer-target
-           #:buffer-source
-           ;;;; VERTEX-ARRAY
-           #:vertex-array
-           #:in-vertex-array
-           ;;;; VERTICES
-           #:defvertices ; dsl macro.
-           #:with-shader ; cleanup.
-           #:in-vertices
-           #:find-vertices
-           #:shader ; reader
-           #:instances-buffer ; reader
-           #:draw
-           #:list-all-vertices ; dev helpers.
-           ;;;; TEXTURE
-           #:deftexture ; dsl macro.
-           #:with-textures ; cleanup.
-           #:in-texture
-           #:list-all-textures
-           #:find-texture
-           ;;;; FRAMEBUFFER
-           #:deframebuf ; dsl macro.
-           #:with-framebuffer ; cleanup.
-           #:framebuffer-texture
-           #:find-framebuffer
-           ;;;; TEXT-RENDERING
-           #:with-text-renderer
-           #:render-text
-           #:glyph ; shader-class
-           #:with-glyph
-           #:*font-size*
-           #:font-loader
-           ;;;; CAMERA
-           ;; constructor
-           #:make-camera
-           ;; readers
-           #:camera-position
-           #:camera-front
-           #:camera-up
-           ;; helpers
-           #:view
-           #:move
-           ;;;; UTILITIES
-           #:with-clear
-           #:tex-image-2d
-           ;;;; MATRIX
-           #:radians
-           #:ortho
-           #:model-matrix))
-
 (in-package :fude-gl)
 
 ;;;; VERBOSE OPENGL
@@ -436,29 +358,6 @@
           `(,method ',(cadar main))
           string)))
 
-(defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
-
-(defun glsl-flet (stream exp &rest noise)
-  (declare (ignore noise))
-  (destructuring-bind
-      (return name arg . body)
-      (cdr exp)
-    (funcall
-      (formatter
-       #.(apply #'concatenate 'string
-                (alexandria:flatten
-                  (list "~(~A~)~^ ~@_" ; return type
-                        "~A~^ ~@_" ; function name.
-                        (list "~:<" ; logical block for args.
-                              "~@{~{~(~A~)~^ ~A~^, ~}~}" ; argbody.
-                              "~:>~^ ~%")
-                        "~:<{~;~3I~:@_" ; function body.
-                        "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
-      stream return (symbol-camel-case name)
-      (loop :for (var type) :in arg
-            :collect `(,type ,(symbol-camel-case var)))
-      body)))
-
 (defun class-shader-inputs (superclasses)
   (loop :for c :in (mapcar #'find-class superclasses)
         :for slots = (c2mop:class-direct-slots c)
@@ -476,7 +375,7 @@
                          "~{out ~A ~A;~%~}~&" ; out
                          "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
                          "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
-                         "~@[~{~/fude-gl::glsl-flet/~^~%~}~]" ; functions.
+                         "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
                          ))))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
@@ -497,15 +396,17 @@
                                     (delete nil uniform)
                                     (remove nil (append varying varying%))
                                     (loop :for x :in main
-                                          :if (typep x '(cons (member flet)))
-                                            :collect x :into flets
+                                          :if (typep x 'cons)
+                                            :collect x :into exp
                                           :else
                                             :collect x :into main
                                           :finally (return
-                                                    `(,@flets
-                                                      (flet :void
-                                                        main
-                                                        nil
+                                                    `(,@exp
+                                                      (declaim
+                                                       (ftype (function nil
+                                                               (values))
+                                                              main))
+                                                      (defun main ()
                                                         ,@main))))))
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))

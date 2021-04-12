@@ -1475,24 +1475,15 @@
   (:vertex ((coord :vec2)) "coord = st;" "gl_Position = vec4(xyz, 1.0);")
   (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
               (|nearPlane| :float) (|farPlane| :float))
-    ;; You can specify local function for shader with flet clause.
-    (flet :float |linearizeDepth| ((depth :float))
+    ;; You can specify local function for shader with defun clause.
+    ;; NOTE: DECLAIM is required.
+    (declaim (ftype (function (float) float) |linearizeDepth|))
+    (defun |linearizeDepth| (depth)
       "float z = depth * 2.0 - 1.0; // Back to NDC"
       "return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));")
     "float depthValue = texture(depthMap, coord).r;"
     "// color = vec4(vec3(linearizeDepth(depthValue) / farPlane), 1.0); // Perspective."
-    "color = vec4(vec3(depthValue), 1.0); // orthographic.")
-  #++
-  (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
-              (|nearPlane| :float) (|farPlane| :float))
-    ;; You can specify local function for shader with flet clause.
-    (flet :float |linearizeDepth| ((depth :float))
-      (let ((z :float (- (* depth 2.0) 1.0)))
-        (return
-         (/ (* 2.0 near-plane far-plane)
-            (* (- (+ far-plane near-plane) z) (- far-plane near-plane))))))
-    (let ((depth-value :float (r (texture depth-map coord))))
-      (setf color (vec4 (vec3 depth-value) 1.0)))))
+    "color = vec4(vec3(depthValue), 1.0); // orthographic."))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *framebuffer-plane-vertices*
@@ -1660,7 +1651,8 @@
     "gl_Position = projection * view * model * vec4(xyz, 1.0);")
   (:fragment ((|outColor| :vec4) &uniform (|diffuseTexture| :|sampler2D|)
               (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
-    (flet :float |calculateShadow| ((|fragPosLightSpace| :vec4))
+    (declaim (ftype (function (3d-vectors:vec4) float) |calculateShadow|))
+    (defun |calculateShadow| (|fragPosLightSpace|)
       "// Perform perspective divide"
       "vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;"
       "// Transform to [0,1] range."
