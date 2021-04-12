@@ -380,30 +380,61 @@
   (:documentation "Return fragment shader code string."))
 
 (defgeneric uniforms (name)
-  (:documentation "Return associated uniform symbols."))
+  (:documentation "Return associated uniform name strings."))
 
 ;;;; DEFSHADER
+
+(defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
+
+(defun varying-keywordp (thing) (and (symbolp thing) (string= '&varying thing)))
+
+(defun parse-shader-lambda-list-spec (spec)
+  (destructuring-bind
+      (name type . vector-size)
+      spec
+    (list nil
+          (etypecase type
+            (symbol (symbol-camel-case type))
+            (list
+             (format nil "~:@(~A~) ~A" name
+                     (format nil
+                             #.(apply #'concatenate 'string
+                                      (alexandria:flatten
+                                        (list "~:<{~;~3I~:@_" ; pprint-logical-block.
+                                              "~@{~A~^ ~@_~A;~^~:@_~}"
+                                              "~%~;}~:> ")))
+                             (loop :for (name type) :in type
+                                   :collect (symbol-camel-case type)
+                                   :collect (symbol-camel-case name))))))
+          (if vector-size
+              (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
+              (symbol-camel-case name)))))
+
+(defun split-shader-lambda-list (lambda-list)
+  (uiop:while-collecting (out uniform varying)
+    (loop :with collector = #'out
+          :for elt :in lambda-list
+          :if (uniform-keywordp elt)
+            :do (setf collector #'uniform)
+          :else :if (varying-keywordp elt)
+            :do (setf collector #'varying)
+          :else
+            :do (mapc collector (parse-shader-lambda-list-spec elt)))))
 
 (defun <uniforms> (name shader*)
   `(defmethod uniforms ((type (eql ',name)))
      (list
        ,@(loop :for (nil lambda-list) :in shader*
-               :for position
-                    = (position-if
-                        (lambda (x) (and (symbolp x) (string= '&uniform x)))
-                        lambda-list)
-               :when position
-                 :nconc (let ((acc))
-                          (dolist (x (subseq lambda-list (1+ position)) acc)
-                            (pushnew `',(car x) acc :test #'equal)))))))
+               :for uniforms
+                    = (nth-value 1 (split-shader-lambda-list lambda-list))
+               :nconc (loop :for (nil nil name) :on uniforms :by #'cdddr
+                            :collect name)))))
 
 (defun <shader-method> (method name main string)
   `(defmethod ,method ((type (eql ',name)))
      ,(if (typep main '(cons (cons (eql quote) (cons symbol null)) null))
           `(,method ',(cadar main))
           string)))
-
-(defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
@@ -437,27 +468,6 @@
           :and :collect (format nil "~[~;float~:;~:*vec~D~]" (length slots))
           :and :collect (symbol-camel-case (class-name c))))
 
-(defun parse-shader-lambda-list (spec*)
-  (loop :for (name type . vector-size) :in spec*
-        :collect nil
-        :collect (etypecase type
-                   (symbol (symbol-camel-case type))
-                   (list
-                    (format nil "~:@(~A~) ~A" name
-                            (format nil
-                                    #.(apply #'concatenate 'string
-                                             (alexandria:flatten
-                                               (list "~:<{~;~3I~:@_" ; pprint-logical-block.
-                                                     "~@{~A~^ ~@_~A;~^~:@_~}"
-                                                     "~%~;}~:> ")))
-                                    (loop :for (name type) :in type
-                                          :collect (symbol-camel-case type)
-                                          :collect (symbol-camel-case name))))))
-        :collect (if vector-size
-                     (format nil "~A[~A]" (symbol-camel-case name)
-                             (car vector-size))
-                     (symbol-camel-case name))))
-
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
          (formatter
@@ -465,33 +475,27 @@
                          "~{~@[~A~]in ~A ~A;~%~}~&" ; in
                          "~{out ~A ~A;~%~}~&" ; out
                          "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
+                         "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
                          "~@[~{~/fude-gl::glsl-flet/~^~%~}~]" ; functions.
                          ))))
-    (labels ((rec (shaders in acc)
+    (labels ((rec (shaders in varying acc)
                (if (endp shaders)
                    (nreverse acc)
-                   (body (car shaders) (cdr shaders) in acc)))
-             (body (shader rest in acc)
+                   (body (car shaders) (cdr shaders) in varying acc)))
+             (body (shader rest in varying acc)
                (destructuring-bind
                    (type shader-lambda-list &rest main)
                    shader
-                 (let* ((&uniform
-                         (position-if #'uniform-keywordp shader-lambda-list))
-                        (vars
-                         (and shader-lambda-list
-                              (parse-shader-lambda-list
-                                (subseq shader-lambda-list 0 &uniform)))))
-                   (rec rest vars
+                 (multiple-value-bind (out uniform varying%)
+                     (split-shader-lambda-list shader-lambda-list)
+                   (rec rest out (append varying varying%)
                         (cons
                           (<shader-method>
                             (intern (format nil "~A-SHADER" type) :fude-gl)
                             name main
-                            (format nil format version in (remove nil vars)
-                                    (and &uniform
-                                         (delete nil
-                                                 (parse-shader-lambda-list
-                                                   (subseq shader-lambda-list
-                                                           (1+ &uniform)))))
+                            (format nil format version in (remove nil out)
+                                    (delete nil uniform)
+                                    (remove nil (append varying varying%))
                                     (loop :for x :in main
                                           :if (typep x '(cons (member flet)))
                                             :collect x :into flets
@@ -504,24 +508,28 @@
                                                         nil
                                                         ,@main))))))
                           acc))))))
-      (rec shader-clause* (class-shader-inputs superclasses) nil))))
+      (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 
 (defmacro defshader (&whole whole name version superclasses &body shader*)
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
     ((version unsigned-byte))
-    (((superclass+ superclasses) (satisfies vertex-attribute-p)))
+    (((superclass* superclasses) (satisfies vertex-attribute-p)))
     ((shader* (or vertex-clause fragment-clause))
      ;;
      (vertex-clause ((eql :vertex) shader-lambda-list main*))
      ;;
      (fragment-clause ((eql :fragment) shader-lambda-list main*))
      ;;
-     (shader-lambda-list (out-spec* uniform-keyword? uniform-spec*))
+     (shader-lambda-list
+      (out-spec* uniform-keyword? uniform-spec* varying-keyword?
+       varying-spec*))
      (out-spec (var type-key))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-key vector-size?))
      (vector-size unsigned-byte)
+     (varying-keyword? (satisfies varying-keywordp))
+     (varying-spec (var type-key))
      ;;
      (var symbol)
      (type-key (or t #|KLUDGE|# keyword))
@@ -661,8 +669,7 @@
         (when (constantp name)
           (let ((name (eval name)))
             (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
-                          :test #'string=
-                          :key #'symbol-camel-case)
+                          :test #'string=)
               ()
               "Unknown uniform ~S for ~S" name (uniforms shader))))))))
 
@@ -694,7 +701,7 @@
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
   (when (constantp shader)
-    (let ((uniforms (mapcar #'symbol-camel-case (uniforms (eval shader)))))
+    (let ((uniforms (uniforms (eval shader))))
       (dolist (var var*)
         (let ((name
                (if (symbolp var)
