@@ -42,10 +42,14 @@
 ;; The first element of the output spec must a symbol.
 ;; The second element of the output spec is a keyword symbol that names a GLSL type.
 ;;
-;; The rest elements of the definitions of glsl codes.
+;; The rest elements of the clause are definitions of the glsl codes.
 ;; You can specify function with DEFUN form.
 ;; DEFUN form require FTYPE DECLAIM.
 ;; (VALUES) represents 'void'.
+;;
+;; You can check the generated vertex shader codes and fragment shader codes by
+;; evaluating (vertex-shader 'hello-triangle) and
+;; (fragment-shader 'hello-triangle) respectively.
 
 (fude-gl:defshader hello-triangle 330 (fude-gl:xy)
   (:vertex ()
@@ -893,7 +897,6 @@
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
           (fude-gl:with-textures ()
-            (fude-gl:in-vertices 'cubes)
             (let ((cube-positions
                    (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
                          (3d-vectors:vec -1.5 -2.2 -2.5)
@@ -904,12 +907,13 @@
                          (3d-vectors:vec 1.5 2 -2.5)
                          (3d-vectors:vec 1.5 0.2 -1.5)
                          (3d-vectors:vec -1.3 1 -1.5))))
-              (gl:enable :depth-test)
+              (gl:enable :depth-test) ; <--- When enable :depth-test...
               (sdl2:with-event-loop (:method :poll)
                 (:quit ()
                   t)
                 (:idle ()
-                  (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+                  ;; you should clear :depth-buffer-bit.
+                  (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
                     (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
                                             view projection)
                         'cubes
@@ -1160,12 +1164,9 @@
       (fude-gl:in-vertices 'instancing)
       (loop :for vec2 :in translations
             :for i :upfrom 0
-            ;; When making uniform name dynamically,
-            ;; you can use underlying function SEND instead of
-            ;; SETF macro with UNIFORM.
-            :do (fude-gl:send vec2 'instancing
-                              :uniform (format nil "offsets[~A]" i)))
-      (gl:bind-vertex-array (fude-gl:vertex-array 'instancing)))
+            :do (setf (fude-gl:uniform 'instancing
+                                       (format nil "offsets[~A]" i))
+                        vec2)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -1213,7 +1214,6 @@
                            :title "Instanced arrays demo")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'instanced-arrays-demo)
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -1249,7 +1249,6 @@
                            :title "InstanceID demo")
       (sdl2:with-gl-context (context win)
         (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'instance-id-demo)
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -1295,7 +1294,6 @@
         (gl:enable :blend)
         (gl:blend-func :src-alpha :one-minus-src-alpha)
         (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'some-instances-demo)
           (sdl2:with-event-loop (:method :poll)
             (:quit ()
               t)
@@ -1325,7 +1323,6 @@
         (gl:enable :blend)
         (gl:blend-func :src-alpha :one-minus-src-alpha)
         (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'some-instance-dynamics)
           (let ((vec
                  ;; To get gl-array object.
                  (fude-gl:buffer-source ;; To get buffer object.
@@ -1491,7 +1488,7 @@
           (let* ((camera (fude-gl:make-camera))
                  (view (fude-gl:view camera))
                  (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
-            (fude-gl:send 0 'framebuffer-screen :uniform "screen")
+            (setf (fude-gl:uniform 'framebuffer-screen "screen") 0)
             (sdl2:with-event-loop (:method :poll)
               (:quit ()
                 t)
@@ -1502,9 +1499,16 @@
                   (fude-gl:with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
                                                    :color '(0.1 0.1 0.1 1) :win win)
                     (gl:enable :depth-test)
+                    ;; You can specify alias for uniform name.
+                    ;; In the example below,
+                    ;; specify alias 'v' for uniform "view" and
+                    ;; alias 'p' for uniform 'projection".
                     (fude-gl:with-uniforms ((tex :unit 0) (v "view")
                                             (p "projection") model)
                         'framebuffer-vertices
+                      ;; Actually this IN-VERTICES is needless.
+                      ;; Just for understanding code structure.
+                      ;;; Cubes
                       (fude-gl:in-vertices 'fb-cube)
                       (setf tex (fude-gl:find-texture 'container)
                             v view
@@ -1519,8 +1523,8 @@
                       (fude-gl:draw 'fb-cube)
                       ;;; floor
                       (fude-gl:in-vertices 'plane-vertices)
-                      (fude-gl:in-texture 'metal)
-                      (setf model (3d-matrices:meye 4))
+                      (setf tex (fude-gl:find-texture 'metal)
+                            model (3d-matrices:meye 4))
                       (fude-gl:draw 'plane-vertices)))
                   ;; draw a quad plane with the attached framebuffer color texture
                   ;; disable depth test so screen-space quad isn't discarded due to depth test.
@@ -1536,14 +1540,27 @@
 (fude-gl:deframebuf depth-map
   :width 1024
   :height 1024
+  ;; To specify texture format. This must be BASE-INTERNAL-FORMAT.
+  ;; The default is :RGB.
   :format :depth-component
+  ;; To specify texture pixel type. This must be PIXEL-TYPE.
+  ;; The default is :UNSIGNED-BYTE.
   :pixel-type :float
-  :options `(:texture-wrap-s :repeat :texture-wrap-t :repeat)
+  ;; To specify texture params. This must be TEXTURE-PNAME and its value plist.
+  ;; The default is '(:texture-min-filter :linear :texture-mag-filter :linear)
+  :options `(:texture-min-filter :nearest :texture-mag-filter :nearest
+             :texture-wrap-s :repeat :texture-wrap-t :repeat)
+  ;; To specify framebuffer attachment. This must be ATTACHMENT.
+  ;; The default is :COLOR-ATTACHMENT0.
   :attachment :depth-attachment
-  :renderbuffer-initializer (lambda (this)
-                              (declare (ignore this))
-                              (gl:draw-buffer :none)
-                              (gl:read-buffer :none)))
+  ;; To specify renderbuffer initializer.
+  ;; This must be function as (function (framebuffer)).
+  ;; The default is #'DEFAULT-RENDERBUFFER-INITIALIZER
+  :renderbuffer-initializer
+  (lambda (this)
+    (declare (ignore this))
+    (gl:draw-buffer :none)
+    (gl:read-buffer :none)))
 
 (fude-gl:defshader simple-depth 330 (fude-gl:xyz)
   (:vertex (&uniform (|lightSpaceMatrix| :mat4) (model :mat4))
@@ -1630,6 +1647,8 @@
               )
             '(array single-float (*)))
   :shader 'simple-depth
+  ;; When shader spec differents actual vertices spec,
+  ;; specify attributes.
   :attributes '(fude-gl:xyz fude-gl:rgb fude-gl:st))
 
 (fude-gl:defvertices shadow-quad
@@ -1641,7 +1660,9 @@
               )
             '(array single-float (*)))
   :shader 'debug-quad
-  :draw-mode :triangle-strip)
+  ;; To specify draw mode. The default is :TRIANGLES.
+  :draw-mode
+  :triangle-strip)
 
 (fude-gl:deftexture wood :texture-2d
   (fude-gl:tex-image-2d
@@ -1674,6 +1695,7 @@
        ;; 1. render depth of scene to texture (from light's perspective)
        ;; render scene from light's point of view
        (fude-gl:with-framebuffer (depth-map (:depth-buffer-bit)
+                                            ;; To specify not clear color.
                                             :color nil :win win)
          (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
                  (3d-matrices:m*
@@ -1683,19 +1705,24 @@
          (render-scene 'plane-vao))
        (gl:clear :color-buffer-bit :depth-buffer-bit)
        ;; render Depth map to quad for visual debugging
-       #| Comment outted, only need with perspective projection.
-       (fude-gl:send near-plane 'debug-quad :uniform "nearPlane")
-       (fude-gl:send far-plane 'debug-quad :uniform "farPlane")
-       |#
-       (setf (fude-gl:uniform 'debug-quad "depthMap" :unit 0)
-               (fude-gl:framebuffer-texture
-                 (fude-gl:find-framebuffer 'depth-map)))
-       (fude-gl:draw 'shadow-quad)))))
+       (fude-gl:with-uniforms ((np "nearPlane") (fp "farPlane")
+                               (depth-map :unit 0))
+         ;; To explicitly represents the relationship of the
+         ;; vertices and shader.
+         (fude-gl:shader 'shadow-quad)
+         (setf ; Comment outted, only need with perspective projection.
+                 #|
+               np near-plane
+               fp far-plane ; |#
+               depth-map
+                 (fude-gl:framebuffer-texture
+                   (fude-gl:find-framebuffer 'depth-map)))
+         (fude-gl:draw 'shadow-quad))))))
 
 (defun render-scene (vertices)
   ;; floor
   (fude-gl:in-vertices vertices)
-  (let ((shader (fude-gl:shader (fude-gl:find-vertices vertices))))
+  (let ((shader (fude-gl:shader vertices)))
     (fude-gl:with-uniforms (model)
         shader
       (setf model (3d-matrices:meye 4))
@@ -1723,6 +1750,8 @@
 (fude-gl:define-vertex-attribute normal (a b c))
 
 (fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
+  ;; To specify user defined complex type (ARGSET in the example below),
+  ;; var-spec list is used for second element of var-spec.
   (:vertex ((argset
              ((|fragPos| :vec3) (normal :vec3) (coord :vec2)
               (|fragPosLightSpace| :vec4)))
