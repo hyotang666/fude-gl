@@ -395,19 +395,7 @@
                             (format nil format version in (remove nil out)
                                     (delete nil uniform)
                                     (remove nil (append varying varying%))
-                                    (loop :for x :in main
-                                          :if (typep x 'cons)
-                                            :collect x :into exp
-                                          :else
-                                            :collect x :into main
-                                          :finally (return
-                                                    `(,@exp
-                                                      (declaim
-                                                       (ftype (function nil
-                                                               (values))
-                                                              main))
-                                                      (defun main ()
-                                                        ,@main))))))
+                                    main))
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 

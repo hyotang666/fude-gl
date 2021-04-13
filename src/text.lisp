@@ -49,10 +49,14 @@
 
 (defshader glyph 330 (xy st)
   (:vertex ((|texCoords| :vec2) &uniform (projection :mat4))
-    "texCoords = st;"
-    "gl_Position = projection * vec4(xy, 0.0, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "texCoords = st;"
+      "gl_Position = projection * vec4(xy, 0.0, 1.0);"))
   (:fragment ((color :vec4) &uniform (text :|sampler2D|) (|textColor| :vec3))
-    "color = vec4(textColor, 1.0) * vec4(1.0, 1.0, 1.0, texture(text, texCoords).r);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "color = vec4(textColor, 1.0) * vec4(1.0, 1.0, 1.0, texture(text, texCoords).r);")))
 
 (defvertices glyph
     (make-array (* 4 6) :element-type 'single-float :initial-element 0.0)

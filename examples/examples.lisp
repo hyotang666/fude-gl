@@ -42,15 +42,23 @@
 ;; The first element of the output spec must a symbol.
 ;; The second element of the output spec is a keyword symbol that names a GLSL type.
 ;;
-;; The rest elements of the clause is GLSL source strings.
+;; The rest elements of the definitions of glsl codes.
+;; You can specify function with DEFUN form.
+;; DEFUN form require FTYPE DECLAIM.
+;; (VALUES) represents 'void'.
 
 (fude-gl:defshader hello-triangle 330 (fude-gl:xy)
-  (:vertex () "gl_Position = vec4(xy, 0.0, 1.0);")
+  (:vertex ()
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "gl_Position = vec4(xy, 0.0, 1.0);"))
   #++
-  (:vertex () (setf gl-position (vec4 xy 0.0 1.0)))
-  (:fragment ((|outColor| :vec4)) "outColor = vec4(1.0, 1.0, 1.0, 1.0);")
+  (:vertex ()
+    (values :gl-position (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
+  (:fragment ((|outColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "outColor = vec4(1.0, 1.0, 1.0, 1.0);"))
   #++
-  (:fragment ((out-color :vec4)) (setf out-color (vec4 1.0 1.0 1.0 1.0))))
+  (:fragment ((out-color :vec4)) (values :out-color (3d-vectors:vec4 1 1 1 1))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *triangle*
@@ -103,10 +111,12 @@
   ;; The first element of the uniform-spec must be a symbol.
   ;; The second element of the uniform-spec is a keyword symbol that names GLSL type.
   (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
-    "outColor = vec4(triangleColor, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "outColor = vec4(triangleColor, 1.0);"))
   #++
   (:fragment ((out-color :vec4) &uniform (triangle-color :vec3))
-    (setf out-color (vec4 triangle-color 1.0))))
+    (values :out-color
+            (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) triangle-color))))
 
 (fude-gl:defvertices uniform-demo *triangle*)
 
@@ -136,14 +146,22 @@
 ;; You can specify some attributes in the attributes list.
 
 (fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
-  (:vertex ((color :vec3)) "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);")
+  (:vertex ((color :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);"))
   #++
   (:vertex ((color :vec3))
-    (setf color rgb
-          |gl_Position| (vec4 xy 0.0 1.0)))
-  (:fragment ((|outColor| :vec4)) "outColor = vec4(color, 1.0);")
+    (values :color
+            rgb
+            :gl-position
+            (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
+  (:fragment ((|outColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "outColor = vec4(color, 1.0);"))
   #++
-  (:fragment ((out-color :vec4)) (setf out-color (vec4 color 1.0))))
+  (:fragment ((out-color :vec4))
+    (values :out-color
+            (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) color))))
 
 (fude-gl:defvertices colored-triangle
     (concatenate '(array single-float (*))
@@ -238,19 +256,27 @@
 
 (fude-gl:defshader texture-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:st)
   (:vertex ((color :vec3) (texcoord :vec2))
-    "texcoord = st;"
-    "color = rgb;"
-    "gl_Position = vec4(xy, 0.0, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "texcoord = st;"
+      "color = rgb;"
+      "gl_Position = vec4(xy, 0.0, 1.0);"))
   #++
   (:vertex ((color :vec3) (texcoord :vec2))
-    (setf texcoord st
-          color rgb
-          |gl_Position| (vec4 xy 0.0 1.0)))
+    (values :texcoord
+            st
+            :color
+            rgb
+            :gl-position
+            (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
   (:fragment ((|outColor| :vec4) &uniform (tex :|sampler2D|))
-    "outColor = texture(tex, texcoord) * vec4(color, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "outColor = texture(tex, texcoord) * vec4(color, 1.0);"))
   #++
   (:fragment ((out-color :vec4) &uniform (tex :|sampler2D|))
-    (setf out-color (* (texture tex texcoord) (vec4 color 1.0)))))
+    (values :out-color
+            (* (texture tex texcoord)
+               (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) color)))))
 
 (defparameter *png*
   (opticl:read-png-file
@@ -330,17 +356,19 @@
 
 (fude-gl:defshader mix-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((texcoord :vec2))
-    "texcoord = st;"
-    "gl_Position = vec4(xy, 0.0, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "texcoord = st;" "gl_Position = vec4(xy, 0.0, 1.0);"))
   #++
   (:vertex ((texcoord :vec2))
     (setf texcoord st
           |gl_Position| (vec4 xy 0.0 1.0)))
   (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|)
               (tex2 :|sampler2D|))
-    "outColor = mix(texture(tex1, texcoord),
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "outColor = mix(texture(tex1, texcoord),
                      texture(tex2, texcoord),
-                     0.5);")
+                     0.5);"))
   #++
   (:fragment ((out-color :vec4) &uniform (tex1 :|sampler2D|)
               (tex2 :|sampler2D|))
@@ -389,10 +417,14 @@
 ;;;; HELLO from glut-examples.
 
 (fude-gl:defshader hello 330 (fude-gl:xy)
-  (:vertex () "gl_Position = vec4(xy,0.0,1.0);")
+  (:vertex ()
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "gl_Position = vec4(xy,0.0,1.0);"))
   #++
   (:vertex () (setf |gl_Position| (vec4 xy 0.0 1.0)))
-  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);")
+  (:fragment ((color :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);"))
   #++
   (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
 
@@ -423,11 +455,14 @@
 
 (fude-gl:defshader double 330 (fude-gl:xyz)
   (:vertex (&uniform (transform :mat4))
-    "gl_Position = transform * vec4(xyz, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "gl_Position = transform * vec4(xyz, 1.0);"))
   #++
   (:vertex ((tex-coord :vec2) &uniform (transform :mat4))
     (setf |gl_Position| (* transform (vec4 xyz 1.0))))
-  (:fragment ((color :vec4)) "color = vec4(1.0, 1.0, 1.0, 1.0);")
+  (:fragment ((color :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);"))
   #++
   (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
 
@@ -485,14 +520,18 @@
 
 (fude-gl:defshader transform-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (transform :mat4))
-    "gl_Position = transform * vec4(xy, 0.0, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = transform * vec4(xy, 0.0, 1.0);"
+      "coord = st;"))
   #++
   (:vertex ((coord :vec2) &uniform (transform :mat4))
     (setf |gl_Position| (* transform (vec4 xy 0.0 1.0))
           coord st))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
   #++
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2))))
@@ -646,10 +685,14 @@
 (fude-gl:defshader coord-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    "gl_Position = projection * view * model * vec4(xy, 0.0, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = projection * view * model * vec4(xy, 0.0, 1.0);"
+      "coord = st;"))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
 
 (fude-gl:defvertices coord-demo
     (concatenate '(array single-float (*))
@@ -700,10 +743,13 @@
 
 (fude-gl:defshader ortho-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (projection :mat4) (model :mat4))
-    "gl_Position = projection * model * vec4(xy, 0.0, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = projection * model * vec4(xy, 0.0, 1.0);"
+      "coord = st;"))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
-    "color = texture(tex, coord);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = texture(tex, coord);")))
 
 (fude-gl:defvertices ortho-demo
     (concatenate '(array single-float (*))
@@ -743,10 +789,14 @@
 (fude-gl:defshader depth-demo 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
+      "coord = st;"))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *depth-demo*
@@ -823,10 +873,14 @@
 (fude-gl:defshader cubes 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
+      "coord = st;"))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
 
 (fude-gl:defvertices cubes *depth-demo*)
 
@@ -1070,15 +1124,19 @@
   ;; When you want to use array for uniform variable,
   ;; you can specify its size in the third element of the uniform spec.
   (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
-    "vec2 offset = offsets[gl_InstanceID];"
-    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-    "fColor = rgb;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "vec2 offset = offsets[gl_InstanceID];"
+      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+      "fColor = rgb;"))
   #++
   (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
     (let ((offset :vec2 (aref offsets |gl_instanceID|)))
       (setf gl-position (vec4 (+ xy offset) 0.0 1.0)
             f-color rgb)))
-  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+  (:fragment ((|fragColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "fragColor = vec4(fColor, 1.0);")))
 
 (fude-gl:defvertices instancing *instancing*)
 
@@ -1122,9 +1180,13 @@
 (fude-gl:defshader instanced-arrays-demo 330 (fude-gl:xy fude-gl:rgb
                                               fude-gl:offset)
   (:vertex ((|fColor| :vec3))
-    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-    "fColor = rgb;")
-  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+      "fColor = rgb;"))
+  (:fragment ((|fragColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "fragColor = vec4(fColor, 1.0);")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *translations*
@@ -1163,14 +1225,18 @@
 
 (fude-gl:defshader instance-id-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:offset)
   (:vertex ((|fColor| :vec3))
-    "gl_Position = vec4(xy * (gl_InstanceID / 100.0) + offset, 0.0, 1.0);"
-    "fColor = rgb;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = vec4(xy * (gl_InstanceID / 100.0) + offset, 0.0, 1.0);"
+      "fColor = rgb;"))
   #++
   (:vertex ((|fColor| :vec3))
     (setf gl-position
             (vec4 (+ (* xy (/ |gl_InstanceID| 100.0)) offset) 0.0 1.0)
           f-color rgb))
-  (:fragment ((|fragColor| :vec4)) "fragColor = vec4(fColor, 1.0);"))
+  (:fragment ((|fragColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "fragColor = vec4(fColor, 1.0);")))
 
 (fude-gl:defvertices instance-id-demo *instancing*
   :instances `((fude-gl:offset ,*translations*)))
@@ -1196,9 +1262,13 @@
 (fude-gl:defshader some-instances-demo 330 (fude-gl:xy fude-gl:rgb
                                             fude-gl:offset fude-gl:a)
   (:vertex ((|fColor| :vec4))
-    "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-    "fColor = vec4(rgb, a);")
-  (:fragment ((|fragColor| :vec4)) "fragColor = fColor;"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
+      "fColor = vec4(rgb, a);"))
+  (:fragment ((|fragColor| :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "fragColor = fColor;")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-random-alpha-array (size)
@@ -1279,10 +1349,13 @@
 (fude-gl:defshader depth-testing 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    "coord = st;"
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "coord = st;"
+      "gl_Position = projection * view * model * vec4(xyz, 1.0);"))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
-    "color = texture(tex, coord);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = texture(tex, coord);")))
 
 (defparameter *marble*
   (let ((pathname (merge-pathnames "marble.jpg" (user-homedir-pathname))))
@@ -1364,9 +1437,12 @@
 ;;;; FRAMEBUFFER
 
 (fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
-  (:vertex ((coord :vec2)) "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;")
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;"))
   (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
-    "color = vec4(texture(screen, coord).rgb, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = vec4(texture(screen, coord).rgb, 1.0);"))
   #++
   (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
     (setf color (vec4 (rgb (texture screen coord)) 1.0))))
@@ -1380,10 +1456,13 @@
 (fude-gl:defshader framebuffer-vertices 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-    "coord = st;")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
+      "coord = st;"))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
-    "color = texture(tex, coord);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "color = texture(tex, coord);")))
 
 (fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
 
@@ -1468,11 +1547,14 @@
 
 (fude-gl:defshader simple-depth 330 (fude-gl:xyz)
   (:vertex (&uniform (|lightSpaceMatrix| :mat4) (model :mat4))
-    "gl_Position = lightSpaceMatrix * model * vec4(xyz, 1.0);")
-  (:fragment ()))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "gl_Position = lightSpaceMatrix * model * vec4(xyz, 1.0);"))
+  (:fragment () (declaim (ftype (function nil (values)) main)) (defun main ())))
 
 (fude-gl:defshader debug-quad 330 (fude-gl:xyz fude-gl:st)
-  (:vertex ((coord :vec2)) "coord = st;" "gl_Position = vec4(xyz, 1.0);")
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () "coord = st;" "gl_Position = vec4(xyz, 1.0);"))
   (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
               (|nearPlane| :float) (|farPlane| :float))
     ;; You can specify local function for shader with defun clause.
@@ -1481,9 +1563,11 @@
     (defun |linearizeDepth| (depth)
       "float z = depth * 2.0 - 1.0; // Back to NDC"
       "return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));")
-    "float depthValue = texture(depthMap, coord).r;"
-    "// color = vec4(vec3(linearizeDepth(depthValue) / farPlane), 1.0); // Perspective."
-    "color = vec4(vec3(depthValue), 1.0); // orthographic."))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "float depthValue = texture(depthMap, coord).r;"
+      "// color = vec4(vec3(linearizeDepth(depthValue) / farPlane), 1.0); // Perspective."
+      "color = vec4(vec3(depthValue), 1.0); // orthographic.")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *framebuffer-plane-vertices*
@@ -1644,11 +1728,13 @@
               (|fragPosLightSpace| :vec4)))
             &uniform (projection :mat4) (view :mat4) (model :mat4)
             (|lightSpaceMatrix| :mat4))
-    "argset.fragPos = vec3(model * vec4(xyz, 1.0));"
-    "argset.normal = transpose(inverse(mat3(model))) * normal;"
-    "argset.coord = st;"
-    "argset.fragPosLightSpace = lightSpaceMatrix * vec4(argset.fragPos, 1.0);"
-    "gl_Position = projection * view * model * vec4(xyz, 1.0);")
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "argset.fragPos = vec3(model * vec4(xyz, 1.0));"
+      "argset.normal = transpose(inverse(mat3(model))) * normal;"
+      "argset.coord = st;"
+      "argset.fragPosLightSpace = lightSpaceMatrix * vec4(argset.fragPos, 1.0);"
+      "gl_Position = projection * view * model * vec4(xyz, 1.0);"))
   (:fragment ((|outColor| :vec4) &uniform (|diffuseTexture| :|sampler2D|)
               (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
     (declaim (ftype (function (3d-vectors:vec4) float) |calculateShadow|))
@@ -1664,26 +1750,28 @@
       "// check whether current frag pos is in shadow"
       "float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;"
       "return shadow;")
-    "vec3 color = texture(diffuseTexture, argset.coord).rgb;"
-    "vec3 normal = normalize(argset.normal);"
-    "vec3 lightColor = vec3(0.3);"
-    "// ambient"
-    "vec3 ambient = 0.3 * color;"
-    "// diffuse"
-    "vec3 lightDir = normalize(lightPos - argset.fragPos);"
-    "float diff = max(dot(lightDir, normal), 0.0);"
-    "vec3 diffuse = diff * lightColor;"
-    "// specular"
-    "vec3 viewDir = normalize(viewPos - argset.fragPos);"
-    "vec3 reflectDir = reflect(-lightDir, normal);"
-    "float spec = 0.0;"
-    "vec3 halfwayDir = normalize(lightDir + viewDir);"
-    "spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);"
-    "vec3 specular = spec * lightColor;"
-    "// calculate shadow"
-    "float shadow = calculateShadow(argset.fragPosLightSpace);"
-    "vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;"
-    "outColor = vec4(lighting, 1.0);"))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      "vec3 color = texture(diffuseTexture, argset.coord).rgb;"
+      "vec3 normal = normalize(argset.normal);"
+      "vec3 lightColor = vec3(0.3);"
+      "// ambient"
+      "vec3 ambient = 0.3 * color;"
+      "// diffuse"
+      "vec3 lightDir = normalize(lightPos - argset.fragPos);"
+      "float diff = max(dot(lightDir, normal), 0.0);"
+      "vec3 diffuse = diff * lightColor;"
+      "// specular"
+      "vec3 viewDir = normalize(viewPos - argset.fragPos);"
+      "vec3 reflectDir = reflect(-lightDir, normal);"
+      "float spec = 0.0;"
+      "vec3 halfwayDir = normalize(lightDir + viewDir);"
+      "spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);"
+      "vec3 specular = spec * lightColor;"
+      "// calculate shadow"
+      "float shadow = calculateShadow(argset.fragPosLightSpace);"
+      "vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;"
+      "outColor = vec4(lighting, 1.0);")))
 
 (fude-gl:defvertices plane-base-vao *framebuffer-plane-vertices*
   :shader 'shadow-mapping
