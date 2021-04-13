@@ -1224,7 +1224,7 @@
   (format :rgb :type base-internal-format :read-only t)
   (pixel-type :unsigned-byte :type pixel-type :read-only t)
   (options nil :type list :read-only t)
-  (attachment :color-attachment0 :read-only t)
+  (attachment :color-attachment0 :type attachment :read-only t)
   (renderbuffer-initializer #'default-renderbuffer-initializer
                             :type function
                             :read-only t)
