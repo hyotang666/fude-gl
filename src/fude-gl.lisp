@@ -644,6 +644,13 @@
     (gl:uniformf (uniform to uniform) x y z)))
 
 (defmethod send
+           ((o 3d-vectors:vec2) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (3d-vectors:with-vec2 (x y)
+      o
+    (gl:uniformf (uniform to uniform) x y)))
+
+(defmethod send
            ((o vector) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
   (gl:uniformfv (uniform to uniform) o))
