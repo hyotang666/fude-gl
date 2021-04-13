@@ -769,6 +769,13 @@
 
 (defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
 
+(defmethod shader ((o symbol)) (shader (find-vertices o)))
+
+(define-compiler-macro shader (&whole whole o)
+  (if (constantp o)
+      `',(shader (find-vertices (eval o) :construct nil))
+      whole))
+
 ;; CONSTRUCT helpers
 
 (defun find-attribute (attribute class)
