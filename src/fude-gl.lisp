@@ -1185,7 +1185,7 @@
 (set-pprint-dispatch '(cons (member with-clear with-framebuffer))
                      'pprint-with-clear)
 
-;;;; FRAME-BUFFER
+;;;; FRAMEBUFFER
 
 (defvar *framebuffers* (make-hash-table :test #'eq))
 
