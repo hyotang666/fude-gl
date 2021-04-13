@@ -413,15 +413,16 @@
      (shader-lambda-list
       (out-spec* uniform-keyword? uniform-spec* varying-keyword?
        varying-spec*))
-     (out-spec (var type-key))
+     (out-spec (var type-spec))
      (uniform-keyword (satisfies uniform-keywordp))
-     (uniform-spec (var type-key vector-size?))
+     (uniform-spec (var type-spec vector-size?))
      (vector-size unsigned-byte)
      (varying-keyword? (satisfies varying-keywordp))
-     (varying-spec (var type-key))
+     (varying-spec (var type-spec))
      ;;
      (var symbol)
-     (type-key (or t #|KLUDGE|# keyword))
+     (type-spec (or complex-type keyword))
+     (complex-type out-spec*)
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
