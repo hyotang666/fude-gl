@@ -64,10 +64,14 @@
 
 (defvar *glyphs*)
 
-(defmacro with-glyph ((&key (size '*font-size*)) &body body)
+(defparameter *char-filter* :linear)
+
+(defmacro with-glyph
+          ((&key (size '*font-size*) (filter '*char-filter*)) &body body)
   `(let ((*fonts* (alexandria:copy-hash-table *fonts*))
          (*glyphs* (make-hash-table))
-         (*font-size* ,size))
+         (*font-size* ,size)
+         (*char-filter* ,filter))
      (unwind-protect (progn ,@body)
        (loop :for g :being :each :hash-value of *glyphs*
              :collect (char-glyph-texture g) :into textures
@@ -142,8 +146,10 @@
                                  :unsigned-byte image)
                 (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
                 (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
-                (gl:tex-parameter :texture-2d :texture-min-filter :linear)
-                (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+                (gl:tex-parameter :texture-2d
+                                  :texture-min-filter *char-filter*)
+                (gl:tex-parameter :texture-2d
+                                  :texture-mag-filter *char-filter*)
                 (setf (gethash char *glyphs*)
                         (make-char-glyph :texture texture
                                          :w w
@@ -198,11 +204,15 @@
                 (incf x (* scale (char-glyph-advance glyph)))))))
 
 (defmacro with-text-renderer
-          ((name &key (size 16) (win (alexandria:required-argument :win)))
+          ((name
+            &key
+            (size 16)
+            (filter '*char-filter*)
+            (win (alexandria:required-argument :win)))
            &body body)
   `(with-shader ()
      (setf (uniform 'glyph "projection") (ortho ,win))
-     (with-glyph (:size ,size)
+     (with-glyph (:size ,size :filter ,filter)
        (flet ((,name (string &key (x 0) (y 0) (scale 1))
                 (render-text string :scale scale :x x :y y :win ,win)))
          ,@body))))
