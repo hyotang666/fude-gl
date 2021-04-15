@@ -1020,6 +1020,12 @@
   (loop :for name :being :each :hash-key :of *textures*
         :collect name))
 
+(define-compiler-macro find-texture (&whole whole name &rest args)
+  (declare (ignore args))
+  (when (constantp name)
+    (find-texture (eval name) :construct nil :error t))
+  whole)
+
 (defun find-texture (name &key (construct t) (error t))
   (if (typep name 'texture)
       name
