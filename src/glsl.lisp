@@ -129,7 +129,7 @@
                     (list "~(~A~)~^ ~@_" ; return type
                           "~A~^ ~@_" ; function name.
                           (list "~:<" ; logical block for args.
-                                "~@{~{~(~A~)~^ ~A~^, ~}~}" ; argbody.
+                                "~@{~(~A~)~^ ~A~^, ~}" ; argbody.
                                 "~:>~^ ~%")
                           "~:<{~;~3I~:@_" ; function body.
                           "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
@@ -137,7 +137,7 @@
         (if (equal '(values) return)
             :void
             return)
-        (second exp) (mapcar #'list arg-types (third exp)) (cdddr exp)))))
+        (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))))
 
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
