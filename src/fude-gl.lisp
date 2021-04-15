@@ -1392,3 +1392,42 @@
         3d-vectors:+vz+ (radians rotate))
       (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
     (3d-vectors:vec w h 1)))
+
+;;;; IMAGE-LOADER
+;; *IMAGES*
+
+(defparameter *images* (make-hash-table :test #'equal))
+
+(defun list-all-images () (alexandria:hash-table-keys *images*))
+
+(defun image (name)
+  (or (gethash name *images*)
+      (error "Unknown image ~S. Eval (fude-gl:list-all-images)." name)))
+
+;; LOAD-IMAGE
+
+(defmacro efiletype-case (pathname &body clause*)
+  ;; Trivial syntax check.
+  (assert (every (lambda (clause) (typep clause '(cons cons *))) clause*))
+  (let ((type (gensym "FILETYPE")))
+    `(let ((,type (pathname-type ,pathname)))
+       (cond
+         ,@(mapcar
+             (lambda (clause)
+               `((find ,type ',(car clause) :test #'string-equal)
+                 ,@(cdr clause)))
+             clause*)
+         (t
+          (error "Not supported file type ~S. ~S" ,type
+                 ',(loop :for c :in clause*
+                         :append (car c))))))))
+
+(defun load-image (filename)
+  (efiletype-case (truename filename)
+    ((png) (opticl:read-png-file filename))
+    ((jpg jpeg) (opticl:read-jpeg-file filename))))
+
+;; DEFIMAGE
+
+(defmacro defimage (name pathname)
+  `(progn (setf (gethash ',name *images*) (load-image ,pathname)) ',name))

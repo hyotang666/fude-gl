@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "2.20.8"
+  "2.21.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -20,6 +20,7 @@
    "vecto" ; TTF rasterization.
    "zpb-ttf" ; TTF font loader.
    "3d-matrices" ; Matrix operations.
+   "opticl" ; Image file loader.
    )
   :pathname
   "src/"
