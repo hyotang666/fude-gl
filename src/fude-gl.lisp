@@ -947,6 +947,9 @@
 (defmacro defvertices (name array &rest options)
   (unless (getf options :shader)
     (assert (find-class name)))
+  (let ((draw-mode (getf options :draw-mode)))
+    (when draw-mode
+      (check-type draw-mode draw-mode)))
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (setf (gethash ',name *vertices*)
              ,(cond
