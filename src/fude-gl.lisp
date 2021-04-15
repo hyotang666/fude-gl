@@ -1433,8 +1433,8 @@
 
 (defun load-image (filename)
   (efiletype-case (truename filename)
-    ((png) (opticl:read-png-file filename))
-    ((jpg jpeg) (opticl:read-jpeg-file filename))))
+    ((png) (opticl:vertical-flip-image (opticl:read-png-file filename)))
+    ((jpg jpeg) (opticl:vertical-flip-image (opticl:read-jpeg-file filename)))))
 
 ;; DEFIMAGE
 
