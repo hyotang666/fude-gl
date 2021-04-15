@@ -570,9 +570,7 @@
 (defun uniform (shader name)
   (handler-case (get-uniform-location (program-id shader) name)
     (uniform-error (c)
-      (if (find (error-uniform c) (uniforms shader)
-                :key #'symbol-camel-case
-                :test #'equal)
+      (if (find (error-uniform c) (uniforms shader) :test #'equal)
           (error "Uniform ~S is not used in shader ~S? ~A" (error-uniform c)
                  shader (uniforms shader))
           (error
