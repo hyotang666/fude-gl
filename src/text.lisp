@@ -203,16 +203,7 @@
                 (gl:draw-arrays :triangles 0 6)
                 (incf x (* scale (char-glyph-advance glyph)))))))
 
-(defmacro with-text-renderer
-          ((name
-            &key
-            (size 16)
-            (filter '*char-filter*)
-            (win (alexandria:required-argument :win)))
-           &body body)
+(defmacro with-text ((win &key (size 16) (filter '*char-filter*)) &body body)
   `(with-shader ()
      (setf (uniform 'glyph "projection") (ortho ,win))
-     (with-glyph (:size ,size :filter ,filter)
-       (flet ((,name (string &key (x 0) (y 0) (scale 1))
-                (render-text string :scale scale :x x :y y :win ,win)))
-         ,@body))))
+     (with-glyph (:size ,size :filter ,filter) ,@body)))

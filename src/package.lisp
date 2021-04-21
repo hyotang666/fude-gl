@@ -52,7 +52,7 @@
            #:framebuffer-texture
            #:find-framebuffer
            ;;;; TEXT-RENDERING
-           #:with-text-renderer
+           #:with-text
            #:render-text
            #:glyph ; shader-class
            #:with-glyph

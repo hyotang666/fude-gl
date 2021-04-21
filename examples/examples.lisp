@@ -1094,12 +1094,11 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :blend)
       (gl:blend-func :src-alpha :one-minus-src-alpha))
-    ;; To render text, you can use a macro WITH-TEXT-RENDERER.
+    ;; To render text, you can use a macro WITH-TEXT as setup.
     ;; The first argument is spec.
-    ;; The first element of the spec must be a symbol that will be a function.
+    ;; The first element of the spec must be a symbol that evaluated to sdl2-ffi:sdl-window.
     ;; The keyword parameter :SIZE specify font size.
-    ;; The required keyword parameter :WIN specify sdl2 window.
-    (fude-gl:with-text-renderer (renderer :size 32 :win win))
+    (fude-gl:with-text (win :size 32))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -1108,7 +1107,7 @@
           ;; The first arument of the text renderer is a string to render.
           ;; The keyword parameter :X and :Y specifies position.
           ;; You can use :CENTER to specify centering the text.
-          (renderer "Hello world! g" :x 0 :y :center))))))
+          (fude-gl:render-text "Hello world! g" :x 0 :y :center :win win))))))
 
 ;;;; INSTANCING
 
