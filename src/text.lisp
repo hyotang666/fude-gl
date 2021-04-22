@@ -189,15 +189,18 @@
                          scale))
             :for w = (* scale (char-glyph-w glyph))
             :for h = (* scale (char-glyph-h glyph))
-            :do (loop :for elt
-                           :in (list x-pos (+ h y-pos) 0 0 ; upper left
-                                     x-pos y-pos 0 1 ; bottom left
-                                     (+ w x-pos) y-pos 1 1 ; bottom right
-                                     x-pos (+ h y-pos) 0 0 ; upper left
-                                     (+ w x-pos) y-pos 1 1 ; bottom right
-                                     (+ w x-pos) (+ h y-pos) 1 0) ; upper right
-                      :for i :upfrom 0
-                      :do (setf (gl:glaref source i) (float elt)))
+            :do #.(flet ((assign (form) ; as debuggable macrolet.
+                           `(setf ,@(loop :for exp :in form
+                                          :for i :upfrom 0
+                                          :collect `(gl:glaref source ,i)
+                                          :collect `(float ,exp)))))
+                    (assign
+                      `(x-pos (+ h y-pos) 0 0 ; upper left
+                              x-pos y-pos 0 1 ; bottom left
+                              (+ w x-pos) y-pos 1 1 ; bottom right
+                              x-pos (+ h y-pos) 0 0 ; upper left
+                              (+ w x-pos) y-pos 1 1 ; bottom right
+                              (+ w x-pos) (+ h y-pos) 1 0)))
                 (gl:bind-texture :texture-2d (char-glyph-texture glyph))
                 (send source buffer :method #'gl:buffer-sub-data)
                 (gl:draw-arrays :triangles 0 6)
