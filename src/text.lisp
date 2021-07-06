@@ -53,10 +53,11 @@
     (defun main ()
       "texCoords = st;"
       "gl_Position = projection * vec4(xy, 0.0, 1.0);"))
-  (:fragment ((color :vec4) &uniform (text :|sampler2D|) (|textColor| :vec3))
+  (:fragment ((color :vec4) &uniform (text :|sampler2D|) (|textColor| :vec3)
+              (alpha :float))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = vec4(textColor, 1.0) * vec4(1.0, 1.0, 1.0, texture(text, texCoords).r);")))
+      "color = vec4(textColor, alpha) * vec4(1.0, 1.0, 1.0, texture(text, texCoords).r);")))
 
 (defvertices glyph
     (make-array (* 4 6) :element-type 'single-float :initial-element 0.0)
@@ -161,6 +162,7 @@
 (defun render-text
        (text
         &key (x 0) (y 0) (scale 1) (color '(1 1 1)) (font "Ubuntu-M")
+        (alpha 1.0)
         (win
          (when (or (eq :center x) (eq :center y))
            (alexandria:required-argument :win))))
@@ -179,6 +181,7 @@
       (in-vertices 'glyph)
     (let ((source (buffer-source buffer)))
       (apply #'gl:uniformf (uniform 'glyph "textColor") color)
+      (setf (uniform 'glyph "alpha") alpha)
       (gl:active-texture 0)
       (gl:bind-vertex-array vertex-array)
       (loop :for glyph :in text
