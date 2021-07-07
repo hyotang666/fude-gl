@@ -735,21 +735,6 @@
                  :report "Return vertices without constructing."
                vertices))))))
 
-;; *VERTEX-ARRAY*
-
-(defvar *vertex-array*)
-
-(defun in-vertex-array (vao) (gl:bind-vertex-array (setf *vertex-array* vao)))
-
-(defmacro in-vertices (form &key (with-vertex-array t))
-  (when (constantp form)
-    (find-vertices (eval form) :construct nil :error t))
-  `(let ((vertices (find-vertices ,form)))
-     (gl:use-program (program-id (shader vertices)))
-     ,@(when with-vertex-array
-         `((in-vertex-array (vertex-array vertices))))
-     vertices))
-
 ;; VERTICES
 
 (defclass vertices ()
@@ -774,12 +759,27 @@
 
 (defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
 
-(defmethod shader ((o symbol)) (shader (find-vertices o)))
-
 (define-compiler-macro shader (&whole whole o)
   (if (constantp o)
       `',(shader (find-vertices (eval o) :construct nil))
       whole))
+
+(defmethod shader ((o symbol)) (shader (find-vertices o)))
+
+;; *VERTEX-ARRAY*
+
+(defvar *vertex-array*)
+
+(defun in-vertex-array (vao) (gl:bind-vertex-array (setf *vertex-array* vao)))
+
+(defmacro in-vertices (form &key (with-vertex-array t))
+  (when (constantp form)
+    (find-vertices (eval form) :construct nil :error t))
+  `(let ((vertices (find-vertices ,form)))
+     (gl:use-program (program-id (shader vertices)))
+     ,@(when with-vertex-array
+         `((in-vertex-array (vertex-array vertices))))
+     vertices))
 
 ;; CONSTRUCT helpers
 
