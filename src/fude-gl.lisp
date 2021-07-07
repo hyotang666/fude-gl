@@ -1377,7 +1377,7 @@
                        (camera-up camera)))
 
 (defun move (camera x y z)
-  (3d-vectors:vsetf (camera-position camera) x y z)
+  (3d-vectors::%vsetf (camera-position camera) x y z)
   camera)
 
 ;; MATRIX
