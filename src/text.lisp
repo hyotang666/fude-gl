@@ -159,6 +159,17 @@
                                          :bearing-y bearing-y
                                          :advance advance))))))))
 
+(define-compiler-macro render-text
+                       (&whole whole text
+                        &key x y scale color font alpha win &environment env)
+  (declare (ignore text scale color font alpha))
+  ;; Compile time argument checking.
+  (when (and (or (and (constantp x env) (eq :center (eval x)))
+                 (and (constantp y env) (eq :center (eval y))))
+             (null win))
+    (error "To render text center, you must specify keyword argument :WIN."))
+  whole)
+
 (defun render-text
        (text
         &key (x 0) (y 0) (scale 1) (color '(1 1 1)) (font "Ubuntu-M")
