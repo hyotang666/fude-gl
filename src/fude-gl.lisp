@@ -1096,7 +1096,8 @@
         :collect name))
 
 (define-compiler-macro find-texture (&whole whole name &rest args)
-  (declare (ignore args))
+  (declare (ignore args)
+           (notinline find-texture))
   (when (constantp name)
     (find-texture (eval name) :construct nil :error t))
   whole)
