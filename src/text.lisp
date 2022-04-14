@@ -165,7 +165,7 @@
         (alpha 1.0)
         (win
          (when (or (eq :center x) (eq :center y))
-           (alexandria:required-argument :win))))
+           (error "To render text center, you must specify :WIN. ~S" text))))
   (when win
     (let ((bbox
            (vecto:string-bounding-box text (ceiling (* scale *font-size*))
