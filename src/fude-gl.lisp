@@ -324,7 +324,7 @@
 (defun varying-keywordp (thing) (and (symbolp thing) (string= '&varying thing)))
 
 (declaim
- (ftype (function ((cons symbol (cons keyword t)))
+ (ftype (function ((cons symbol (cons t t)))
          (values (cons null (cons string (cons string null))) &optional))
         parse-shader-lambda-list-spec))
 
@@ -688,7 +688,7 @@
 
 (defstruct buffer
   name
-  (original (error "ORIGINAL is required.") :type vector)
+  (original (error "ORIGINAL is required.") :type array)
   source
   buffer
   (target :array-buffer :type buffer-target :read-only t)
