@@ -1281,26 +1281,6 @@
 
 ;;;; FRAMEBUFFER
 
-(defvar *framebuffers* (make-hash-table :test #'eq))
-
-(defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
-
-(defun find-framebuffer (name &key (construct t) (error t))
-  (let ((framebuffer (gethash name *framebuffers*)))
-    (cond
-      ((null framebuffer)
-       (when error
-         (error
-           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
-           name)))
-      ((framebuffer-id framebuffer) framebuffer)
-      ((not construct) framebuffer)
-      (t
-       (restart-case (construct framebuffer)
-         (continue ()
-             :report "Return framebuffer without constructing."
-           framebuffer))))))
-
 (defun default-renderbuffer-initializer (framebuffer)
   (with-slots (render-buffer width height)
       framebuffer
@@ -1328,6 +1308,26 @@
   (height (alexandria:required-argument :height)
           :type (mod #.most-positive-fixnum)
           :read-only t))
+
+(defvar *framebuffers* (make-hash-table :test #'eq))
+
+(defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
+
+(defun find-framebuffer (name &key (construct t) (error t))
+  (let ((framebuffer (gethash name *framebuffers*)))
+    (cond
+      ((null framebuffer)
+       (when error
+         (error
+           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
+           name)))
+      ((framebuffer-id framebuffer) framebuffer)
+      ((not construct) framebuffer)
+      (t
+       (restart-case (construct framebuffer)
+         (continue ()
+             :report "Return framebuffer without constructing."
+           framebuffer))))))
 
 (defmethod construct ((o framebuffer))
   (with-slots (id texture render-buffer format width height pixel-type options
