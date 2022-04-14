@@ -745,6 +745,26 @@
           (t (error "Unknown method ~S" method)))))
 
 ;;;; VERTICES
+;; VERTICES
+
+(defclass vertices ()
+  ((shader :type symbol :reader shader)
+   (buffer :type buffer :reader buffer)
+   (attributes :type list :reader attributes)
+   (draw-mode :type draw-mode :reader draw-mode)
+   (vertex-array :type (mod #.most-positive-fixnum) :reader vertex-array)))
+
+(defmethod initialize-instance :after
+           ((o vertices)
+            &key name buffer array shader attributes (draw-mode :triangles))
+  (setf (slot-value o 'shader) (or shader name)
+        (slot-value o 'buffer)
+          (apply #'make-buffer :name :vertices :original array buffer)
+        (slot-value o 'draw-mode) draw-mode
+        (slot-value o 'attributes)
+          (or (mapcar #'find-class attributes)
+              (c2mop:class-direct-superclasses (find-class (or shader name))))))
+
 ;; *VERTICES*
 
 (defvar *vertices* (make-hash-table :test #'eq))
@@ -768,26 +788,6 @@
              (continue ()
                  :report "Return vertices without constructing."
                vertices))))))
-
-;; VERTICES
-
-(defclass vertices ()
-  ((shader :type symbol :reader shader)
-   (buffer :type buffer :reader buffer)
-   (attributes :type list :reader attributes)
-   (draw-mode :type draw-mode :reader draw-mode)
-   (vertex-array :type (mod #.most-positive-fixnum) :reader vertex-array)))
-
-(defmethod initialize-instance :after
-           ((o vertices)
-            &key name buffer array shader attributes (draw-mode :triangles))
-  (setf (slot-value o 'shader) (or shader name)
-        (slot-value o 'buffer)
-          (apply #'make-buffer :name :vertices :original array buffer)
-        (slot-value o 'draw-mode) draw-mode
-        (slot-value o 'attributes)
-          (or (mapcar #'find-class attributes)
-              (c2mop:class-direct-superclasses (find-class (or shader name))))))
 
 ;; Trivial readers.
 
