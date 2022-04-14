@@ -139,6 +139,21 @@
      (format stream "Uniform ~S is not active in ~S" (error-uniform condition)
              (program condition)))))
 
+(define-condition missing-vertices (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing vertices named ~S. ~:@_To see defined vertices, eval ~S"
+             (cell-error-name this) '(list-all-vertices)))))
+
+(define-condition missing-definition (style-warning)
+  ((condition :initarg :condition :reader %condition))
+  (:report
+   (lambda (this output)
+     (format output "~:I~A ~:@_Define before use is recomended."
+             (%condition this)))))
+
 (defvar *condition*) ; For debug use.
 
 (declaim
@@ -565,7 +580,9 @@
 
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
-    (find-vertices (eval thing) :construct nil :error t))
+    (handler-case (find-vertices (eval thing) :construct nil :error t)
+      (missing-vertices (c)
+        (warn 'missing-definition :condition c))))
   whole)
 
 (defgeneric draw (thing))
@@ -772,14 +789,6 @@
 (defun list-all-vertices ()
   (loop :for name :being :each :hash-key :of *vertices*
         :collect name))
-
-(define-condition missing-vertices (cell-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output
-             "Missing vertices named ~S. ~:@_To see defined vertices, eval ~S"
-             (cell-error-name this) '(list-all-vertices)))))
 
 (defun find-vertices (name &key (construct t) (error t))
   (let ((vertices))
