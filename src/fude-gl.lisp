@@ -1,5 +1,7 @@
 (in-package :fude-gl)
 
+(declaim (optimize speed))
+
 ;;;; VERBOSE OPENGL
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
@@ -142,7 +144,7 @@
 (declaim
  (ftype (function
          ((eql :framebuffer) attachment framebuffer-texture-target
-          unsigned-byte integer)
+          (mod #.most-positive-fixnum) integer)
          (values &optional))
         framebuffer-texture-2d))
 
@@ -152,6 +154,7 @@
 
 (defun get-uniform-location (program name)
   (let ((location (gl:get-uniform-location program name)))
+    (declare (fixnum location))
     (assert (not (minusp location)) ()
       'uniform-error :program program
                      :uniform name)
@@ -178,6 +181,8 @@
         (t (error "Not supported type. ~S" cl-type))))
 
 (defun tex-image-2d (array)
+  #+sbcl ; Due to the array dimensions are unknown in compile time.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
     (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
                      (the base-internal-format format)
@@ -189,6 +194,12 @@
                      (make-array (array-total-size array)
                                  :element-type (array-element-type array)
                                  :displaced-to array))))
+
+(declaim
+ (ftype (function
+         (draw-mode vector &key (:offset (mod #.most-positive-fixnum)))
+         (values &optional))
+        draw-elements))
 
 (defun draw-elements (mode cl-vector &key (offset 0))
   (%gl:draw-elements mode (length cl-vector)
@@ -250,6 +261,8 @@
      (defclass ,name ()
        ,(mapcar
           (lambda (slot)
+            #+sbcl ; Due to SLOT may symbol or character.
+            (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
             `(,(intern (format nil "%~A" slot) :fude-gl) :initarg
               ,(intern (string slot) :keyword) :type single-float))
           (or slot* (coerce (symbol-name name) 'list)))
@@ -310,6 +323,11 @@
 
 (defun varying-keywordp (thing) (and (symbolp thing) (string= '&varying thing)))
 
+(declaim
+ (ftype (function ((cons symbol (cons keyword t)))
+         (values (cons null (cons string (cons string null))) &optional))
+        parse-shader-lambda-list-spec))
+
 (defun parse-shader-lambda-list-spec (spec)
   (destructuring-bind
       (name type . vector-size)
@@ -331,6 +349,10 @@
           (if vector-size
               (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
               (symbol-camel-case name)))))
+
+(declaim
+ (ftype (function (list) (values list list list &optional))
+        split-shader-lambda-list))
 
 (defun split-shader-lambda-list (lambda-list)
   (uiop:while-collecting (out uniform varying)
@@ -361,10 +383,11 @@
 (defun class-shader-inputs (superclasses)
   (loop :for c :in (mapcar #'find-class superclasses)
         :for slots = (c2mop:class-direct-slots c)
-        :for i :upfrom 0
+        :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
         :when slots
           :collect (format nil "layout (location = ~A) " i)
-          :and :collect (format nil "~[~;float~:;~:*vec~D~]" (length slots))
+          :and :collect (format nil "~[~;float~:;~:*vec~D~]"
+                                (list-length slots))
           :and :collect (symbol-camel-case (class-name c))))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
@@ -402,7 +425,7 @@
 (defmacro defshader (&whole whole name version superclasses &body shader*)
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
-    ((version unsigned-byte))
+    ((version (mod #.most-positive-fixnum)))
     (((superclass* superclasses) (satisfies vertex-attribute-p)))
     ((shader* (or vertex-clause fragment-clause))
      ;;
@@ -416,7 +439,7 @@
      (out-spec (var type-spec))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-spec vector-size?))
-     (vector-size unsigned-byte)
+     (vector-size (mod #.most-positive-fixnum))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
@@ -508,7 +531,9 @@
 (defun create-program (name)
   (let ((program (program-id name :error nil)))
     (or program
-        (let ((program (setf (gethash name *programs*) (gl:create-program))))
+        (let ((program
+               (setf (gethash name *programs*)
+                       (the (mod #.most-positive-fixnum) (gl:create-program)))))
           (when (zerop program)
             (remhash name *programs*)
             (error "Fails to create program."))
@@ -558,8 +583,10 @@
         (find-class shader)
         (when (constantp name)
           (let ((name (eval name)))
-            (assert (find (subseq name 0 (position #\[ name)) (uniforms shader)
-                          :test #'string=)
+            (declare (string name))
+            (assert (find (subseq name 0 (position #\[ name))
+                          (the list (uniforms shader))
+                          :test #'equal)
               ()
               "Unknown uniform ~S for ~S" name (uniforms shader))))))))
 
@@ -570,7 +597,7 @@
 (defun uniform (shader name)
   (handler-case (get-uniform-location (program-id shader) name)
     (uniform-error (c)
-      (if (find (error-uniform c) (uniforms shader) :test #'equal)
+      (if (find (error-uniform c) (the list (uniforms shader)) :test #'equal)
           (error "Uniform ~S is not used in shader ~S? ~A" (error-uniform c)
                  shader (uniforms shader))
           (error
@@ -589,7 +616,7 @@
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
   (when (constantp shader)
-    (let ((uniforms (uniforms (eval shader))))
+    (let ((uniforms (the list (uniforms (eval shader)))))
       (dolist (var var*)
         (let ((name
                (if (symbolp var)
@@ -597,7 +624,7 @@
                    (if (stringp (cadr var))
                        (cadr var)
                        (symbol-camel-case (car var))))))
-          (assert (find name uniforms :test #'string=))))))
+          (assert (find name uniforms :test #'equal))))))
   (let ((s (gensym "SHADER")))
     `(let ((,s ,shader))
        (symbol-macrolet ,(loop :for spec :in var*
@@ -625,6 +652,8 @@
 (defmethod send
            ((o float) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
+  #+sbcl ; Due to unknown single float or double float.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (in-program to)
   (gl:uniformf (uniform to uniform) o))
 
@@ -651,13 +680,15 @@
 (defmethod send
            ((o vector) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
+  #+sbcl ; Due to unknown upgraded element type.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (gl:uniformfv (uniform to uniform) o))
 
 ;;;; BUFFER
 
 (defstruct buffer
   name
-  original
+  (original (error "ORIGINAL is required.") :type vector)
   source
   buffer
   (target :array-buffer :type buffer-target :read-only t)
@@ -666,11 +697,14 @@
 (defmethod print-object ((o buffer) stream)
   (if *print-escape*
       (print-unreadable-object (o stream :type t)
-        (format stream "~S ~:[unconstructed~;~:*~A~] ~S ~S" (buffer-name o)
-                (buffer-buffer o) (buffer-target o) (buffer-usage o)))
+        (funcall (formatter "~S ~:[unconstructed~;~:*~A~] ~S ~S") stream
+                 (buffer-name o) (buffer-buffer o) (buffer-target o)
+                 (buffer-usage o)))
       (call-next-method)))
 
 (defun make-gl-vector (initial-contents)
+  #+sbcl ; Due to unknown array rank at compile time.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (let* ((length (array-total-size initial-contents))
          (a
           (gl:alloc-gl-array
@@ -742,7 +776,7 @@
    (buffer :type buffer :reader buffer)
    (attributes :type list :reader attributes)
    (draw-mode :type draw-mode :reader draw-mode)
-   (vertex-array :type unsigned-byte :reader vertex-array)))
+   (vertex-array :type (mod #.most-positive-fixnum) :reader vertex-array)))
 
 (defmethod initialize-instance :after
            ((o vertices)
@@ -785,21 +819,27 @@
 
 (defun find-attribute (attribute class)
   (loop :for c :in (c2mop:class-direct-superclasses (find-class class))
-        :for index :upfrom 0
+        :for index :of-type (mod #.most-positive-fixnum) :upfrom 0
         :when (eq attribute (class-name c))
           :return (values c index)
         :finally (error "Missing attribute ~S in ~S" attribute
                         (c2mop:class-direct-superclasses (find-class class)))))
 
 (defun count-attributes (attributes)
-  (loop :for c :in attributes
-        :when (typep c 'attributes)
-          :sum (length (c2mop:class-slots (c2mop:ensure-finalized c)))))
+  (let ((sum 0))
+    (declare ((mod #.most-positive-fixnum) sum))
+    (dolist (c attributes sum)
+      (when (typep c 'attributes)
+        (incf sum
+              (list-length (c2mop:class-slots (c2mop:ensure-finalized c))))))))
 
 (defun attribute-offset (attribute attributes)
-  (loop :for c :in attributes
-        :until (eq attribute (class-name c))
-        :sum (length (c2mop:class-slots c))))
+  (let ((sum 0))
+    (declare ((mod #.most-positive-fixnum) sum))
+    (loop :for c :in attributes
+          :until (eq attribute (class-name c))
+          :do (incf sum (list-length (c2mop:class-slots c))))
+    sum))
 
 (defun link-attribute (a index attributes)
   (let* ((slots (c2mop:class-slots (c2mop:ensure-finalized a)))
@@ -808,21 +848,31 @@
     (etypecase a
       (attributes
        (gl:vertex-attrib-pointer index (length slots) type nil
-                                 (* (count-attributes attributes)
-                                    (cffi:foreign-type-size type))
-                                 (*
-                                   (attribute-offset (class-name a) attributes)
-                                   (cffi:foreign-type-size type))))
+                                 (the fixnum
+                                      (* (count-attributes attributes)
+                                         (the fixnum
+                                              (cffi:foreign-type-size type))))
+                                 (the fixnum
+                                      (*
+                                        (attribute-offset (class-name a)
+                                                          attributes)
+                                        (the fixnum
+                                             (cffi:foreign-type-size type))))))
       (instanced-array
        (gl:vertex-attrib-pointer index (length slots) type nil
-                                 (* (length slots)
-                                    (cffi:foreign-type-size type))
+                                 (the fixnum
+                                      (* (length slots)
+                                         (the fixnum
+                                              (cffi:foreign-type-size type))))
                                  0)
        (%gl:vertex-attrib-divisor index 1)))))
 
+(declaim
+ (ftype (function (list function) (values null &optional)) link-attributes))
+
 (defun link-attributes (superclasses instance-buffers)
   (loop :for c :in superclasses
-        :for i :upfrom 0
+        :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
         :do (in-buffer (construct (funcall instance-buffers (class-name c))))
             (link-attribute c i superclasses)))
 
@@ -857,6 +907,8 @@
 (defmethod draw :before ((o vertices)) (in-vertices o))
 
 (defmethod draw ((o vertices))
+  #+sbcl ; Due to out of our responsibility.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (gl:draw-arrays (draw-mode o) 0 (vertex-length o)))
 
 ;; INDEXED
@@ -867,7 +919,8 @@
            ((o indexed-vertices) &key indices &allow-other-keys)
   (setf (slot-value o 'indices)
           (apply #'make-buffer :name :indices :original
-                 (coerce (car indices) '(array (unsigned-byte 8) (*)))
+                 (coerce (the list (car indices))
+                         '(array (unsigned-byte 8) (*)))
                  (append (cdr indices) (list :target :element-array-buffer)))))
 
 (defmethod create-vertex-array ((o indexed-vertices))
@@ -909,6 +962,7 @@
   (link-attributes (attributes o)
                    (let ((table (table o)) (default-buffer (buffer o)))
                      (lambda (slot)
+                       (declare (symbol slot))
                        (or (cdr (assoc slot table)) default-buffer)))))
 
 (defmethod construct ((o instanced-vertices))
@@ -930,9 +984,15 @@
      (count-attributes (attributes vertices))))
 
 (defmethod draw ((o instanced-vertices))
+  #+sbcl ; Out our responsibility.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (%gl:draw-arrays-instanced (draw-mode o) 0 (vertex-length o)
                              (array-dimension
                                (buffer-original (cdar (table o))) 0)))
+
+(declaim
+ (ftype (function (symbol symbol) (values (or null buffer) &optional))
+        instances-buffer))
 
 (defun instances-buffer (vertices name)
   (or (cdr (assoc name (table (find-vertices vertices))))
@@ -1045,7 +1105,7 @@
                texture)))))))
 
 (defstruct texture
-  (id nil :type (or null unsigned-byte))
+  (id nil :type (or null (mod #.most-positive-fixnum)))
   (params nil :type list :read-only t)
   (target (alexandria:required-argument :target)
           :type texture-target
@@ -1062,7 +1122,7 @@
       (gl:bind-texture target id)
       (loop :for (k v) :on params :by #'cddr
             :do (gl:tex-parameter target k v))
-      (funcall initializer)))
+      (funcall (the function initializer))))
   o)
 
 (defmethod destruct ((o texture))
@@ -1080,13 +1140,15 @@
   (gl:bind-texture (texture-target o) (texture-id o)))
 
 (defun connect (shader &rest pairs)
-  (loop :for i :upfrom 0
+  (loop :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
         :for (uniform name) :on pairs :by #'cddr
         :do (send (find-texture name) shader :uniform uniform :unit i)))
 
 (defun type-assert (form type)
   (if (constantp form)
-      (progn
+      (locally
+       #+sbcl ; due to unknown TYPE at compile time.
+       (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
        (assert (typep form type) ()
          "~S is not type of ~S" form (millet:type-expand type))
        form)
@@ -1160,6 +1222,8 @@
           (&whole whole
            (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)) (fps 60))
            &body body)
+  (declare ((mod #.most-positive-fixnum) fps)
+           (sb-ext:muffle-conditions sb-ext:compiler-note))
   (check-bnf:check-bnf (:whole whole)
     ((var-win symbol))
     ((buf* check-bnf:expression))
@@ -1243,16 +1307,17 @@
                             :type function
                             :read-only t)
   (width (alexandria:required-argument :width)
-         :type unsigned-byte
+         :type (mod #.most-positive-fixnum)
          :read-only t)
   (height (alexandria:required-argument :height)
-          :type unsigned-byte
+          :type (mod #.most-positive-fixnum)
           :read-only t))
 
 (defmethod construct ((o framebuffer))
   (with-slots (id texture render-buffer format width height pixel-type options
                attachment renderbuffer-initializer)
       o
+    (declare (function renderbuffer-initializer))
     (setf id (car (gl:gen-framebuffers 1))
           texture
             (construct
@@ -1264,6 +1329,10 @@
                                           :do (setf (getf default k) v)
                                           :finally (return default))
                             :initializer (lambda ()
+                                           #+sbcl ; due to our responsibility.
+                                           (declare
+                                            (sb-ext:muffle-conditions
+                                             sb-ext:compiler-note))
                                            (gl:tex-image-2d :texture-2d 0
                                                             format width height
                                                             0 format pixel-type
@@ -1382,7 +1451,10 @@
 
 ;; MATRIX
 
-(defun radians (degrees) (* degrees (/ pi 180)))
+(defun radians (degrees)
+  #+sbcl ; Due to unknown type.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (* degrees (/ pi 180)))
 
 (defun ortho (win &optional (direction :bottom-up))
   (multiple-value-bind (w h)
