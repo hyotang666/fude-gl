@@ -773,14 +773,19 @@
   (loop :for name :being :each :hash-key :of *vertices*
         :collect name))
 
+(define-condition missing-vertices (cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing vertices named ~S. ~:@_To see defined vertices, eval ~S"
+             (cell-error-name this) '(list-all-vertices)))))
+
 (defun find-vertices (name &key (construct t) (error t))
   (let ((vertices))
     (cond ((typep name 'vertices) name)
           ((null (setf vertices (gethash name *vertices*)))
-           (when error
-             (error
-               "Missing vertices named ~S. Eval (fude-gl:list-all-vertices)"
-               name)))
+           (and error (error 'missing-vertices :name name)))
           ((slot-boundp vertices 'vertex-array) vertices)
           ((not construct) vertices)
           (t
