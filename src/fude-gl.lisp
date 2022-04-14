@@ -1089,6 +1089,16 @@
 
 ;;; TEXTURE
 
+(defstruct texture
+  (id nil :type (or null (mod #.most-positive-fixnum)))
+  (params nil :type list :read-only t)
+  (target (alexandria:required-argument :target)
+          :type texture-target
+          :read-only t)
+  (initializer (alexandria:required-argument :initializer)
+               :type function
+               :read-only t))
+
 (defvar *textures* (make-hash-table :test #'eq))
 
 (defun list-all-textures ()
@@ -1119,16 +1129,6 @@
              (continue ()
                  :report "Return texture without constructing."
                texture)))))))
-
-(defstruct texture
-  (id nil :type (or null (mod #.most-positive-fixnum)))
-  (params nil :type list :read-only t)
-  (target (alexandria:required-argument :target)
-          :type texture-target
-          :read-only t)
-  (initializer (alexandria:required-argument :initializer)
-               :type function
-               :read-only t))
 
 (defmethod construct ((o texture))
   (with-slots (id target params initializer)
