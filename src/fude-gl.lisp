@@ -794,6 +794,7 @@
 (defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
 
 (define-compiler-macro shader (&whole whole o)
+  (declare (notinline shader))
   (if (constantp o)
       `',(shader (find-vertices (eval o) :construct nil))
       whole))
