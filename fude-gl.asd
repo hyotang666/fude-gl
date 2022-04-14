@@ -2,25 +2,25 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "2.22.4"
+  "2.22.5"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
   :author "SATO Shinichi"
   :depends-on
   (
-   "cl-opengl" ; FFI for opengl.
-   "closer-mop" ; Wrapper for metaobject protocols.
-   "uiop" ; Utilities.
-   "alexandria" ; Public domain utilities.
-   "cl-change-case" ; Convert lisp case to camel case.
-   "sdl2" ; Windowing support.
-   "millet" ; Wrapper for tiny utilities.
-   "check-bnf" ; BNF like macro syntax checker.
-   "vecto" ; TTF rasterization.
-   "zpb-ttf" ; TTF font loader.
-   "3d-matrices" ; Matrix operations.
-   "opticl" ; Image file loader.
+   "cl-opengl"          ; FFI for opengl.
+   "sdl2"               ; Windowing support.
+   "uiop"               ; Utilities.
+   "alexandria"         ; Public domain utilities.
+   "millet"             ; Wrapper for tiny utilities.
+   "closer-mop"         ; Wrapper for metaobject protocols.
+   "cl-change-case"     ; Convert lisp case to camel case.
+   "3d-matrices"        ; Matrix operations.
+   "check-bnf"          ; BNF like macro syntax checker.
+   "vecto"              ; TTF rasterization.
+   "zpb-ttf"            ; TTF font loader.
+   "opticl"             ; Image file loader.
    )
   :pathname
   "src/"
