@@ -159,7 +159,7 @@
 (declaim
  (ftype (function
          ((eql :framebuffer) attachment framebuffer-texture-target
-          (mod #.most-positive-fixnum) integer)
+          (unsigned-byte 32) integer)
          (values &optional))
         framebuffer-texture-2d))
 
@@ -169,7 +169,7 @@
 
 (defun get-uniform-location (program name)
   (let ((location (gl:get-uniform-location program name)))
-    (declare (fixnum location))
+    (declare ((signed-byte 32) location))
     (assert (not (minusp location)) ()
       'uniform-error :program program
                      :uniform name)
@@ -212,7 +212,7 @@
 
 (declaim
  (ftype (function
-         (draw-mode vector &key (:offset (mod #.most-positive-fixnum)))
+         (draw-mode vector &key (:offset (mod #.array-total-size-limit)))
          (values &optional))
         draw-elements))
 
@@ -454,7 +454,7 @@
      (out-spec (var type-spec))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-spec vector-size?))
-     (vector-size (mod #.most-positive-fixnum))
+     (vector-size (mod #.array-total-size-limit))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
@@ -548,7 +548,7 @@
     (or program
         (let ((program
                (setf (gethash name *programs*)
-                       (the (mod #.most-positive-fixnum) (gl:create-program)))))
+                       (the (unsigned-byte 32) (gl:create-program)))))
           (when (zerop program)
             (remhash name *programs*)
             (error "Fails to create program."))
@@ -769,7 +769,7 @@
    (buffer :type buffer :reader buffer)
    (attributes :type list :reader attributes)
    (draw-mode :type draw-mode :reader draw-mode)
-   (vertex-array :type (mod #.most-positive-fixnum) :reader vertex-array)))
+   (vertex-array :type (unsigned-byte 32) :reader vertex-array)))
 
 (defmethod initialize-instance :after
            ((o vertices)
@@ -1090,7 +1090,7 @@
 ;;; TEXTURE
 
 (defstruct texture
-  (id nil :type (or null (mod #.most-positive-fixnum)))
+  (id nil :type (or null (unsigned-byte 32)))
   (params nil :type list :read-only t)
   (target (alexandria:required-argument :target)
           :type texture-target
@@ -1292,7 +1292,7 @@
   (values))
 
 (defstruct framebuffer
-  id
+  (id nil :type (or null (unsigned-byte 32)))
   texture
   render-buffer
   (format :rgb :type base-internal-format :read-only t)
