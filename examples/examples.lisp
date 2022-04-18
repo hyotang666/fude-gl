@@ -40,7 +40,10 @@
 ;; In the example below, (|outColor| :vec4) is an output spec.
 ;;
 ;; The first element of the output spec must a symbol.
-;; The second element of the output spec is a keyword symbol that names a GLSL type.
+;; The second element of the output spec is a var-spec or set-spec.
+;; A var-spec is a list and its first element must a symbol,
+;; second element is a keyword symbol that names a GLSL type.
+;; a set-spec is a list that has var-specs.
 ;;
 ;; The rest elements of the clause are definitions of the glsl codes.
 ;; You can specify function with DEFUN form.
