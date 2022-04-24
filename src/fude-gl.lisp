@@ -338,8 +338,19 @@
 
 (defun varying-keywordp (thing) (and (symbolp thing) (string= '&varying thing)))
 
+(deftype var () 'symbol)
+
+(deftype type-spec () 'keyword)
+
+(deftype complex-type-spec () 'list)
+
+(deftype index () '(mod #.array-total-size-limit))
+
 (declaim
- (ftype (function ((cons symbol (cons t t)))
+ (ftype (function
+         ((cons var
+                (cons (or type-spec complex-type-spec)
+                      (or null (cons index null)))))
          (values (cons null (cons string (cons string null))) &optional))
         parse-shader-lambda-list-spec))
 
