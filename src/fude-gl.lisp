@@ -462,15 +462,13 @@
      (shader-lambda-list
       (out-spec* uniform-keyword? uniform-spec* varying-keyword?
        varying-spec*))
-     (out-spec (var type-spec))
+     (out-spec (var (or type-spec complex-type)))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-spec vector-size?))
      (vector-size (mod #.array-total-size-limit))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
-     (var symbol)
-     (type-spec (or complex-type keyword))
      (complex-type out-spec*)
      (main check-bnf:expression)))
   ;; The body.
