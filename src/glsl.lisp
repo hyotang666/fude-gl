@@ -46,8 +46,9 @@
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~{~:/fude-gl::glsl-symbol/ = ~W;~:@_~}") stream
-           (cdr exp)))
+  (let ((*var-check-p* t))
+    (funcall (formatter "~{~:/fude-gl::glsl-symbol/ = ~W;~:@_~}") stream
+             (cdr exp))))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
