@@ -175,8 +175,11 @@
     *print-pprint-dispatch*))
 
 (defun print-glsl (exp &optional stream)
-  (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
-    (pprint exp stream)))
+  (handler-case
+      (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
+        (pprint exp stream))
+    (error (e)
+      (error e))))
 
 (defun pprint-glsl (stream exp &rest noise)
   (declare (ignore noise))
