@@ -362,16 +362,13 @@
           (etypecase type
             (symbol (symbol-camel-case type))
             (list
-             (format nil "~:@(~A~) ~A" name
-                     (format nil
-                             #.(apply #'concatenate 'string
-                                      (alexandria:flatten
-                                        (list "~:<{~;~3I~:@_" ; pprint-logical-block.
-                                              "~@{~A~^ ~@_~A;~^~:@_~}"
-                                              "~%~;}~:> ")))
-                             (loop :for (name type) :in type
-                                   :collect (symbol-camel-case type)
-                                   :collect (symbol-camel-case name))))))
+             (format nil "~:@(~A~) ~?" name
+                     #.(concatenate 'string "~:<{~;~3I~:@_" ; pprint-logical-block.
+                                    "~@{~A~^ ~@_~A;~^~:@_~}" "~%~;}~:> ")
+                     (list
+                       (loop :for (name type) :in type
+                             :collect (symbol-camel-case type)
+                             :collect (symbol-camel-case name))))))
           (if vector-size
               (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
               (symbol-camel-case name)))))
