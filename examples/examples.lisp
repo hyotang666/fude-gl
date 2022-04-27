@@ -58,14 +58,9 @@
   (:vertex ()
     (declaim (ftype (function nil (values)) main))
     (defun main () "gl_Position = vec4(xy, 0.0, 1.0);"))
-  #++
-  (:vertex ()
-    (values :gl-position (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
   (:fragment ((|outColor| :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "outColor = vec4(1.0, 1.0, 1.0, 1.0);"))
-  #++
-  (:fragment ((out-color :vec4)) (values :out-color (3d-vectors:vec4 1 1 1 1))))
+    (defun main () "outColor = vec4(1.0, 1.0, 1.0, 1.0);")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *triangle*
@@ -119,11 +114,7 @@
   ;; The second element of the uniform-spec is a keyword symbol that names GLSL type.
   (:fragment ((|outColor| :vec4) &uniform (|triangleColor| :vec3))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "outColor = vec4(triangleColor, 1.0);"))
-  #++
-  (:fragment ((out-color :vec4) &uniform (triangle-color :vec3))
-    (values :out-color
-            (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) triangle-color))))
+    (defun main () "outColor = vec4(triangleColor, 1.0);")))
 
 (fude-gl:defvertices uniform-demo *triangle*)
 
@@ -156,19 +147,9 @@
   (:vertex ((color :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main () "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);"))
-  #++
-  (:vertex ((color :vec3))
-    (values :color
-            rgb
-            :gl-position
-            (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
   (:fragment ((|outColor| :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "outColor = vec4(color, 1.0);"))
-  #++
-  (:fragment ((out-color :vec4))
-    (values :out-color
-            (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) color))))
+    (defun main () "outColor = vec4(color, 1.0);")))
 
 (fude-gl:defvertices colored-triangle
     (concatenate '(array single-float (*))
@@ -268,22 +249,9 @@
       "texcoord = st;"
       "color = rgb;"
       "gl_Position = vec4(xy, 0.0, 1.0);"))
-  #++
-  (:vertex ((color :vec3) (texcoord :vec2))
-    (values :texcoord
-            st
-            :color
-            rgb
-            :gl-position
-            (setf (3d-vectors:vxy (3d-vectors:vec4 0 0 0 1)) xy)))
   (:fragment ((|outColor| :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "outColor = texture(tex, texcoord) * vec4(color, 1.0);"))
-  #++
-  (:fragment ((out-color :vec4) &uniform (tex :|sampler2D|))
-    (values :out-color
-            (* (texture tex texcoord)
-               (setf (3d-vectors:vxyz (3d-vectors:vec4 0 0 0 1)) color)))))
+    (defun main () "outColor = texture(tex, texcoord) * vec4(color, 1.0);")))
 
 (defparameter *png*
   (opticl:read-png-file
@@ -365,21 +333,13 @@
   (:vertex ((texcoord :vec2))
     (declaim (ftype (function nil (values)) main))
     (defun main () "texcoord = st;" "gl_Position = vec4(xy, 0.0, 1.0);"))
-  #++
-  (:vertex ((texcoord :vec2))
-    (setf texcoord st
-          |gl_Position| (vec4 xy 0.0 1.0)))
   (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|)
               (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
       "outColor = mix(texture(tex1, texcoord),
                      texture(tex2, texcoord),
-                     0.5);"))
-  #++
-  (:fragment ((out-color :vec4) &uniform (tex1 :|sampler2D|)
-              (tex2 :|sampler2D|))
-    (setf out-color (mix (texture tex1 texcoord) (texture tex2 texcoord) 0.5))))
+                     0.5);")))
 
 (defparameter *logo*
   (opticl:read-png-file
@@ -427,13 +387,9 @@
   (:vertex ()
     (declaim (ftype (function nil (values)) main))
     (defun main () "gl_Position = vec4(xy,0.0,1.0);"))
-  #++
-  (:vertex () (setf |gl_Position| (vec4 xy 0.0 1.0)))
   (:fragment ((color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);"))
-  #++
-  (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
+    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);")))
 
 (fude-gl:defvertices hello
     (concatenate '(array single-float (*))
@@ -464,14 +420,9 @@
   (:vertex (&uniform (transform :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main () "gl_Position = transform * vec4(xyz, 1.0);"))
-  #++
-  (:vertex ((tex-coord :vec2) &uniform (transform :mat4))
-    (setf |gl_Position| (* transform (vec4 xyz 1.0))))
   (:fragment ((color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);"))
-  #++
-  (:fragment ((color :vec4)) (setf color (vec4 1.0 1.0 1.0 1.0))))
+    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);")))
 
 (fude-gl:defvertices double
     (concatenate '(array single-float (*))
@@ -531,17 +482,10 @@
     (defun main ()
       "gl_Position = transform * vec4(xy, 0.0, 1.0);"
       "coord = st;"))
-  #++
-  (:vertex ((coord :vec2) &uniform (transform :mat4))
-    (setf |gl_Position| (* transform (vec4 xy 0.0 1.0))
-          coord st))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);"))
-  #++
-  (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
-    (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2))))
+      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
 
 (fude-gl:defvertices transform-demo
     (concatenate '(array single-float (*))
