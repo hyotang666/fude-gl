@@ -129,8 +129,6 @@
            :transform-feedback-varying-max-length :geometry-vertices-out
            :geometry-input-type :geometry-output-type))
 
-(define-condition fude-gl-error (error) ())
-
 (define-condition uniform-error (fude-gl-error)
   ((program :initarg :program :reader program)
    (uniform :initarg :uniform :reader error-uniform))

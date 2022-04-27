@@ -10,6 +10,21 @@
 
 (defvar *var-check-p* nil)
 
+(define-condition fude-gl-error (error) ())
+
+(define-condition shader-error (fude-gl-error program-error) ())
+
+(define-condition unknown-variable (shader-error cell-error)
+  ((known-vars :initarg :known-vars :reader known-vars))
+  (:report
+   (lambda (this output)
+     (pprint-logical-block (output nil)
+       (apply #'format output
+              "Unknown variable. ~S ~:@_Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+              (cell-error-name this)
+              (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                       (known-vars this)))))))
+
 (defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
   (declare (ignore atp))
   (let ((alias (assoc exp *alias*)))
@@ -20,12 +35,10 @@
           ((progn
             (when colonp
               (unless (gethash exp *shader-vars*)
-                (apply #'error
-                       "Unknown var. ~S ~:@_Hint, typo?: ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~]."
-                       exp
-                       (fuzzy-match:fuzzy-match (symbol-name exp)
-                                                (alexandria:hash-table-keys
-                                                  *shader-vars*)))))
+                (error 'unknown-variable
+                       :name exp
+                       :known-vars (alexandria:hash-table-keys
+                                     *shader-vars*))))
             (find-if #'lower-case-p (symbol-name exp)))
            (write-string (symbol-name exp) stream))
           (t
