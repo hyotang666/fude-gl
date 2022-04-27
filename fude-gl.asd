@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "2.24.10"
+  "2.25.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -18,6 +18,7 @@
    "cl-change-case"     ; Convert lisp case to camel case.
    "3d-matrices"        ; Matrix operations.
    "check-bnf"          ; BNF like macro syntax checker.
+   "fuzzy-match"        ; For better error message.
    "vecto"              ; TTF rasterization.
    "zpb-ttf"            ; TTF font loader.
    "opticl"             ; Image file loader.

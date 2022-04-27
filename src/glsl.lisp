@@ -1,33 +1,44 @@
 (in-package :fude-gl)
 
+(defvar *shader-vars*)
+
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
 (defvar *alias* nil)
 
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
 
-(defun glsl-symbol (stream exp &rest noise)
-  (declare (ignore noise))
+(defvar *var-check-p* nil)
+
+(defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
+  (declare (ignore atp))
   (let ((alias (assoc exp *alias*)))
-    (if alias
-        (glsl-symbol stream (cdr alias))
-        (cond
+    (cond (alias (glsl-symbol stream (cdr alias)))
           ((uiop:string-prefix-p "GL-" exp)
            (format stream "gl_~A"
                    (change-case:pascal-case (subseq (symbol-name exp) 3))))
-          ((find-if #'lower-case-p (symbol-name exp))
+          ((progn
+            (when colonp
+              (assert (gethash exp *shader-vars*) ()
+                "Unknown var. ~S ~:@_Hint, typo?: ~#{~#[~;~S~;~S or ~S~:;~S, ~S or ~S~]~}."
+                exp
+                (fuzzy-match:fuzzy-match (symbol-name exp)
+                                         (alexandria:hash-table-keys
+                                           *shader-vars*))))
+            (find-if #'lower-case-p (symbol-name exp)))
            (write-string (symbol-name exp) stream))
           (t
-           (write-string (change-case:camel-case (symbol-name exp)) stream))))))
+           (write-string (change-case:camel-case (symbol-name exp)) stream)))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~{~/fude-gl::glsl-symbol/ = ~W;~:@_~}") stream
+  (funcall (formatter "~{~:/fude-gl::glsl-symbol/ = ~W;~:@_~}") stream
            (cdr exp)))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~W~:<~@{~W~^, ~@_~}~:>") stream (car exp) (cdr exp)))
+  (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
+           (car exp) (cdr exp)))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
@@ -36,25 +47,29 @@
       (0 (error "No argument ~S" exp))
       (1 (format stream "~A~A" (symbol-name op) (cadr exp)))
       (2
-       (format stream "(~W ~A ~W)" (second exp) (symbol-name op) (third exp)))
+       (let ((*var-check-p* t))
+         (format stream "(~W ~A ~W)" (second exp) (symbol-name op)
+                 (third exp))))
       (otherwise
        (loop :for (form . rest) :on (cdr exp)
              :initially (write-char #\( stream)
-             :do (write form :stream stream)
+             :do (let ((*var-check-p* t))
+                   (write form :stream stream))
                  (when rest
                    (format stream " ~A " (symbol-name op)))
              :finally (write-char #\) stream))))))
 
 (defun glsl-aref (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~W~:<[~;~@{~W~^, ~@_~}~;]~:>") stream (cadr exp)
-           (cddr exp)))
+  (funcall (formatter "~:/fude-gl:glsl-symbol/~:<[~;~@{~W~^, ~@_~}~;]~:>")
+           stream (cadr exp) (cddr exp)))
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
   (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
            (loop :for (name type init) :in (cadr exp)
                  :do (check-type type glsl-type)
+                     (setf (gethash name *shader-vars*) t)
                  :collect type
                  :collect name
                  :collect init)
@@ -62,7 +77,7 @@
 
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
-  (format stream "~W.~W" (cadr exp) (car exp)))
+  (format stream "~:/fude-gl:glsl-symbol/.~W" (cadr exp) (car exp)))
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))

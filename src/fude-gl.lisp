@@ -374,11 +374,11 @@
               (symbol-camel-case name)))))
 
 (declaim
- (ftype (function (list) (values list list list &optional))
+ (ftype (function (list) (values list list list list &optional))
         split-shader-lambda-list))
 
 (defun split-shader-lambda-list (lambda-list)
-  (uiop:while-collecting (out uniform varying)
+  (uiop:while-collecting (out uniform varying vars)
     (loop :with collector = #'out
           :for elt :in lambda-list
           :if (uniform-keywordp elt)
@@ -386,7 +386,8 @@
           :else :if (varying-keywordp elt)
             :do (setf collector #'varying)
           :else
-            :do (mapc collector (parse-shader-lambda-list-spec elt)))))
+            :do (vars (car elt))
+                (mapc collector (parse-shader-lambda-list-spec elt)))))
 
 (defun <uniforms> (name shader*)
   `(defmethod uniforms ((type (eql ',name)))
@@ -422,7 +423,8 @@
                          "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
                          "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
                          "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
-                         ))))
+                         )))
+        (*shader-vars* (uiop:list-to-hash-set superclasses)))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
                    (nreverse acc)
@@ -431,8 +433,9 @@
                (destructuring-bind
                    (type shader-lambda-list &rest main)
                    shader
-                 (multiple-value-bind (out uniform varying%)
+                 (multiple-value-bind (out uniform varying% vars)
                      (split-shader-lambda-list shader-lambda-list)
+                   (dolist (var vars) (setf (gethash var *shader-vars*) t))
                    (rec rest out (append varying varying%)
                         (cons
                           (<shader-method>
