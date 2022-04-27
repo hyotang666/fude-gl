@@ -19,12 +19,13 @@
                    (change-case:pascal-case (subseq (symbol-name exp) 3))))
           ((progn
             (when colonp
-              (assert (gethash exp *shader-vars*) ()
-                "Unknown var. ~S ~:@_Hint, typo?: ~#{~#[~;~S~;~S or ~S~:;~S, ~S or ~S~]~}."
-                exp
-                (fuzzy-match:fuzzy-match (symbol-name exp)
-                                         (alexandria:hash-table-keys
-                                           *shader-vars*))))
+              (unless (gethash exp *shader-vars*)
+                (apply #'error
+                       "Unknown var. ~S ~:@_Hint, typo?: ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~]."
+                       exp
+                       (fuzzy-match:fuzzy-match (symbol-name exp)
+                                                (alexandria:hash-table-keys
+                                                  *shader-vars*)))))
             (find-if #'lower-case-p (symbol-name exp)))
            (write-string (symbol-name exp) stream))
           (t
