@@ -525,7 +525,11 @@
 
 ;;;; *PROGRAMS*
 
-(defvar *programs* (make-hash-table :test #'eq))
+(defvar *programs*
+  (make-hash-table :test #'eq)
+  "HASH-TABLE that maps a defined shader name to shader program ID,
+especially for a better error message by handling the shader programs by its name.
+Use a macro WITH-SHADER to achieve this context.")
 
 (defun program-id (name &key (error t))
   (or (gethash name *programs*)
