@@ -525,15 +525,38 @@
 
 ;;;; *PROGRAMS*
 
+(define-condition context-not-achieved (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output "Context is not achieved. ~:_Wrap your code with ~S."
+             (cell-error-name this)))))
+
+(defmacro with-context-assertion ((&key name) &body body)
+  `(handler-case (progn ,@body)
+     (error ()
+       (error 'context-not-achieved :name ,name))))
+
 (defvar *programs*
   nil
   "HASH-TABLE that maps a defined shader name to shader program ID,
 especially for a better error message by handling the shader programs by its name.
 Use a macro WITH-SHADER to achieve this context.")
 
+(defun get-program-id (name)
+  (with-context-assertion (:name 'with-shader)
+    (gethash name *programs*)))
+
+(defun (setf get-program-id) (id name)
+  (with-context-assertion (:name 'with-shader)
+    (setf (gethash name *programs*) id)))
+
+(defun remove-program (name)
+  (with-context-assertion (:name 'with-shader)
+    (remhash name *programs*)))
+
 (defun program-id (name &key (error t))
-  (or (gethash name *programs*)
-      (and error (error "Missing shader named ~S" name))))
+  (or (get-program-id name) (and error (error "Missing shader named ~S" name))))
 
 (defun compile-shader (prog vertex-shader fragment-shader)
   (let ((vs (gl:create-shader :vertex-shader))
@@ -558,10 +581,10 @@ Use a macro WITH-SHADER to achieve this context.")
   (let ((program (program-id name :error nil)))
     (or program
         (let ((program
-               (setf (gethash name *programs*)
-                       (the (unsigned-byte 32) (gl:create-program)))))
+               (the (unsigned-byte 32)
+                    (setf (get-program-id name) (gl:create-program)))))
           (when (zerop program)
-            (remhash name *programs*)
+            (remove-program name)
             (error "Fails to create program."))
           (compile-shader program (vertex-shader name) (fragment-shader name))
           program))))
