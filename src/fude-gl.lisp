@@ -526,7 +526,7 @@
 ;;;; *PROGRAMS*
 
 (defvar *programs*
-  (make-hash-table :test #'eq)
+  nil
   "HASH-TABLE that maps a defined shader name to shader program ID,
 especially for a better error message by handling the shader programs by its name.
 Use a macro WITH-SHADER to achieve this context.")
@@ -1073,7 +1073,7 @@ Use a macro WITH-SHADER to achieve this context.")
   (let ((toplevelp (gensym "TOPLEVELP")))
     `(let ((,toplevelp *toplevel-p*)
            (*toplevel-p* nil)
-           (*programs* (alexandria:copy-hash-table *programs*)))
+           (*programs* (or *programs* (make-hash-table :test #'eq))))
        (unwind-protect (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
