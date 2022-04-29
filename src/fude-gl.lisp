@@ -543,20 +543,21 @@
 especially for a better error message by handling the shader programs by its name.
 Use a macro WITH-SHADER to achieve this context.")
 
-(defun get-program-id (name)
+(defun cached-program-id (name)
   (with-context-assertion (:name 'with-shader)
     (gethash name *programs*)))
 
-(defun (setf get-program-id) (id name)
+(defun (setf cached-program-id) (id name)
   (with-context-assertion (:name 'with-shader)
     (setf (gethash name *programs*) id)))
 
-(defun remove-program (name)
+(defun remove-program-cache (name)
   (with-context-assertion (:name 'with-shader)
     (remhash name *programs*)))
 
 (defun program-id (name &key (error t))
-  (or (get-program-id name) (and error (error "Missing shader named ~S" name))))
+  (or (cached-program-id name)
+      (and error (error "Missing shader named ~S" name))))
 
 (defun compile-shader (prog vertex-shader fragment-shader)
   (let ((vs (gl:create-shader :vertex-shader))
@@ -582,9 +583,9 @@ Use a macro WITH-SHADER to achieve this context.")
     (or program
         (let ((program
                (the (unsigned-byte 32)
-                    (setf (get-program-id name) (gl:create-program)))))
+                    (setf (cached-program-id name) (gl:create-program)))))
           (when (zerop program)
-            (remove-program name)
+            (remove-program-cache name)
             (error "Fails to create program."))
           (compile-shader program (vertex-shader name) (fragment-shader name))
           program))))
