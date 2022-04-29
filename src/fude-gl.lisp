@@ -586,7 +586,9 @@ Use a macro WITH-SHADER to achieve this context.")
                     (setf (cached-program-id name) (gl:create-program)))))
           (when (zerop program)
             (remove-program-cache name)
-            (error "Fails to create program."))
+            (error
+              "Fails to create program named ~S. ~:_Is opengl context achieved?"
+              name))
           (compile-shader program (vertex-shader name) (fragment-shader name))
           program))))
 
