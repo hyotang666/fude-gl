@@ -894,7 +894,7 @@ Use a macro WITH-SHADER to achieve this context.")
   (when (constantp form)
     (find-vertices (eval form) :construct nil :error t))
   `(let ((vertices (find-vertices ,form)))
-     (gl:use-program (program-id (shader vertices)))
+     (in-program (shader vertices))
      ,@(when with-vertex-array
          `((in-vertex-array (vertex-array vertices))))
      vertices))
