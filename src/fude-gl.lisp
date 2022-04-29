@@ -330,6 +330,38 @@
 (defgeneric uniforms (name)
   (:documentation "Return associated uniform name strings."))
 
+(define-condition missing-shader (fude-gl-error cell-error)
+  ((interface :initarg :interface :reader interface))
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing shader named ~S. ~:@_~? ~:@_To see all known shaders, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (princ-to-string (cell-error-name this))
+                                      (loop :for method
+                                                 :in (c2mop:generic-function-methods
+                                                       (interface this))
+                                            :for specializer
+                                                 := (car
+                                                      (c2mop:method-specializers
+                                                        method))
+                                            :when (typep specializer
+                                                         'c2mop:eql-specializer)
+                                              :collect (c2mop:eql-specializer-object
+                                                         specializer)))
+             `(c2mop:generic-function-methods
+                #',(c2mop:generic-function-name (interface this)))))))
+
+(defmethod no-applicable-method ((gf (eql #'vertex-shader)) &rest args)
+  (error 'missing-shader :name (car args) :interface gf))
+
+(defmethod no-applicable-method ((gf (eql #'fragment-shader)) &rest args)
+  (error 'missing-shader :name (car args) :interface gf))
+
+(defmethod no-applicable-method ((gf (eql #'uniforms)) &rest args)
+  (error 'missing-shader :name (car args) :interface gf))
+
 ;;;; DEFSHADER
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
