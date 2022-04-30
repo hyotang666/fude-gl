@@ -1531,19 +1531,23 @@
     (defun main ()
       (setf coord fude-gl:st
             gl-position (vec4 fude-gl:xyz 1.0))))
-  (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
-              (|nearPlane| :float) (|farPlane| :float))
+  (:fragment ((color :vec4) &uniform (depth-map :|sampler2D|)
+              (near-plane :float) (far-plane :float))
     ;; You can specify local function for shader with defun clause.
     ;; NOTE: DECLAIM is required.
-    (declaim (ftype (function (float) float) |linearizeDepth|))
-    (defun |linearizeDepth| (depth)
-      "float z = depth * 2.0 - 1.0; // Back to NDC"
-      "return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));")
+    (declaim (ftype (function (float) float) linearize-depth))
+    (defun linearize-depth (depth)
+      (let ((z :float (- (* depth 2.0) 1.0))) ; Back to NDC.
+        (return
+         (/ (* 2.0 near-plane far-plane)
+            (- (+ far-plane near-plane) (* z (- far-plane near-plane)))))))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "float depthValue = texture(depthMap, coord).r;"
-      "// color = vec4(vec3(linearizeDepth(depthValue) / farPlane), 1.0); // Perspective."
-      "color = vec4(vec3(depthValue), 1.0); // orthographic.")))
+      (let ((depth-value :float (fude-gl::r (texture depth-map coord))))
+        ;; Perspective
+        ;; (setf color (vec4 (vec3 (/ (linearize-depth depth-value) far-plane)) 1.0))
+        ;; orthographic.
+        (setf color (vec4 (vec3 depth-value) 1.0))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *framebuffer-plane-vertices*
