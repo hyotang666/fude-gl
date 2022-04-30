@@ -695,21 +695,6 @@ Use a macro WITH-SHADER to achieve this context.")
                                               (uniforms (shader this))))
              `(uniforms ',(shader this))))))
 
-(define-compiler-macro send
-                       (&whole whole object to
-                        &key uniform &allow-other-keys &environment env)
-  (declare (ignore object))
-  ;; Compile time uniform existance check.
-  (when (and (constantp to env) uniform (constantp uniform env))
-    (let ((uniform-name (eval uniform)) (vertice-name (eval to)))
-      (unless (find uniform-name (the list (uniforms vertice-name))
-                    :test #'equal
-                    :key #'uniform-name)
-        (error 'missing-uniform :name uniform-name :shader vertice-name))))
-  whole)
-
-;;;; UNIFORM
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Compiler macro and setf expander below needs this eval-when.
   (defun check-uniform-args (shader name)
@@ -727,6 +712,15 @@ Use a macro WITH-SHADER to achieve this context.")
               ()
               'missing-uniform :name name
                                :shader shader)))))))
+
+(define-compiler-macro send
+                       (&whole whole object to &key uniform &allow-other-keys)
+  (declare (ignore object))
+  ;; Compile time uniform existance check.
+  (and uniform (check-uniform-args to uniform))
+  whole)
+
+;;;; UNIFORM
 
 (define-compiler-macro uniform (&whole whole shader name)
   (check-uniform-args shader name)
