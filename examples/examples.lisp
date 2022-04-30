@@ -96,6 +96,11 @@
         t))
     (:idle nil)
     ;; To clear window, WITH-CLEAR is recomended.
+    ;; The first argument ((win (:color-buffer-bit)) in the example below) is bind.
+    ;; The first element of the bind (win in the example below.) is a variable that is binding the window.
+    ;; The second element of the bind ((:color-buffer-bit) in the example below.) is buffer-bit-spec.
+    ;; Each element must be the type of fude-gl::buffer-bit.
+    ;; For detail, evaluate (describe 'fude-gl::buffer-bit).
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; To draw vertices, you can use DRAW with passing vertices name.
       (fude-gl:draw 'hello-triangle))))
