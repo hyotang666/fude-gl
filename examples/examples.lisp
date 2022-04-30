@@ -145,6 +145,10 @@
 ;; You can specify some attributes in the attributes list.
 
 (fude-gl:defshader colored-triangle 330 (fude-gl:xy fude-gl:rgb)
+  ;; NOTE: Out-spec-variable is filtered by change-case:camel-case.
+  ;; The symbol `color` is not needed to be multiple-escaped. (i.e. |color|.)
+  ;; You can use `out-color` instead of `|outColor|` in the fragment shader lambda list.
+  ;; (Although, not recommended due to its looking is different.)
   (:vertex ((color :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main () "color = rgb;" "gl_Position = vec4(xy, 0.0, 1.0);"))
