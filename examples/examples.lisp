@@ -747,8 +747,10 @@
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit))
                     (fude-gl:in-texture 'face)
-                    (fude-gl:send m 'ortho-demo :uniform "model")
-                    (fude-gl:send p 'ortho-demo :uniform "projection")
+                    (fude-gl:with-uniforms (model projection)
+                        'ortho-demo
+                      (setf model m
+                            projection p))
                     (fude-gl:draw 'ortho-demo)))))))))))
 
 ;;;; DEPTH-DEMO
