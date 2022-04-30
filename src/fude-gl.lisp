@@ -444,6 +444,12 @@
                                 (list-length slots))
           :and :collect (symbol-camel-case (class-name c))))
 
+(define-compiler-macro shader (&whole whole o)
+  (declare (notinline shader))
+  (if (constantp o)
+      `',(shader (find-vertices (eval o) :construct nil))
+      whole))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
          (formatter
@@ -875,12 +881,6 @@ Use a macro WITH-SHADER to achieve this context.")
 ;; Trivial readers.
 
 (defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
-
-(define-compiler-macro shader (&whole whole o)
-  (declare (notinline shader))
-  (if (constantp o)
-      `',(shader (find-vertices (eval o) :construct nil))
-      whole))
 
 (defmethod shader ((o symbol)) (shader (find-vertices o)))
 
