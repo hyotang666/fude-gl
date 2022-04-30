@@ -185,7 +185,8 @@
 
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
-  (format stream "~:/fude-gl:glsl-symbol/.~W" (cadr exp) (car exp)))
+  (let ((*var-check-p* t))
+    (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
