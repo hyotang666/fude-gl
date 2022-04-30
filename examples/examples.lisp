@@ -135,15 +135,13 @@
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
           (fude-gl:in-vertices 'uniform-demo)
-          ;; To send a data (three floats in the example below.),
-          ;; you can use a generic-function SEND.
-          ;; The first argument is a data.
-          ;; The second argument is a symbol that names shader.
-          (fude-gl:send
-            (3d-vectors:vec (/ (+ 1.0 (sin (get-internal-real-time))) 2) 0.0
-                            0.0)
-            'uniform-demo
-            :uniform "triangleColor")
+          ;; To send a data (3d-vectors:vec in the example below.),
+          ;; you can use SETF with fude-gl:UNIFORM.
+          ;; The first argument of fude-gl:uniform is a shader name.
+          ;; The second argument of fude-gl:uniform is a uniform name.
+          (setf (fude-gl:uniform 'uniform-demo "triangleColor")
+                  (3d-vectors:vec (/ (+ 1.0 (sin (get-internal-real-time))) 2)
+                                  0.0 0.0))
           (fude-gl:draw 'uniform-demo))))))
 
 ;;;; COLORED-TRIANGLE
