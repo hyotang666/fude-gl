@@ -240,7 +240,9 @@
 
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
-  (let ((ftype (gethash (second exp) *declaims*)))
+  (let ((ftype (gethash (second exp) *declaims*))
+        (*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
+    (dolist (var (third exp)) (setf (gethash var *shader-vars*) t))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
     (destructuring-bind
