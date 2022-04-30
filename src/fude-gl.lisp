@@ -153,7 +153,8 @@
   ((condition :initarg :condition :reader %condition))
   (:report
    (lambda (this output)
-     (format output "~:I~W ~:@_Or you may have used vertices before defining it."
+     (format output
+             "~:I~W ~:@_Or you may have used vertices before defining it."
              (%condition this)))))
 
 (defvar *condition*) ; For debug use.
