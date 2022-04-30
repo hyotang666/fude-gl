@@ -86,22 +86,40 @@
 
 (defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
   (declare (ignore atp))
-  (let ((alias (assoc exp *alias*)))
-    (cond (alias (glsl-symbol stream (cdr alias)))
-          ((uiop:string-prefix-p "GL-" exp)
-           (format stream "gl_~A"
-                   (change-case:pascal-case (subseq (symbol-name exp) 3))))
-          ((progn
-            (when colonp
-              (unless (gethash exp *shader-vars*)
-                (error 'unknown-variable
-                       :name exp
-                       :known-vars (alexandria:hash-table-keys
-                                     *shader-vars*))))
-            (find-if #'lower-case-p (symbol-name exp)))
-           (write-string (symbol-name exp) stream))
-          (t
-           (write-string (change-case:camel-case (symbol-name exp)) stream)))))
+  (flet ((check-builtin-var-existence (name exp)
+           (when colonp
+             (assert (gethash name *glsl-functions*) ()
+               'unknown-variable :name exp
+                                 :known-vars (loop :for key :being :each
+                                                        :hash-key :of
+                                                        *glsl-functions*
+                                                   :when (uiop:string-prefix-p
+                                                           "gl_" key)
+                                                     :collect key)))))
+    (let ((alias (assoc exp *alias*)))
+      (cond (alias (glsl-symbol stream (cdr alias)))
+            ((uiop:string-prefix-p "gl_" exp)
+             (check-builtin-var-existence (symbol-name exp) exp)
+             (write-string (symbol-name exp) stream))
+            ((uiop:string-prefix-p "GL-" exp)
+             (let ((name
+                    (format nil "gl_~A"
+                            (change-case:pascal-case
+                              (subseq (symbol-name exp) 3)))))
+               (check-builtin-var-existence name exp)
+               (write-string name stream)))
+            ((progn
+              (when colonp
+                (unless (gethash exp *shader-vars*)
+                  (error 'unknown-variable
+                         :name exp
+                         :known-vars (alexandria:hash-table-keys
+                                       *shader-vars*))))
+              (find-if #'lower-case-p (symbol-name exp)))
+             (write-string (symbol-name exp) stream))
+            (t
+             (write-string (change-case:camel-case (symbol-name exp))
+                           stream))))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
