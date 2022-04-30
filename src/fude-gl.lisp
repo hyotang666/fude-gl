@@ -142,14 +142,18 @@
   (:report
    (lambda (this output)
      (format output
-             "Missing vertices named ~S. ~:@_To see defined vertices, eval ~S"
-             (cell-error-name this) '(list-all-vertices)))))
+             "Missing vertices named ~S. ~:@_~? ~:@_To see defined vertices, eval ~S"
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (princ-to-string (cell-error-name this))
+                                      (list-all-vertices))
+             '(list-all-vertices)))))
 
 (define-condition missing-definition (style-warning)
   ((condition :initarg :condition :reader %condition))
   (:report
    (lambda (this output)
-     (format output "~:I~A ~:@_Define before use is recomended."
+     (format output "~:I~W ~:@_Or you may have used vertices before defining it."
              (%condition this)))))
 
 (defvar *condition*) ; For debug use.
