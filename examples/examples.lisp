@@ -533,9 +533,9 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
-      (setf (fude-gl:uniform 'transform-demo "tex1" :unit 0)
+      (setf (fude-gl:uniform 'transform-demo "tex1")
               (fude-gl:find-texture 'container)
-            (fude-gl:uniform 'transform-demo "tex2" :unit 1)
+            (fude-gl:uniform 'transform-demo "tex2")
               (fude-gl:find-texture 'face)
             (fude-gl:uniform 'transform-demo "transform")
               (3d-matrices:nmscale
@@ -561,7 +561,7 @@
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; When set some values to the uniforms,
       ;; you can use WITH-UNIFORMS which is a family of CL:WITH-SLOTS.
-      (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) transform)
+      (fude-gl:with-uniforms (tex1 tex2 transform)
           'transform-demo
         (setf tex1 (fude-gl:find-texture 'container)
               tex2 (fude-gl:find-texture 'face)
@@ -585,8 +585,7 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1)
-                                          transform)
+                  (fude-gl:with-uniforms (tex1 tex2 transform)
                       'transform-demo
                     (setf tex1 (fude-gl:find-texture 'container)
                           tex2 (fude-gl:find-texture 'face)
@@ -612,8 +611,7 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1)
-                                          transform)
+                  (fude-gl:with-uniforms (tex1 tex2 transform)
                       'transform-demo
                     (setf tex1 (fude-gl:find-texture 'container)
                           tex2 (fude-gl:find-texture 'face)
@@ -639,8 +637,7 @@
                 t)
               (:idle ()
                 (fude-gl:with-clear (win (:color-buffer-bit))
-                  (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1)
-                                          transform)
+                  (fude-gl:with-uniforms (tex1 tex2 transform)
                       'transform-demo
                     (setf tex1 (fude-gl:find-texture 'container)
                           tex2 (fude-gl:find-texture 'face)
@@ -700,8 +697,7 @@
                   t)
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit))
-                    (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
-                                            view projection)
+                    (fude-gl:with-uniforms (tex1 tex2 model view projection)
                         'coord-demo
                       (setf tex1 (fude-gl:find-texture 'container)
                             tex2 (fude-gl:find-texture 'face)
