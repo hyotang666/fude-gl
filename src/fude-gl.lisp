@@ -664,6 +664,30 @@ Use a macro WITH-SHADER to achieve this context.")
 
 (defgeneric send (object to &key))
 
+(define-condition missing-uniform (fude-gl-error cell-error)
+  ((shader :initarg :shader :reader shader))
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing uniform named ~S. ~:@_~? ~:@_To see all supported uniforms, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (cell-error-name this)
+                                      (uniforms (shader this)))
+             `(uniforms ',(shader this))))))
+
+(define-compiler-macro send
+                       (&whole whole object to
+                        &key uniform &allow-other-keys &environment env)
+  (declare (ignore object))
+  ;; Compile time uniform existance check.
+  (when (and (constantp to env) uniform (constantp uniform env))
+    (let ((uniform-name (eval uniform)) (vertice-name (eval to)))
+      (unless (find uniform-name (the list (uniforms vertice-name))
+                    :test #'equal)
+        (error 'missing-uniform :name uniform-name :shader vertice-name))))
+  whole)
+
 ;;;; UNIFORM
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
