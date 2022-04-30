@@ -432,12 +432,6 @@
                :nconc (loop :for (nil nil name) :on uniforms :by #'cdddr
                             :collect name)))))
 
-(defun <shader-method> (method name main string)
-  `(defmethod ,method ((type (eql ',name)))
-     ,(if (typep main '(cons (cons (eql quote) (cons symbol null)) null))
-          `(,method ',(cadar main))
-          string)))
-
 (defun class-shader-inputs (superclasses)
   (loop :for c :in (mapcar #'find-class superclasses)
         :for slots = (c2mop:class-direct-slots c)
@@ -478,13 +472,22 @@
                    (dolist (var vars) (setf (gethash var *shader-vars*) t))
                    (rec rest out (append varying varying%)
                         (cons
-                          (<shader-method>
-                            (intern (format nil "~A-SHADER" type) :fude-gl)
-                            name main
-                            (format nil format version in (remove nil out)
-                                    (delete nil uniform)
-                                    (remove nil (append varying varying%))
-                                    main))
+                          (let ((method
+                                 (intern (format nil "~A-SHADER" type)
+                                         :fude-gl)))
+                            `(defmethod ,method ((type (eql ',name)))
+                               ,(if (typep main
+                                           '(cons
+                                              (cons (eql quote)
+                                                    (cons symbol null))
+                                              null))
+                                    `(,method ',(cadar main))
+                                    (format nil format version in
+                                            (remove nil out)
+                                            (delete nil uniform)
+                                            (remove nil
+                                                    (append varying varying%))
+                                            main))))
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 
