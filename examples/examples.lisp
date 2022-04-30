@@ -248,15 +248,26 @@
 ;;;; TEXTURE
 
 (fude-gl:defshader texture-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:st)
+  ;; This is an experimental feature though you can use S-Expression glsl code.
+  ;;
+  ;; Pros:
+  ;; Variable existence checking is done in lisp compile time.
+  ;; Free from the semi-colon.
+  ;; Free from the multiple-escaped symbol.
+  ;;
+  ;; Cons:
+  ;; S-Expression glsl code is very lisp-friendly but of course, it is not completely the same as common-lisp.
+  ;; Code reader (the third person that includes yourself who is in the future.) may confuse easily.
   (:vertex ((color :vec3) (texcoord :vec2))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "texcoord = st;"
-      "color = rgb;"
-      "gl_Position = vec4(xy, 0.0, 1.0);"))
-  (:fragment ((|outColor| :vec4) &uniform (tex :|sampler2D|))
+      (setf texcoord fude-gl:st
+	    color fude-gl:rgb
+	    gl-position (vec4 fude-gl:xy 0.0 1.0))))
+  (:fragment ((out-color :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "outColor = texture(tex, texcoord) * vec4(color, 1.0);")))
+    (defun main ()
+      (setf out-color (* (texture tex texcoord) (vec4 color 1.0))))))
 
 (defparameter *png*
   (opticl:read-png-file
