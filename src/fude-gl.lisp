@@ -712,7 +712,8 @@ Use a macro WITH-SHADER to achieve this context.")
                           (the list (uniforms shader))
                           :test #'equal)
               ()
-              "Unknown uniform ~S for ~S" name (uniforms shader))))))))
+              'missing-uniform :name name
+                               :shader shader)))))))
 
 (define-compiler-macro uniform (&whole whole shader name)
   (check-uniform-args shader name)
