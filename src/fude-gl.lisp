@@ -750,15 +750,14 @@ Use a macro WITH-SHADER to achieve this context.")
 (defmacro with-uniforms ((&rest var*) shader &body body)
   ;; Trivial-syntax-check
   (when (constantp shader)
-    (let ((uniforms (the list (uniforms (eval shader)))))
-      (dolist (var var*)
-        (let ((name
-               (if (symbolp var)
-                   (symbol-camel-case var)
-                   (if (stringp (cadr var))
-                       (cadr var)
-                       (symbol-camel-case (car var))))))
-          (assert (find name uniforms :test #'equal :key #'uniform-name))))))
+    (dolist (var var*)
+      (let ((name
+             (if (symbolp var)
+                 (symbol-camel-case var)
+                 (if (stringp (cadr var))
+                     (cadr var)
+                     (symbol-camel-case (car var))))))
+        (check-uniform-args shader name))))
   (let ((s (gensym "SHADER")))
     `(let ((,s ,shader))
        (symbol-macrolet ,(loop :for spec :in var*
