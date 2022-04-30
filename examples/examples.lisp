@@ -262,8 +262,8 @@
     (declaim (ftype (function nil (values)) main))
     (defun main ()
       (setf texcoord fude-gl:st
-	    color fude-gl:rgb
-	    gl-position (vec4 fude-gl:xy 0.0 1.0))))
+            color fude-gl:rgb
+            gl-position (vec4 fude-gl:xy 0.0 1.0))))
   (:fragment ((out-color :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
@@ -348,14 +348,15 @@
 (fude-gl:defshader mix-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((texcoord :vec2))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "texcoord = st;" "gl_Position = vec4(xy, 0.0, 1.0);"))
-  (:fragment ((|outColor| :vec4) &uniform (tex1 :|sampler2D|)
+    (defun main ()
+      (setf texcoord fude-gl:st
+            gl-position (vec4 fude-gl:xy 0.0 1.0))))
+  (:fragment ((out-color :vec4) &uniform (tex1 :|sampler2D|)
               (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "outColor = mix(texture(tex1, texcoord),
-                     texture(tex2, texcoord),
-                     0.5);")))
+      (setf out-color
+              (mix (texture tex1 texcoord) (texture tex2 texcoord) 0.5)))))
 
 (defparameter *logo*
   (opticl:read-png-file
@@ -402,10 +403,10 @@
 (fude-gl:defshader hello 330 (fude-gl:xy)
   (:vertex ()
     (declaim (ftype (function nil (values)) main))
-    (defun main () "gl_Position = vec4(xy,0.0,1.0);"))
+    (defun main () (setf gl-position (vec4 fude-gl:xy 0.0 1.0))))
   (:fragment ((color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);")))
+    (defun main () (setf color (vec4 1.0 1.0 1.0 1.0)))))
 
 (fude-gl:defvertices hello
     (concatenate '(array single-float (*))
@@ -435,10 +436,10 @@
 (fude-gl:defshader double 330 (fude-gl:xyz)
   (:vertex (&uniform (transform :mat4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "gl_Position = transform * vec4(xyz, 1.0);"))
+    (defun main () (setf gl-position (* transform (vec4 fude-gl:xyz 1.0)))))
   (:fragment ((color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = vec4(1.0, 1.0, 1.0, 1.0);")))
+    (defun main () (setf color (vec4 1.0 1.0 1.0 1.0)))))
 
 (fude-gl:defvertices double
     (concatenate '(array single-float (*))
@@ -496,12 +497,12 @@
   (:vertex ((coord :vec2) &uniform (transform :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = transform * vec4(xy, 0.0, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* transform (vec4 fude-gl:xy 0.0 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
+      (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2)))))
 
 (fude-gl:defvertices transform-demo
     (concatenate '(array single-float (*))
@@ -654,12 +655,12 @@
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = projection * view * model * vec4(xy, 0.0, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* projection view model (vec4 fude-gl:xy 0.0 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
+      (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2)))))
 
 (fude-gl:defvertices coord-demo
     (concatenate '(array single-float (*))
@@ -712,11 +713,11 @@
   (:vertex ((coord :vec2) &uniform (projection :mat4) (model :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = projection * model * vec4(xy, 0.0, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* projection model (vec4 fude-gl:xy 0.0 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = texture(tex, coord);")))
+    (defun main () (setf color (texture tex coord)))))
 
 (fude-gl:defvertices ortho-demo
     (concatenate '(array single-float (*))
@@ -758,12 +759,12 @@
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
+      (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *depth-demo*
@@ -842,12 +843,12 @@
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex1 :|sampler2D|) (tex2 :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "color = mix(texture(tex1, coord), texture(tex2, coord), 0.2);")))
+      (setf color (mix (texture tex1 coord) (texture tex2 coord) 0.2)))))
 
 (fude-gl:defvertices cubes *depth-demo*)
 
