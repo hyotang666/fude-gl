@@ -168,8 +168,9 @@
 
 (defun glsl-aref (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~:/fude-gl:glsl-symbol/~:<[~;~@{~W~^, ~@_~}~;]~:>")
-           stream (cadr exp) (cddr exp)))
+  (let ((*var-check-p* t))
+    (funcall (formatter "~:/fude-gl:glsl-symbol/~:<[~;~@{~W~^, ~@_~}~;]~:>")
+             stream (cadr exp) (cddr exp))))
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
