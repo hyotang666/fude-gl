@@ -393,7 +393,9 @@
   (destructuring-bind
       (name type . vector-size)
       spec
-    (list nil
+    (list ;; Layout location, in order to share the formatter with class-shader-inputs.
+          nil
+          ;; GLSL type string.
           (etypecase type
             (symbol (symbol-camel-case type))
             (list
@@ -404,6 +406,7 @@
                        (loop :for (name type) :in type
                              :collect (symbol-camel-case type)
                              :collect (symbol-camel-case name))))))
+          ;; Var name string.
           (if vector-size
               (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
               (symbol-camel-case name)))))
