@@ -1090,20 +1090,16 @@
 (fude-gl:defshader instancing 330 (fude-gl:xy fude-gl:rgb)
   ;; When you want to use array for uniform variable,
   ;; you can specify its size in the third element of the uniform spec.
-  (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
+  (:vertex ((f-color :vec3) &uniform (offsets :vec2 100))
     (declaim (ftype (function nil (values)) main))
+    ;; With S-Expression glsl, LET needs type-spec in the second element of the bind.
     (defun main ()
-      "vec2 offset = offsets[gl_InstanceID];"
-      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-      "fColor = rgb;"))
-  #++
-  (:vertex ((|fColor| :vec3) &uniform (offsets :vec2 100))
-    (let ((offset :vec2 (aref offsets |gl_instanceID|)))
-      (setf gl-position (vec4 (+ xy offset) 0.0 1.0)
-            f-color rgb)))
-  (:fragment ((|fragColor| :vec4))
+      (let ((offset :vec2 (aref offsets |gl_InstanceID|)))
+        (setf gl-position (vec4 (+ fude-gl:xy offset) 0.0 1.0)
+              f-color fude-gl:rgb))))
+  (:fragment ((frag-color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "fragColor = vec4(fColor, 1.0);")))
+    (defun main () (setf frag-color (vec4 f-color 1.0)))))
 
 (fude-gl:defvertices instancing *instancing*)
 
@@ -1143,14 +1139,14 @@
 
 (fude-gl:defshader instanced-arrays-demo 330 (fude-gl:xy fude-gl:rgb
                                               fude-gl:offset)
-  (:vertex ((|fColor| :vec3))
+  (:vertex ((f-color :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-      "fColor = rgb;"))
-  (:fragment ((|fragColor| :vec4))
+      (setf gl-position (vec4 (+ fude-gl:xy fude-gl:offset) 0.0 1.0)
+            f-color fude-gl:rgb)))
+  (:fragment ((frag-color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "fragColor = vec4(fColor, 1.0);")))
+    (defun main () (setf frag-color (vec4 f-color 1.0)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *translations*
@@ -1187,19 +1183,16 @@
 ;;;; INSTANCE-ID-DEMO
 
 (fude-gl:defshader instance-id-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:offset)
-  (:vertex ((|fColor| :vec3))
+  (:vertex ((f-color :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = vec4(xy * (gl_InstanceID / 100.0) + offset, 0.0, 1.0);"
-      "fColor = rgb;"))
-  #++
-  (:vertex ((|fColor| :vec3))
-    (setf gl-position
-            (vec4 (+ (* xy (/ |gl_InstanceID| 100.0)) offset) 0.0 1.0)
-          f-color rgb))
-  (:fragment ((|fragColor| :vec4))
+      (setf gl-position
+              (vec4 (+ (* fude-gl:xy (/ |gl_InstanceID| 100.0)) fude-gl:offset)
+               0.0 1.0)
+            f-color fude-gl:rgb)))
+  (:fragment ((frag-color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "fragColor = vec4(fColor, 1.0);")))
+    (defun main () (setf frag-color (vec4 f-color 1.0)))))
 
 (fude-gl:defvertices instance-id-demo *instancing*
   :instances `((fude-gl:offset ,*translations*)))
@@ -1223,14 +1216,14 @@
 
 (fude-gl:defshader some-instances-demo 330 (fude-gl:xy fude-gl:rgb
                                             fude-gl:offset fude-gl:a)
-  (:vertex ((|fColor| :vec4))
+  (:vertex ((f-color :vec4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = vec4(xy + offset, 0.0, 1.0);"
-      "fColor = vec4(rgb, a);"))
-  (:fragment ((|fragColor| :vec4))
+      (setf gl-position (vec4 (+ fude-gl:xy fude-gl:offset) 0.0 1.0)
+            f-color (vec4 fude-gl:rgb fude-gl:a))))
+  (:fragment ((frag-color :vec4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "fragColor = fColor;")))
+    (defun main () (setf frag-color f-color))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-random-alpha-array (size)
@@ -1311,11 +1304,11 @@
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "coord = st;"
-      "gl_Position = projection * view * model * vec4(xyz, 1.0);"))
+      (setf coord fude-gl:st
+            gl-position (* projection view model (vec4 fude-gl:xyz 1.0)))))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = texture(tex, coord);")))
+    (defun main () (setf color (texture tex coord)))))
 
 (defparameter *marble*
   (let ((pathname (merge-pathnames "marble.jpg" (user-homedir-pathname))))
@@ -1399,13 +1392,13 @@
 (fude-gl:defshader framebuffer-screen 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "gl_Position = vec4(xy, 0.0, 1.0);" "coord = st;"))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = vec4(texture(screen, coord).rgb, 1.0);"))
-  #++
-  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
-    (setf color (vec4 (rgb (texture screen coord)) 1.0))))
+    (defun main ()
+      (setf color (vec4 (fude-gl:rgb (texture screen coord)) 1.0)))))
 
 (fude-gl:defvertices framebuffer-quad
     (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
@@ -1418,11 +1411,11 @@
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "gl_Position = projection * view * model * vec4(xyz, 1.0);"
-      "coord = st;"))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0))
+            coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (tex :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "color = texture(tex, coord);")))
+    (defun main () (setf color (texture tex coord)))))
 
 (fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
 
@@ -1526,15 +1519,18 @@
     (gl:read-buffer :none)))
 
 (fude-gl:defshader simple-depth 330 (fude-gl:xyz)
-  (:vertex (&uniform (|lightSpaceMatrix| :mat4) (model :mat4))
+  (:vertex (&uniform (light-space-matrix :mat4) (model :mat4))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "gl_Position = lightSpaceMatrix * model * vec4(xyz, 1.0);"))
+    (defun main ()
+      (setf gl-position (* light-space-matrix model (vec4 fude-gl:xyz 1.0)))))
   (:fragment () (declaim (ftype (function nil (values)) main)) (defun main ())))
 
 (fude-gl:defshader debug-quad 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2))
     (declaim (ftype (function nil (values)) main))
-    (defun main () "coord = st;" "gl_Position = vec4(xyz, 1.0);"))
+    (defun main ()
+      (setf coord fude-gl:st
+            gl-position (vec4 fude-gl:xyz 1.0))))
   (:fragment ((color :vec4) &uniform (|depthMap| :|sampler2D|)
               (|nearPlane| :float) (|farPlane| :float))
     ;; You can specify local function for shader with defun clause.
