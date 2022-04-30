@@ -1256,11 +1256,19 @@ Use a macro WITH-SHADER to achieve this context.")
     (gl:delete-textures (list (texture-id o)))
     (setf (texture-id o) nil)))
 
-(defun unit (shader uniform)
-  (or (position uniform (the list (uniforms shader))
-                :test #'equal
-                :key #'uniform-name)
-      (error 'missing-uniform :name uniform :shader shader)))
+(defun unit (shader name)
+  (or (loop :for uniform :in (uniforms shader)
+            :with unit :of-type fixnum = 0
+            :if (equal name (uniform-name uniform))
+              :return unit
+            :else :if (locally
+                       #+sbcl ; Due to second argument is not a (simple-array
+                              ; character (*)).
+                       (declare
+                        (sb-ext:muffle-conditions sb-ext:compiler-note))
+                       (equal "sampler2D" (uniform-type uniform)))
+              :do (incf unit))
+      (error 'missing-uniform :name name :shader shader)))
 
 (defmethod send
            ((o texture) (to symbol)
