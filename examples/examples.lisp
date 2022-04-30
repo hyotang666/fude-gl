@@ -395,9 +395,9 @@
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; To set texture to :sampler2D variables,
       ;; you can use SETF with UNIFORM.
-      (setf (fude-gl:uniform 'mix-demo "tex1" :unit 0)
+      (setf (fude-gl:uniform 'mix-demo "tex1")
               (fude-gl:find-texture 'lisp-alien)
-            (fude-gl:uniform 'mix-demo "tex2" :unit 1)
+            (fude-gl:uniform 'mix-demo "tex2")
               (fude-gl:find-texture 'lisp-logo))
       (fude-gl:draw 'mix-demo))))
 

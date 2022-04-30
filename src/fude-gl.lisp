@@ -1248,10 +1248,14 @@ Use a macro WITH-SHADER to achieve this context.")
     (gl:delete-textures (list (texture-id o)))
     (setf (texture-id o) nil)))
 
+(defun unit (shader uniform)
+  (or (position uniform (the list (uniforms shader)) :test #'equal)
+      (error 'missing-uniform :name uniform :shader shader)))
+
 (defmethod send
            ((o texture) (to symbol)
             &key (uniform (alexandria:required-argument :uniform))
-            (unit (alexandria:required-argument :unit)))
+            (unit (unit to uniform)))
   (in-program to)
   (gl:uniformi (uniform to uniform) unit)
   (gl:active-texture unit)
