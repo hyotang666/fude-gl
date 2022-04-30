@@ -381,6 +381,13 @@
 
 (deftype index () '(mod #.array-total-size-limit))
 
+(defstruct uniform
+  (name (error "NAME is required.") :type string :read-only t)
+  (type (error "TYPE is required.") :type string :read-only t))
+
+(defmethod make-load-form ((this uniform) &optional environment)
+  (make-load-form-saving-slots this :environment environment))
+
 (declaim
  (ftype (function
          ((cons var
@@ -433,8 +440,8 @@
        ,@(loop :for (nil lambda-list) :in shader*
                :for uniforms
                     = (nth-value 1 (split-shader-lambda-list lambda-list))
-               :nconc (loop :for (nil nil name) :on uniforms :by #'cdddr
-                            :collect name)))))
+               :nconc (loop :for (nil type name) :on uniforms :by #'cdddr
+                            :collect (make-uniform :name name :type type))))))
 
 (defun class-shader-inputs (superclasses)
   (loop :for c :in (mapcar #'find-class superclasses)
@@ -684,7 +691,8 @@ Use a macro WITH-SHADER to achieve this context.")
              (cell-error-name this)
              "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
              (fuzzy-match:fuzzy-match (cell-error-name this)
-                                      (uniforms (shader this)))
+                                      (mapcar #'uniform-name
+                                              (uniforms (shader this))))
              `(uniforms ',(shader this))))))
 
 (define-compiler-macro send
@@ -695,7 +703,8 @@ Use a macro WITH-SHADER to achieve this context.")
   (when (and (constantp to env) uniform (constantp uniform env))
     (let ((uniform-name (eval uniform)) (vertice-name (eval to)))
       (unless (find uniform-name (the list (uniforms vertice-name))
-                    :test #'equal)
+                    :test #'equal
+                    :key #'uniform-name)
         (error 'missing-uniform :name uniform-name :shader vertice-name))))
   whole)
 
@@ -713,7 +722,8 @@ Use a macro WITH-SHADER to achieve this context.")
             (declare (string name))
             (assert (find (subseq name 0 (position #\[ name))
                           (the list (uniforms shader))
-                          :test #'equal)
+                          :test #'equal
+                          :key #'uniform-name)
               ()
               'missing-uniform :name name
                                :shader shader)))))))
@@ -725,7 +735,9 @@ Use a macro WITH-SHADER to achieve this context.")
 (defun uniform (shader name)
   (handler-case (get-uniform-location (program-id shader) name)
     (uniform-error (c)
-      (if (find (error-uniform c) (the list (uniforms shader)) :test #'equal)
+      (if (find (error-uniform c) (the list (uniforms shader))
+                :test #'equal
+                :key #'uniform-name)
           (error "Uniform ~S is not used in shader ~S? ~A" (error-uniform c)
                  shader (uniforms shader))
           (error
@@ -752,7 +764,7 @@ Use a macro WITH-SHADER to achieve this context.")
                    (if (stringp (cadr var))
                        (cadr var)
                        (symbol-camel-case (car var))))))
-          (assert (find name uniforms :test #'equal))))))
+          (assert (find name uniforms :test #'equal :key #'uniform-name))))))
   (let ((s (gensym "SHADER")))
     `(let ((,s ,shader))
        (symbol-macrolet ,(loop :for spec :in var*
@@ -1252,7 +1264,9 @@ Use a macro WITH-SHADER to achieve this context.")
     (setf (texture-id o) nil)))
 
 (defun unit (shader uniform)
-  (or (position uniform (the list (uniforms shader)) :test #'equal)
+  (or (position uniform (the list (uniforms shader))
+                :test #'equal
+                :key #'uniform-name)
       (error 'missing-uniform :name uniform :shader shader)))
 
 (defmethod send
