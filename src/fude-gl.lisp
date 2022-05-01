@@ -502,11 +502,12 @@
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 
-(defmacro defshader (&whole whole name version superclasses &body shader*)
+(defmacro defshader
+          (&whole whole name version (&rest attribute*) &body shader*)
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
     ((version (mod #.most-positive-fixnum)))
-    (((superclass* superclasses) (satisfies vertex-attribute-p)))
+    ((attribute* (satisfies vertex-attribute-p)))
     ((shader* (or vertex-clause fragment-clause))
      ;;
      (vertex-clause ((eql :vertex) shader-lambda-list main*))
@@ -527,8 +528,8 @@
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (defclass ,name ,superclasses () (:metaclass vector-class))
-     ,@(<shader-forms> shader* superclasses name version)
+     (defclass ,name ,attribute* () (:metaclass vector-class))
+     ,@(<shader-forms> shader* attribute* name version)
      ,(<uniforms> name shader*)
      ',name))
 
