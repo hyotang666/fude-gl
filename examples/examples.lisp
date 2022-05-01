@@ -70,7 +70,7 @@
                  (make-instance 'fude-gl:xy :x 0.5 :y -0.5)
                  ;; Of course, you can use cl:vector literal.
                  ;; NOTE: The vector must be a single-float element-type.
-		 ;; In this case, it is cl:concatenate above that guarantees it.
+                 ;; In this case, it is cl:concatenate above that guarantees it.
                  #(-0.5 -0.5))))
 
 ;; Macro DEFVERTICES defines vertices spec.
@@ -112,6 +112,10 @@
       (fude-gl:draw 'hello-triangle))))
 
 ;;;; UNIFORM-DEMO
+;;
+;; In this example, we explain how to define uniform variable in the shader and
+;; how to send data to the uniforms.
+;;
 
 (fude-gl:defshader uniform-demo 330 (fude-gl:xy)
   ;; Re-use vertex-shader of HELLO-TRIANGLE.
@@ -134,20 +138,21 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader ())
+    (fude-gl:with-shader () (fude-gl:in-vertices 'uniform-demo))
+    ;; In order to avoid inner loop alocating.
+    (let ((vec (3d-vectors:vec 0 0 0))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
-          (fude-gl:in-vertices 'uniform-demo)
-          ;; To send a data (3d-vectors:vec in the example below.),
-          ;; you can use SETF with fude-gl:UNIFORM.
+          ;; Update RED of the vec.
+          (setf (3d-vectors:vx vec)
+                  (/ (+ 1.0 (sin (get-internal-real-time))) 2))
+          ;; To send a data, you can use SETF with fude-gl:UNIFORM.
           ;; The first argument of fude-gl:uniform is a shader name.
           ;; The second argument of fude-gl:uniform is a uniform name.
-          (setf (fude-gl:uniform 'uniform-demo "triangleColor")
-                  (3d-vectors:vec (/ (+ 1.0 (sin (get-internal-real-time))) 2)
-                                  0.0 0.0))
+          (setf (fude-gl:uniform 'uniform-demo "triangleColor") vec)
           (fude-gl:draw 'uniform-demo))))))
 
 ;;;; COLORED-TRIANGLE
