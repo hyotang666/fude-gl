@@ -129,14 +129,6 @@
            :transform-feedback-varying-max-length :geometry-vertices-out
            :geometry-input-type :geometry-output-type))
 
-(define-condition uniform-error (fude-gl-error)
-  ((program :initarg :program :reader program)
-   (uniform :initarg :uniform :reader error-uniform))
-  (:report
-   (lambda (condition stream)
-     (format stream "Uniform ~S is not active in ~S" (error-uniform condition)
-             (program condition)))))
-
 (define-condition missing-vertices (fude-gl-error cell-error)
   ()
   (:report
@@ -169,14 +161,6 @@
 (defun framebuffer-texture-2d (target attachment textarget texture level)
   (handler-bind ((condition (lambda (c) (print (setf *condition* c)))))
     (gl:framebuffer-texture-2d target attachment textarget texture level)))
-
-(defun get-uniform-location (program name)
-  (let ((location (gl:get-uniform-location program name)))
-    (declare ((signed-byte 32) location))
-    (assert (not (minusp location)) ()
-      'uniform-error :program program
-                     :uniform name)
-    location))
 
 (defun foreign-type (cl-type &key cffi)
   (cond ((and cffi (subtypep cl-type 'single-float)) :float)
@@ -690,8 +674,11 @@ Use a macro WITH-SHADER to achieve this context.")
 
 (defgeneric send (object to &key))
 
-(define-condition missing-uniform (fude-gl-error cell-error)
-  ((shader :initarg :shader :reader shader))
+(define-condition uniform-error (fude-gl-error cell-error)
+  ((shader :initarg :shader :reader shader)))
+
+(define-condition missing-uniform (uniform-error)
+  ()
   (:report
    (lambda (this output)
      (format output
@@ -702,6 +689,15 @@ Use a macro WITH-SHADER to achieve this context.")
                                       (mapcar #'uniform-name
                                               (uniforms (shader this))))
              `(uniforms ',(shader this))))))
+
+(define-condition non-active-uniform (uniform-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Uniform ~S is not active in shader ~S. ~:@_Active uniforms in GL are ~S."
+             (cell-error-name this) (shader this)
+             (gl:get-program (program-id (shader this)) :active-uniforms)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Compiler macro and setf expander below needs this eval-when.
@@ -735,17 +731,15 @@ Use a macro WITH-SHADER to achieve this context.")
   whole)
 
 (defun uniform (shader name)
-  (handler-case (get-uniform-location (program-id shader) name)
-    (uniform-error (c)
-      (if (find (error-uniform c) (the list (uniforms shader))
+  (let ((location (gl:get-uniform-location (program-id shader) name)))
+    (declare ((signed-byte 32) location))
+    (unless (minusp location)
+      (if (find name (the list (uniforms shader))
                 :test #'equal
                 :key #'uniform-name)
-          (error "Uniform ~S is not used in shader ~S? ~A" (error-uniform c)
-                 shader (uniforms shader))
-          (error
-            "Uniform ~S is not active in ~A~:@_Program id = ~S~:@_Active uniforms are ~S"
-            (error-uniform c) (uniforms shader) (program c)
-            (gl:get-program (program c) :active-uniforms))))))
+          (error 'missing-uniform :name name :shader shader)
+          (error 'non-active-uniform :name name :shader shader)))
+    location))
 
 (define-setf-expander uniform (shader name &rest args)
   (check-uniform-args shader name)
