@@ -533,6 +533,13 @@
      ,(<uniforms> name shader*)
      ',name))
 
+(defmethod documentation ((this (eql 'defshader)) (type (eql 'function)))
+  "Define lisp side meta shader protocol object and its generic function methods.
+You can define GLSL vertex shader code generator (i.e. generic-function VERTEX-SHADER) and/or
+GLSL fragment shader code generator (i.e. generic-function FRAGMENT-SHADER) and
+vertex constructor (i.e. make-instance NAME.) via this macro.
+Vertex constructor makes a single-float vector that's length depends on its ATTRIBUTEs.")
+
 (defun pprint-defshader (stream exp)
   (setf stream (or stream *standard-output*))
   (funcall
