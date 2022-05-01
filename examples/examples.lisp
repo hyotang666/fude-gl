@@ -59,13 +59,19 @@
     (declaim (ftype (function nil (values)) main))
     (defun main () "outColor = vec4(1.0, 1.0, 1.0, 1.0);")))
 
+;; After define shader, you can make vertex vector via cl:make-instance.
+;; Making vertex via MAKE-INSTANCE may be a bit annoying for you but it is good as documentation.
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *triangle*
     (concatenate '(array single-float (*))
-                 ;; The constructors of the ATTRIBUTE class makes vector.
-                 (make-instance 'fude-gl:xy :x 0.0 :y 0.5)
+                 (make-instance 'hello-triangle :x 0.0 :y 0.5)
+                 ;; If vertex-attribute is only one, you can use it directly.
                  (make-instance 'fude-gl:xy :x 0.5 :y -0.5)
-                 (make-instance 'fude-gl:xy :x -0.5 :y -0.5))))
+                 ;; Of course, you can use cl:vector literal.
+                 ;; NOTE: The vector must be a single-float element-type.
+		 ;; In this case, it is cl:concatenate above that guarantees it.
+                 #(-0.5 -0.5))))
 
 ;; Macro DEFVERTICES defines vertices spec.
 ;;
