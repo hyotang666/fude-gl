@@ -395,10 +395,11 @@
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; To set texture to :sampler2D variables,
       ;; you can use SETF with UNIFORM.
+      ;; Unit location is computed automatically unless explicitly specified.
       (setf (fude-gl:uniform 'mix-demo "tex1")
               (fude-gl:find-texture 'lisp-alien)
-            (fude-gl:uniform 'mix-demo "tex2")
-              (fude-gl:find-texture 'lisp-logo))
+            (fude-gl:uniform 'mix-demo "tex2" :unit 1) ; Explicitly specified.
+            (fude-gl:find-texture 'lisp-logo))
       (fude-gl:draw 'mix-demo))))
 
 ;;;; HELLO from glut-examples.
@@ -827,8 +828,7 @@
                                                      (sdl2:get-window-size
                                                        win))
                                                    0.1 100)))
-                    (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
-                                            view projection)
+                    (fude-gl:with-uniforms (tex1 tex2 model view projection)
                         'depth-demo
                       (setf tex1 (fude-gl:find-texture 'container)
                             tex2 (fude-gl:find-texture 'face)
@@ -879,8 +879,7 @@
                 (:idle ()
                   ;; you should clear :depth-buffer-bit.
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
-                    (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
-                                            view projection)
+                    (fude-gl:with-uniforms (tex1 tex2 model view projection)
                         'cubes
                       (setf tex1 (fude-gl:find-texture 'container)
                             tex2 (fude-gl:find-texture 'face))
@@ -933,8 +932,7 @@
                   t)
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                    (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
-                                            view projection)
+                    (fude-gl:with-uniforms (tex1 tex2 model view projection)
                         'cubes
                       (setf tex1 (fude-gl:find-texture 'container)
                             tex2 (fude-gl:find-texture 'face))
@@ -1031,8 +1029,7 @@
                   (move-camera keysym camera))
                 (:idle ()
                   (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                    (fude-gl:with-uniforms ((tex1 :unit 0) (tex2 :unit 1) model
-                                            view projection)
+                    (fude-gl:with-uniforms (tex1 tex2 model view projection)
                         'cubes
                       (setf tex1 (fude-gl:find-texture 'container)
                             tex2 (fude-gl:find-texture 'face))
@@ -1371,7 +1368,7 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-      (fude-gl:with-uniforms (model (tex :unit 0))
+      (fude-gl:with-uniforms (model tex)
           'depth-testing
         (fude-gl:in-vertices 'depth-testing-cubes)
         (setf tex (fude-gl:find-texture 'cube-texture)
@@ -1460,8 +1457,8 @@
                     ;; In the example below,
                     ;; specify alias 'v' for uniform "view" and
                     ;; alias 'p' for uniform 'projection".
-                    (fude-gl:with-uniforms ((tex :unit 0) (v "view")
-                                            (p "projection") model)
+                    (fude-gl:with-uniforms (tex (v "view") (p "projection")
+                                            model)
                         'framebuffer-vertices
                       ;; Actually this IN-VERTICES is needless.
                       ;; Just for understanding code structure.
