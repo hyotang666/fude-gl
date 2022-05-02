@@ -606,9 +606,16 @@ Use a macro WITH-SHADER to achieve this context.")
   (with-context-assertion (:name 'with-shader)
     (remhash name *programs*)))
 
+(define-condition missing-program (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Shader program named ~S is not created in GL yet."
+             (cell-error-name this)))))
+
 (defun program-id (name &key (error t))
-  (or (cached-program-id name)
-      (and error (error "Missing shader named ~S" name))))
+  (or (cached-program-id name) (and error (error 'missing-program :name name))))
 
 (defun compile-shader (prog vertex-shader fragment-shader)
   (let ((vs (gl:create-shader :vertex-shader))
