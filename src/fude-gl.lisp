@@ -746,12 +746,12 @@ otherwise request GL to create SHADER and cache the ID."
 (defun uniform (shader name)
   (let ((location (gl:get-uniform-location (program-id shader) name)))
     (declare ((signed-byte 32) location))
-    (unless (minusp location)
+    (when (minusp location)
       (if (find name (the list (uniforms shader))
                 :test #'equal
                 :key #'uniform-name)
-          (error 'missing-uniform :name name :shader shader)
-          (error 'non-active-uniform :name name :shader shader)))
+          (error 'non-active-uniform :name name :shader shader)
+          (error 'missing-uniform :name name :shader shader)))
     location))
 
 (define-setf-expander uniform (shader name &rest args)
