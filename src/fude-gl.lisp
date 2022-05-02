@@ -419,6 +419,9 @@
                 (mapc collector (parse-shader-lambda-list-spec elt)))))
 
 (defun <uniforms> (name shader*)
+  ;; Shader NAME becomes VECTOR-CLASS.
+  ;; MAKE-INSTANCE for VECTOR-CLASS makes a VECTOR instead of an object instance.
+  ;; So we should use eql-specializer instead of class.
   `(defmethod uniforms ((type (eql ',name)))
      (list
        ,@(loop :for (nil lambda-list) :in shader*
