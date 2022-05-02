@@ -629,18 +629,21 @@ Use a macro WITH-SHADER to achieve this context.")
       (gl:delete-shader fs)
       (gl:delete-shader vs))))
 
-(defun create-program (name)
-  (let ((program (program-id name :error nil)))
+(defun create-program (shader)
+  "Return created SHADER ID. If SHADER is already created return cached ID
+otherwise request GL to create SHADER and cache the ID."
+  (let ((program (program-id shader :error nil)))
     (or program
         (let ((program
                (the (unsigned-byte 32)
-                    (setf (cached-program-id name) (gl:create-program)))))
+                    (setf (cached-program-id shader) (gl:create-program)))))
           (when (zerop program)
-            (remove-program-cache name)
+            (remove-program-cache shader)
             (error
               "Fails to create program named ~S. ~:_Is opengl context achieved?"
-              name))
-          (compile-shader program (vertex-shader name) (fragment-shader name))
+              shader))
+          (compile-shader program (vertex-shader shader)
+                          (fragment-shader shader))
           program))))
 
 (defun find-program (name &key (construct t) (error t))
