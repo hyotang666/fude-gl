@@ -40,7 +40,7 @@ SBCL/2.2.4
 
 ## Installation
 
-<-- Links -->
+<!-- Links -->
 
 [cl-glut]:https://github.com/3b/cl-opengl/tree/master/glut
 [cl-glfw3]:https://github.com/AlexCharlton/cl-glfw3
