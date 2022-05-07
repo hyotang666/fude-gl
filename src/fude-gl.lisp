@@ -836,8 +836,12 @@ otherwise request GL to create SHADER and cache the ID."
 
 (defstruct buffer
   name
+  ;; Lisp side vector as meta-buffer-object, i.e. used for cl:length,
+  ;; cl:array-rank, cl:array-dimensions etc...
   (original (error "ORIGINAL is required.") :type array)
+  ;; GL side vector.
   source
+  ;; Buffer ID.
   buffer
   (target :array-buffer :type buffer-target :read-only t)
   (usage :static-draw :type buffer-usage :read-only t))
@@ -1144,7 +1148,13 @@ otherwise request GL to create SHADER and cache the ID."
 
 ;;;; DEFVERTICES
 
-(defmacro defvertices (name array &rest options)
+(defmacro defvertices (&whole whole name array &rest options)
+  (check-bnf:check-bnf (:whole whole)
+    ((name symbol))
+    (((vertex-array array) check-bnf:expression))
+    (((option* options) option-keys check-bnf:expression)
+     (option-keys
+      (member :shader :draw-mode :indices :instances :buffer :attributes))))
   (unless (getf options :shader)
     (assert (find-class name)))
   (let ((draw-mode (getf options :draw-mode)))
@@ -1163,6 +1173,34 @@ otherwise request GL to create SHADER and cache the ID."
                  `(make-instance 'vertices :name ',name :array ,array
                                  ,@options))))
      ',name))
+
+(defmethod documentation ((this (eql 'defvertices)) (type (eql 'function)))
+  "Define lisp side vertices object.
+(defvertices NAME ARRAY { option* })
+
+  NAME := SYMBOL, names vertices.
+
+  ARRAY := An expression that generates (VECTOR SINGLE-FLOAT).
+  This represents vertices and will be send to GL.
+
+  OPTION := [ :shader shader-name
+            | :draw-mode DRAW-MODE
+            | :indices indices-option
+            | :instances instances-option
+            | :attributes attributes-option
+            | :buffer buffer-option ]
+    shader-name := An expression that generates a shader name. See DEFSHADER.
+    indices-option := An expression that generates a LIST.
+                      The first element of the list is a LIST which have indices.
+                      The rest elements of the list is key-value pair for MAKE-BUFFER.
+    instances-option := An expression that generates a LIST of instances-clause.
+                        The first element of instances-clause is a SYMBOL that is an ATTRIBUTE.
+                        The second element of instances-clause is an ARRAY.
+                        The rest elements of instances-clause is buffer-option.
+    attributes-option := An expression that generates a LIST of attribute names.
+    buffer-option := An expression that generates a PLIST.
+                     Each key of the PLIST is (member :buffer-usage :buffer-target).
+                     Each value of the PLIST is a type of buffer-usage or buffer-taget respectively.")
 
 (defun pprint-defvertices (stream exp)
   (funcall
