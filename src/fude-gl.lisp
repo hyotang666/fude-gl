@@ -1232,7 +1232,9 @@ otherwise request GL to create SHADER and cache the ID."
                  :when (slot-boundp shader 'vertex-array)
                    :do (destruct shader))
            (loop :for framebuffer :being :each :hash-value :of *framebuffers*
-                 :do (destruct framebuffer)))))))
+                 :do (destruct framebuffer))
+           (loop :for program :being :each :hash-value :of *programs*
+                 :do (gl:delete-program program)))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
