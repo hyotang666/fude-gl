@@ -643,15 +643,17 @@ otherwise request GL to create SHADER and cache the ID."
                           (fragment-shader shader))
           program))))
 
-(defun find-program (name &key (construct t) (error t))
-  (or (program-id name :error error)
-      (when construct
-        (create-program name))))
+(defun find-program (name &key (if-does-not-exist :error))
+  (or (program-id name :error nil)
+      (ecase if-does-not-exist
+        (:error (error 'missing-program :name name))
+        (:create (create-program name))
+        ((nil) nil))))
 
 (defmacro in-program (name)
   (when (constantp name)
     (find-class (eval name)))
-  `(gl:use-program (find-program ,name :error nil)))
+  `(gl:use-program (find-program ,name :if-does-not-exist :create)))
 
 ;;;; GENERIC-FUNCTIONS
 
