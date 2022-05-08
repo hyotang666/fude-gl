@@ -406,9 +406,9 @@
       ;; you can use SETF with UNIFORM.
       ;; Unit location is computed automatically unless explicitly specified.
       (setf (fude-gl:uniform 'mix-demo "tex1")
-              (fude-gl:find-texture 'lisp-alien)
+              (fude-gl:find-texture 'lisp-alien :if-does-not-exist :create)
             (fude-gl:uniform 'mix-demo "tex2" :unit 1) ; Explicitly specified.
-            (fude-gl:find-texture 'lisp-logo))
+            (fude-gl:find-texture 'lisp-logo :if-does-not-exist :create))
       (fude-gl:draw 'mix-demo))))
 
 ;;;; HELLO from glut-examples.
@@ -543,9 +543,9 @@
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
       (setf (fude-gl:uniform 'transform-demo "tex1")
-              (fude-gl:find-texture 'container)
+              (fude-gl:find-texture 'container :if-does-not-exist :create)
             (fude-gl:uniform 'transform-demo "tex2")
-              (fude-gl:find-texture 'face)
+              (fude-gl:find-texture 'face :if-does-not-exist :create)
             (fude-gl:uniform 'transform-demo "transform")
               (3d-matrices:nmscale
                 (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vz+
@@ -571,8 +571,8 @@
       ;; you can use WITH-UNIFORMS which is a family of CL:WITH-SLOTS.
       (fude-gl:with-uniforms (tex1 tex2 transform)
           'transform-demo
-        (setf tex1 (fude-gl:find-texture 'container)
-              tex2 (fude-gl:find-texture 'face)
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
               transform
                 (3d-matrices:mtranslation
                   (3d-vectors:vec (sin (get-internal-real-time)) 0.0 0.0))))
@@ -594,8 +594,12 @@
               (fude-gl:with-clear (win (:color-buffer-bit))
                 (fude-gl:with-uniforms (tex1 tex2 transform)
                     'transform-demo
-                  (setf tex1 (fude-gl:find-texture 'container)
-                        tex2 (fude-gl:find-texture 'face)
+                  (setf tex1
+                          (fude-gl:find-texture 'container
+                                                :if-does-not-exist :create)
+                        tex2
+                          (fude-gl:find-texture 'face
+                                                :if-does-not-exist :create)
                         transform
                           (3d-matrices:mtranslation
                             (3d-vectors:vec 0.0 (sin (get-internal-real-time))
@@ -618,8 +622,12 @@
               (fude-gl:with-clear (win (:color-buffer-bit))
                 (fude-gl:with-uniforms (tex1 tex2 transform)
                     'transform-demo
-                  (setf tex1 (fude-gl:find-texture 'container)
-                        tex2 (fude-gl:find-texture 'face)
+                  (setf tex1
+                          (fude-gl:find-texture 'container
+                                                :if-does-not-exist :create)
+                        tex2
+                          (fude-gl:find-texture 'face
+                                                :if-does-not-exist :create)
                         transform
                           (3d-matrices:nmscale
                             (3d-matrices:mtranslation (3d-vectors:vec 0 0 0))
@@ -643,8 +651,12 @@
               (fude-gl:with-clear (win (:color-buffer-bit))
                 (fude-gl:with-uniforms (tex1 tex2 transform)
                     'transform-demo
-                  (setf tex1 (fude-gl:find-texture 'container)
-                        tex2 (fude-gl:find-texture 'face)
+                  (setf tex1
+                          (fude-gl:find-texture 'container
+                                                :if-does-not-exist :create)
+                        tex2
+                          (fude-gl:find-texture 'face
+                                                :if-does-not-exist :create)
                         transform
                           (3d-matrices:nmrotate
                             (3d-matrices:mtranslation (3d-vectors:vec 0 0 0))
@@ -702,8 +714,12 @@
                 (fude-gl:with-clear (win (:color-buffer-bit))
                   (fude-gl:with-uniforms (tex1 tex2 model view projection)
                       'coord-demo
-                    (setf tex1 (fude-gl:find-texture 'container)
-                          tex2 (fude-gl:find-texture 'face)
+                    (setf tex1
+                            (fude-gl:find-texture 'container
+                                                  :if-does-not-exist :create)
+                          tex2
+                            (fude-gl:find-texture 'face
+                                                  :if-does-not-exist :create)
                           model m
                           view v
                           projection p))
@@ -829,8 +845,12 @@
                                                  0.1 100)))
                   (fude-gl:with-uniforms (tex1 tex2 model view projection)
                       'depth-demo
-                    (setf tex1 (fude-gl:find-texture 'container)
-                          tex2 (fude-gl:find-texture 'face)
+                    (setf tex1
+                            (fude-gl:find-texture 'container
+                                                  :if-does-not-exist :create)
+                          tex2
+                            (fude-gl:find-texture 'face
+                                                  :if-does-not-exist :create)
                           model m
                           view v
                           projection p))
@@ -878,8 +898,12 @@
                 (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
                   (fude-gl:with-uniforms (tex1 tex2 model view projection)
                       'cubes
-                    (setf tex1 (fude-gl:find-texture 'container)
-                          tex2 (fude-gl:find-texture 'face))
+                    (setf tex1
+                            (fude-gl:find-texture 'container
+                                                  :if-does-not-exist :create)
+                          tex2
+                            (fude-gl:find-texture 'face
+                                                  :if-does-not-exist :create))
                     (loop :for pos :in cube-positions
                           :for i :upfrom 0
                           :do (setf model
@@ -929,8 +953,12 @@
                 (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                   (fude-gl:with-uniforms (tex1 tex2 model view projection)
                       'cubes
-                    (setf tex1 (fude-gl:find-texture 'container)
-                          tex2 (fude-gl:find-texture 'face))
+                    (setf tex1
+                            (fude-gl:find-texture 'container
+                                                  :if-does-not-exist :create)
+                          tex2
+                            (fude-gl:find-texture 'face
+                                                  :if-does-not-exist :create))
                     (let* ((radius 10)
                            ;; To move camera you can use a function MOVE.
                            ;; The first argument is a camera object.
@@ -1027,8 +1055,12 @@
                 (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
                   (fude-gl:with-uniforms (tex1 tex2 model view projection)
                       'cubes
-                    (setf tex1 (fude-gl:find-texture 'container)
-                          tex2 (fude-gl:find-texture 'face))
+                    (setf tex1
+                            (fude-gl:find-texture 'container
+                                                  :if-does-not-exist :create)
+                          tex2
+                            (fude-gl:find-texture 'face
+                                                  :if-does-not-exist :create))
                     (loop :for pos :in *cube-positions*
                           :for i :upfrom 0
                           :do (setf model
@@ -1367,7 +1399,8 @@
       (fude-gl:with-uniforms (model tex)
           'depth-testing
         (fude-gl:in-vertices 'depth-testing-cubes)
-        (setf tex (fude-gl:find-texture 'cube-texture)
+        (setf tex
+                (fude-gl:find-texture 'cube-texture :if-does-not-exist :create)
               model
                 (3d-matrices:nmtranslate (3d-matrices:meye 4)
                                          (3d-vectors:vec3 -1 0 -1)))
@@ -1377,7 +1410,7 @@
                                          (3d-vectors:vec3 2 0 0)))
         (fude-gl:draw 'depth-testing-cubes)
         (fude-gl:in-vertices 'depth-testing-plane)
-        (setf tex (fude-gl:find-texture 'metal)
+        (setf tex (fude-gl:find-texture 'metal :if-does-not-exist :create)
               model (3d-matrices:meye 4))
         (fude-gl:draw 'depth-testing-plane)))))
 
@@ -1460,7 +1493,9 @@
                       ;; Just for understanding code structure.
                       ;;; Cubes
                       (fude-gl:in-vertices 'fb-cube)
-                      (setf tex (fude-gl:find-texture 'container)
+                      (setf tex
+                              (fude-gl:find-texture 'container
+                                                    :if-does-not-exist :create)
                             v view
                             p projection
                             model
@@ -1473,7 +1508,9 @@
                       (fude-gl:draw 'fb-cube)
                       ;;; floor
                       (fude-gl:in-vertices 'plane-vertices)
-                      (setf tex (fude-gl:find-texture 'metal)
+                      (setf tex
+                              (fude-gl:find-texture 'metal
+                                                    :if-does-not-exist :create)
                             model (3d-matrices:meye 4))
                       (fude-gl:draw 'plane-vertices)))
                   ;; draw a quad plane with the attached framebuffer color texture
@@ -1867,7 +1904,8 @@
                                           0.1 100)
               view-pos (fude-gl:camera-position camera)
               light-pos light-position
-              diffuse-texture (fude-gl:find-texture 'wood)
+              diffuse-texture
+                (fude-gl:find-texture 'wood :if-does-not-exist :create)
               shadow-map
                 (fude-gl:framebuffer-texture
                   (fude-gl:find-framebuffer 'depth-map)))
