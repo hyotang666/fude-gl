@@ -10,10 +10,10 @@
   (restart-case (mapc #'funcall
                       '(hello-triangle uniform-demo colored-triangle
                                        element-buffer texture-demo mix-demo
-                                       double transform-demo translate-x
-                                       translate-y scaling rotating coord-demo
-                                       depth-demo cubes cameras walk-around
-                                       text instancing instanced-arrays-demo
+                                       transform-demo translate-x translate-y
+                                       scaling rotating coord-demo depth-demo
+                                       cubes cameras walk-around text
+                                       instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
                                        some-instance-dynamics))
     (quit ())))
@@ -425,48 +425,6 @@
       (setf (fude-gl:uniform 'mix-demo "tex2" :unit 1)
               (fude-gl:find-texture 'lisp-logo))
       (fude-gl:draw 'mix-demo))))
-
-;;;; DOUBLE from glut-examples.
-
-(fude-gl:defshader double 330 (fude-gl:xyz)
-  (:vertex (&uniform (transform :mat4))
-    (declaim (ftype (function nil (values)) main))
-    (defun main () (setf gl-position (* transform (vec4 fude-gl:xyz 1.0)))))
-  (:fragment ((color :vec4))
-    (declaim (ftype (function nil (values)) main))
-    (defun main () (setf color (vec4 1.0 1.0 1.0 1.0)))))
-
-(fude-gl:defvertices double
-    (concatenate '(array single-float (*))
-                 (make-instance 'double :x -0.5 :y 0.5 :z 0.0) ; top-left
-                 (make-instance 'double :x 0.5 :y 0.5 :z 0.0) ; top-right
-                 (make-instance 'double :x -0.5 :y -0.5 :z 0.0) ; bottom-left
-                 (make-instance 'double :x 0.5 :y -0.5 :z 0.0))
-  :indices `((0 1 2 2 3 1)))
-
-(defun double ()
-  (uiop:nest
-    (sdl2:with-init (:everything))
-    (sdl2:with-window (win :flags '(:shown :opengl)
-                           :w 250
-                           :h 250
-                           :title "double"))
-    (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'double))
-    (sdl2:with-event-loop (:method :poll)
-      (:quit ()
-        t))
-    (:idle nil)
-    (fude-gl:with-clear (win (:color-buffer-bit) :color '(0.2 0.3 0.3 1.0))
-      ;; To set the uniform variable by matrix,
-      ;; you can use a SETF macro.
-      ;; The first argument of UNIFORM is a shader name.
-      ;; The second argument is a uniform variable name.
-      (setf (fude-gl:uniform 'double "transform")
-              (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vz+
-                                    (fude-gl:radians
-                                      (get-internal-real-time))))
-      (fude-gl:draw 'double))))
 
 ;;;; MATRIX-OPERATIONS
 
