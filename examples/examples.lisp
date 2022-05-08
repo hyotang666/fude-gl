@@ -205,6 +205,9 @@
       (fude-gl:draw 'colored-triangle))))
 
 ;;;; ELEMENT-BUFFER
+;;
+;; In this example, we explain how to use element buffer.
+;;
 
 (fude-gl:defvertices element-buffer
     (concatenate '(array single-float (*))
@@ -247,7 +250,7 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'element-buffer))
+    (fude-gl:with-shader ())
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
