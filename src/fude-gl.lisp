@@ -360,7 +360,7 @@
         (warn 'missing-definition :condition c))))
   whole)
 
-(defgeneric draw (thing))
+(defgeneric draw (thing) (:documentation "Request openGL to draw THING."))
 
 (defgeneric send (object to &key))
 
