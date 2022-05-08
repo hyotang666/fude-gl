@@ -196,14 +196,13 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader ()
-      (fude-gl:in-vertices 'colored-triangle)
-      (sdl2:with-event-loop (:method :poll)
-        (:quit ()
-          t)
-        (:idle ()
-          (fude-gl:with-clear (win (:color-buffer-bit))
-            (fude-gl:draw 'colored-triangle)))))))
+    (fude-gl:with-shader ())
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:draw 'colored-triangle))))
 
 ;;;; ELEMENT-BUFFER
 
