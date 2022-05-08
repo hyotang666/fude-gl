@@ -696,9 +696,16 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
     (or (and instance (program-id instance))
         (ecase if-does-not-exist
           (:error (error 'missing-program :name name))
-          (:create
-           (setf (program-id (find-shader name)) (create-program name)))
+          (:create (program-id (construct (find-shader name))))
           ((nil) nil)))))
+
+(defmethod construct ((o vector-class))
+  (setf (program-id o) (create-program (class-name o)))
+  o)
+
+(defmethod destruct ((o vector-class))
+  (gl:delete-program (program-id o))
+  (setf (program-id o) nil))
 
 (defmacro in-program (name)
   (when (constantp name)
@@ -1222,8 +1229,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
            (loop :for name :being :each :hash-key :of *shaders* :using
                       (:hash-value shader)
                  :when (program-id shader)
-                   :do (gl:delete-program (program-id shader))
-                       (setf (program-id shader) nil)))))))
+                   :do (destruct shader)))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
