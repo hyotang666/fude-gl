@@ -212,7 +212,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; NOTE: DEFINE-VERTEX-ATTRIBUTE below needs this eval-when.
-  (defclass vector-class (standard-class) ())
+  (defclass vector-class (standard-class)
+    ((program-id :accessor program-id :initform nil)))
   (defmethod c2mop:validate-superclass ((c vector-class) (s standard-class)) t)
   ;; METACLASS for attributes.
   (defclass attributes (vector-class) ())
@@ -479,6 +480,21 @@
                           acc))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 
+(defvar *shaders*
+  (make-hash-table :test #'eq)
+  "Repository of the meta shader objects.")
+
+(define-condition missing-program (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output "Shader program named ~S is not created in GL yet."
+             (cell-error-name this)))))
+
+(defun find-shader (name &optional (errorp t))
+  (or (gethash name *shaders*)
+      (and errorp (error 'missing-program :name name))))
+
 (defmacro defshader
           (&whole whole name version (&rest attribute*) &body shader*)
   (check-bnf:check-bnf (:whole whole)
@@ -505,7 +521,8 @@
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (defclass ,name ,attribute* () (:metaclass vector-class))
+     (setf (gethash ',name *shaders*)
+             (defclass ,name ,attribute* () (:metaclass vector-class)))
      ,@(<shader-forms> shader* attribute* name version)
      ,(<uniforms> name shader*)
      ',name))
@@ -564,8 +581,6 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
 
-;;;; *PROGRAMS*
-
 (define-condition context-not-achieved (fude-gl-error cell-error)
   ()
   (:report
@@ -577,34 +592,6 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   `(handler-case (progn ,@body)
      (error ()
        (error 'context-not-achieved :name ,name))))
-
-(defvar *programs*
-  nil
-  "HASH-TABLE that maps a defined shader name to shader program ID,
-especially for a better error message by handling the shader programs by its name.
-Use a macro WITH-SHADER to achieve this context.")
-
-(defun cached-program-id (name)
-  (with-context-assertion (:name 'with-shader)
-    (gethash name *programs*)))
-
-(defun (setf cached-program-id) (id name)
-  (with-context-assertion (:name 'with-shader)
-    (setf (gethash name *programs*) id)))
-
-(defun remove-program-cache (name)
-  (with-context-assertion (:name 'with-shader)
-    (remhash name *programs*)))
-
-(define-condition missing-program (fude-gl-error cell-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output "Shader program named ~S is not created in GL yet."
-             (cell-error-name this)))))
-
-(defun program-id (name &key (error t))
-  (or (cached-program-id name) (and error (error 'missing-program :name name))))
 
 (defun compile-shader (program-id vertex-shader fragment-shader)
   "Request openGL to compile and link shader programs. Return nil."
@@ -644,15 +631,17 @@ Use a macro WITH-SHADER to achieve this context.")
 
 (defun find-program (name &key (if-does-not-exist :error))
   "Return program ID of the NAME if exists, otherwise depends on IF-DOES-NOT-EXIST."
-  (or (program-id name :error nil)
-      (ecase if-does-not-exist
-        (:error (error 'missing-program :name name))
-        (:create (setf (cached-program-id name) (create-program name)))
-        ((nil) nil))))
+  (let ((instance (find-shader name nil)))
+    (or (and instance (program-id instance))
+        (ecase if-does-not-exist
+          (:error (error 'missing-program :name name))
+          (:create
+           (setf (program-id (find-shader name)) (create-program name)))
+          ((nil) nil)))))
 
 (defmacro in-program (name)
   (when (constantp name)
-    (find-class (eval name)))
+    (find-shader (eval name)))
   `(gl:use-program (find-program ,name :if-does-not-exist :create)))
 
 ;;;; GENERIC-FUNCTIONS
@@ -702,7 +691,8 @@ Use a macro WITH-SHADER to achieve this context.")
      (format output
              "Uniform ~S is not active in shader ~S. ~:@_Active uniforms in GL are ~S."
              (cell-error-name this) (shader this)
-             (gl:get-program (program-id (shader this)) :active-uniforms)))))
+             (gl:get-program (program-id (find-shader (shader this)))
+                             :active-uniforms)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Compiler macro and setf expander below needs this eval-when.
@@ -710,7 +700,7 @@ Use a macro WITH-SHADER to achieve this context.")
     "Compile time argument validation for UNIFORM."
     (when (constantp shader)
       (let ((shader (eval shader)))
-        (find-class shader)
+        (find-shader shader)
         (when (constantp name)
           (let ((name (eval name)))
             (declare (string name))
@@ -736,7 +726,8 @@ Use a macro WITH-SHADER to achieve this context.")
   whole)
 
 (defun uniform (shader name)
-  (let ((location (gl:get-uniform-location (program-id shader) name)))
+  (let ((location
+         (gl:get-uniform-location (program-id (find-shader shader)) name)))
     (declare ((signed-byte 32) location))
     (when (minusp location)
       (if (find name (the list (uniforms shader))
@@ -1150,7 +1141,7 @@ Use a macro WITH-SHADER to achieve this context.")
      (option-keys
       (member :shader :draw-mode :indices :instances :buffer :attributes))))
   (unless (getf options :shader)
-    (assert (find-class name)))
+    (assert (find-shader name)))
   (let ((draw-mode (getf options :draw-mode)))
     (when draw-mode
       (check-type draw-mode draw-mode)))
@@ -1217,9 +1208,7 @@ Use a macro WITH-SHADER to achieve this context.")
 
 (defmacro with-shader (() &body body)
   (let ((toplevelp (gensym "TOPLEVELP")))
-    `(let ((,toplevelp *toplevel-p*)
-           (*toplevel-p* nil)
-           (*programs* (or *programs* (make-hash-table :test #'eq))))
+    `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
        (unwind-protect (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
@@ -1227,8 +1216,11 @@ Use a macro WITH-SHADER to achieve this context.")
                    :do (destruct shader))
            (loop :for framebuffer :being :each :hash-value :of *framebuffers*
                  :do (destruct framebuffer))
-           (loop :for program :being :each :hash-value :of *programs*
-                 :do (gl:delete-program program)))))))
+           (loop :for name :being :each :hash-key :of *shaders* :using
+                      (:hash-value shader)
+                 :when (program-id shader)
+                   :do (gl:delete-program (program-id shader))
+                       (setf (program-id shader) nil)))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
