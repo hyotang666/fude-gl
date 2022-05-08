@@ -434,7 +434,7 @@
 (define-compiler-macro shader (&whole whole o)
   (declare (notinline shader))
   (if (constantp o)
-      `',(shader (find-vertices (eval o) :construct nil))
+      `',(shader (find-vertices (eval o) :if-does-not-exist nil))
       whole))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
@@ -659,7 +659,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
-    (handler-case (find-vertices (eval thing) :construct nil :error t)
+    (handler-case (find-vertices (eval thing) :if-does-not-exist nil)
       (missing-vertices (c)
         (warn 'missing-definition :condition c))))
   whole)
@@ -908,24 +908,37 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   (loop :for name :being :each :hash-key :of *vertices*
         :collect name))
 
-(defun find-vertices (name &key (construct t) (error t))
+(defun find-vertices (name &key (if-does-not-exist :error))
+  "Return VERTICES object named NAME.
+The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIST."
   (let ((vertices))
     (cond ((typep name 'vertices) name)
+          ;; Vertices are not defined yet.
           ((null (setf vertices (gethash name *vertices*)))
-           (and error (error 'missing-vertices :name name)))
+           (error 'missing-vertices :name name))
+          ;; Vertices are already constructed in GL.
           ((slot-boundp vertices 'vertex-array) vertices)
-          ((not construct) vertices)
+          ;; Vertices are not constrcuted in GL yet.
           (t
-           (restart-case (construct vertices)
-             (continue ()
-                 :report "Return vertices without constructing."
-               vertices))))))
+           (ecase if-does-not-exist
+             (:error
+              (cerror "Return vertices without constructing."
+                      "Vertices named ~S are not constructed in GL yet." name)
+              vertices)
+             (:create
+              (restart-case (construct vertices)
+                (continue ()
+                    :report "Return vertices without constructing."
+                  vertices)))
+             ((nil) vertices))))))
 
 ;; Trivial readers.
 
-(defmethod vertex-array ((o symbol)) (vertex-array (find-vertices o)))
+(defmethod vertex-array ((o symbol))
+  (vertex-array (find-vertices o :if-does-not-exist :create)))
 
-(defmethod shader ((o symbol)) (shader (find-vertices o)))
+(defmethod shader ((o symbol))
+  (shader (find-vertices o :if-does-not-exist :create)))
 
 ;; *VERTEX-ARRAY*
 
@@ -935,8 +948,8 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (defmacro in-vertices (form &key (with-vertex-array t))
   (when (constantp form)
-    (find-vertices (eval form) :construct nil :error t))
-  `(let ((vertices (find-vertices ,form)))
+    (find-vertices (eval form) :if-does-not-exist nil))
+  `(let ((vertices (find-vertices ,form :if-does-not-exist :create)))
      (in-program (shader vertices))
      ,@(when with-vertex-array
          `((in-vertex-array (vertex-array vertices))))
@@ -1026,10 +1039,11 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   (destruct (buffer o)))
 
 (defmethod send ((o (eql :buffer)) (to symbol) &key (method #'gl:buffer-data))
-  (let ((buffer (buffer (find-vertices to))))
+  (let ((buffer (buffer (find-vertices to :if-does-not-exist :create))))
     (send (buffer-source buffer) buffer :method method)))
 
-(defmethod draw ((name symbol)) (draw (find-vertices name)))
+(defmethod draw ((name symbol))
+  (draw (find-vertices name :if-does-not-exist :create)))
 
 (defmethod draw :before ((o vertices)) (in-vertices o))
 
@@ -1124,7 +1138,9 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
         instances-buffer))
 
 (defun instances-buffer (vertices name)
-  (or (cdr (assoc name (table (find-vertices vertices))))
+  (or (cdr
+        (assoc name
+               (table (find-vertices vertices :if-does-not-exist :create))))
       (error "Missing vertices ~S in ~S" name vertices)))
 
 (defmethod send ((o symbol) (to symbol) &key (method #'gl:buffer-data))
