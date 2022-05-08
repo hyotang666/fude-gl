@@ -74,6 +74,7 @@
            #:radians
            #:ortho
            #:model-matrix
+           #:re-eye
            ;;;; IMAGE-LOADER
            #:defimage ; dsl macro.
            #:list-all-images ; dev helpers.
