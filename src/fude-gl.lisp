@@ -626,28 +626,28 @@ Use a macro WITH-SHADER to achieve this context.")
       (gl:delete-shader fs)
       (gl:delete-shader vs))))
 
+(define-condition fail-to-create-program (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Fails to create program named ~S. ~:_Is opengl context achieved?"
+             (cell-error-name this)))))
+
 (defun create-program (shader)
-  "Return created SHADER ID. If SHADER is already created return cached ID
-otherwise request GL to create SHADER and cache the ID."
-  (let ((program (program-id shader :error nil)))
-    (or program
-        (let ((program
-               (the (unsigned-byte 32)
-                    (setf (cached-program-id shader) (gl:create-program)))))
-          (when (zerop program)
-            (remove-program-cache shader)
-            (error
-              "Fails to create program named ~S. ~:_Is opengl context achieved?"
-              shader))
-          (compile-shader program (vertex-shader shader)
-                          (fragment-shader shader))
-          program))))
+  "Request openGL to create SHADER, return its ID."
+  (let ((program (the (unsigned-byte 32) (gl:create-program))))
+    (when (zerop program)
+      (error 'fail-to-create-program :name shader))
+    (compile-shader program (vertex-shader shader) (fragment-shader shader))
+    program))
 
 (defun find-program (name &key (if-does-not-exist :error))
+  "Return program ID of the NAME if exists, otherwise depends on IF-DOES-NOT-EXIST."
   (or (program-id name :error nil)
       (ecase if-does-not-exist
         (:error (error 'missing-program :name name))
-        (:create (create-program name))
+        (:create (setf (cached-program-id name) (create-program name)))
         ((nil) nil))))
 
 (defmacro in-program (name)
@@ -1024,7 +1024,7 @@ otherwise request GL to create SHADER and cache the ID."
 (defmethod construct ((o vertices))
   (with-slots (vertex-array shader)
       o
-    (create-program shader)
+    (find-program shader :if-does-not-exist :create)
     (setf vertex-array (create-vertex-array o))
     o))
 
@@ -1066,7 +1066,7 @@ otherwise request GL to create SHADER and cache the ID."
 (defmethod construct ((o indexed-vertices))
   (with-slots (vertex-array shader)
       o
-    (create-program shader)
+    (find-program shader :if-does-not-exist :create)
     (setf vertex-array (create-vertex-array o))
     o))
 
@@ -1108,7 +1108,7 @@ otherwise request GL to create SHADER and cache the ID."
         :do (construct buffer))
   (with-slots (vertex-array shader)
       o
-    (create-program shader)
+    (find-program shader :if-does-not-exist :create)
     (setf vertex-array (create-vertex-array o))
     o))
 
