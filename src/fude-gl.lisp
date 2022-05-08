@@ -197,16 +197,6 @@
                                  :element-type (array-element-type array)
                                  :displaced-to array))))
 
-(declaim
- (ftype (function
-         (draw-mode vector &key (:offset (mod #.array-total-size-limit)))
-         (values &optional))
-        draw-elements))
-
-(defun draw-elements (mode cl-vector &key (offset 0))
-  (%gl:draw-elements mode (length cl-vector)
-                     (foreign-type (array-element-type cl-vector)) offset))
-
 ;;;; VERTEX-ATTRIBUTE-CLASSES
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -1083,7 +1073,9 @@ otherwise request GL to create SHADER and cache the ID."
   (destruct (indices o)))
 
 (defmethod draw ((o indexed-vertices))
-  (draw-elements (draw-mode o) (buffer-original (indices o))))
+  (let ((cl-vector (buffer-original (indices o))))
+    (%gl:draw-elements (draw-mode o) (length cl-vector)
+                       (foreign-type (array-element-type cl-vector)) 0)))
 
 ;; INSTANCED
 
