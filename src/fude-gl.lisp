@@ -1229,6 +1229,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                    :do (destruct shader))
            (loop :for framebuffer :being :each :hash-value :of *framebuffers*
                  :do (destruct framebuffer))
+           (loop :for texture :being :each :hash-value :of *textures*
+                 :when (texture-id texture)
+                   :do (destruct texture))
            (loop :for name :being :each :hash-key :of *shaders* :using
                       (:hash-value shader)
                  :when (program-id shader)
@@ -1386,28 +1389,6 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
     (find-texture (eval name) :construct nil :error t))
   `(let ((texture (find-texture ,name)))
      (gl:bind-texture (texture-target texture) (texture-id texture))))
-
-(defmacro with-textures (() &body body)
-  `(unwind-protect (progn ,@body)
-     (loop :for texture :being :each :hash-value :of *textures*
-           :when (texture-id texture)
-             :do (destruct texture))))
-
-(defun pprint-with-textures (stream exp)
-  (funcall
-    (formatter
-     #.(apply #'concatenate 'string
-              (alexandria:flatten
-                (list "~:<" ; pprint logial block.
-                      "~1I~W~^ ~@_" ; operator
-                      (list "~:<" ; dummy
-                            "~@{~W~^ ~:_~}" ; dummy body
-                            "~:>~^ ~_")
-                      "~@{~W~^ ~_~}" ; The body.
-                      "~:>"))))
-    stream exp))
-
-(set-pprint-dispatch '(cons (member with-textures)) 'pprint-with-textures)
 
 ;;;; WITH-CLEAR
 

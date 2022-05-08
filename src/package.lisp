@@ -42,7 +42,6 @@
            #:list-all-vertices ; dev helpers.
            ;;;; TEXTURE
            #:deftexture ; dsl macro.
-           #:with-textures ; cleanup.
            #:in-texture
            #:list-all-textures
            #:find-texture
