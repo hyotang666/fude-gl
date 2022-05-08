@@ -11,15 +11,15 @@ Not a game engine.
 * [cl-glfw3]
 * [glkit]
 
-## See also.
-### GLSL
+### See also.
+#### GLSL
 * [3bgl-shader]
 * [varjo]
 * [glsl-spec]
 * [glsl-packing]
 * [glsl-toolkit]
 
-### Text rendering.
+#### Text rendering.
 * [glisph]
 * [cl-fond]
 
