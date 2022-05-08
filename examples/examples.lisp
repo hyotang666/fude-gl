@@ -359,6 +359,9 @@
       (fude-gl:draw 'texture-demo))))
 
 ;;;; MIX
+;;
+;; In this example, we explain how to handle some textures.
+;;
 
 (fude-gl:defshader mix-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((texcoord :vec2))
@@ -398,7 +401,7 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader ())
+    (fude-gl:with-shader () (fude-gl:in-texture 'lisp-logo))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -407,10 +410,20 @@
       ;; To set texture to :sampler2D variables,
       ;; you can use SETF with UNIFORM.
       ;; Unit location is computed automatically unless explicitly specified.
+      ;;
+      ;; NOTE: Unlike previous texture-demo, we does not need to fude-gl:in-texture
+      ;; because underlying generic function SEND bind current texture implicitly.
+      ;;
+      ;; NOTE: If you feel annoying to specify keyword argument :if-does-not-exist with :create,
+      ;; you can write (fude-gl:in-texture texture-name) beforehand.
+      ;; In such cases, fude-gl:in-texture guarantees existence of texture instead of keyword argument.
+      ;;
+      ;; Case auto location detection and using if-does-not-exist.
       (setf (fude-gl:uniform 'mix-demo "tex1")
-              (fude-gl:find-texture 'lisp-alien :if-does-not-exist :create)
-            (fude-gl:uniform 'mix-demo "tex2" :unit 1) ; Explicitly specified.
-            (fude-gl:find-texture 'lisp-logo :if-does-not-exist :create))
+              (fude-gl:find-texture 'lisp-alien :if-does-not-exist :create))
+      ;; Case specifying unit location explicitly and using fude-gl:in-texture which in with-shader above.
+      (setf (fude-gl:uniform 'mix-demo "tex2" :unit 1)
+              (fude-gl:find-texture 'lisp-logo))
       (fude-gl:draw 'mix-demo))))
 
 ;;;; HELLO from glut-examples.
