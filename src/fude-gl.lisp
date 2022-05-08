@@ -1271,30 +1271,46 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (loop :for name :being :each :hash-key :of *textures*
         :collect name))
 
+(define-condition missing-texture (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing texture named ~S. ~:@_~? ~:@_To see all known textures, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (list-all-textures))
+             '(list-all-textures)))))
+
 (define-compiler-macro find-texture (&whole whole name &rest args)
   (declare (ignore args)
            (notinline find-texture))
   (when (constantp name)
-    (find-texture (eval name) :construct nil :error t))
+    (find-texture (eval name) :if-does-not-exist nil))
   whole)
 
-(defun find-texture (name &key (construct t) (error t))
+(defun find-texture (name &key (if-does-not-exist :error))
   (if (typep name 'texture)
       name
-      (let ((texture (or (gethash name *textures*))))
-        (cond
-          ((null texture)
-           (when error
-             (error
-               "Missing texture named ~S. Eval (fude-gl:list-all-textures)"
-               name)))
-          ((texture-id texture) texture)
-          ((not construct) texture)
-          (t
-           (restart-case (construct texture)
-             (continue ()
-                 :report "Return texture without constructing."
-               texture)))))))
+      (let ((texture (gethash name *textures*)))
+        (cond ;; Texture is not defined yet.
+              ((null texture) (error 'missing-texture :name name))
+              ;; Texture is constructed in GL already.
+              ((texture-id texture) texture)
+              ;; Texture is not constructed in GL yet.
+              (t
+               (ecase if-does-not-exist
+                 (:error
+                  (cerror "Return texture without constructing."
+                          "Texture ~S is not constructed in GL yet." name)
+                  texture)
+                 (:create
+                  (restart-case (construct texture)
+                    (continue ()
+                        :report "Return texture without constructing."
+                      texture)))
+                 ((nil) nil)))))))
 
 (defmethod construct ((o texture))
   (with-slots (id target params initializer)
@@ -1338,7 +1354,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defun connect (shader &rest pairs)
   (loop :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
         :for (uniform name) :on pairs :by #'cddr
-        :do (send (find-texture name) shader :uniform uniform :unit i)))
+        :do (send (find-texture name :if-does-not-exist :create) shader
+                  :uniform uniform
+                  :unit i)))
 
 (defun type-assert (form type)
   (if (constantp form)
@@ -1386,8 +1404,8 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 (defmacro in-texture (name)
   (when (constantp name)
-    (find-texture (eval name) :construct nil :error t))
-  `(let ((texture (find-texture ,name)))
+    (find-texture (eval name) :if-does-not-exist nil))
+  `(let ((texture (find-texture ,name :if-does-not-exist :create)))
      (gl:bind-texture (texture-target texture) (texture-id texture))))
 
 ;;;; WITH-CLEAR
