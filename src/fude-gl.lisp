@@ -790,6 +790,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 (defmethod send
            ((o 3d-vectors:vec3) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
+  (in-program to)
   (3d-vectors:with-vec3 (x y z)
       o
     (gl:uniformf (uniform to uniform) x y z)))
@@ -797,6 +798,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 (defmethod send
            ((o 3d-vectors:vec2) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
+  (in-program to)
   (3d-vectors:with-vec2 (x y)
       o
     (gl:uniformf (uniform to uniform) x y)))
@@ -806,6 +808,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
             &key (uniform (alexandria:required-argument :uniform)))
   #+sbcl ; Due to unknown upgraded element type.
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (in-program to)
   (gl:uniformfv (uniform to uniform) o))
 
 ;;;; BUFFER
