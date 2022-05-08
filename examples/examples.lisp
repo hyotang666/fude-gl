@@ -610,6 +610,9 @@
       (fude-gl:draw 'transform-demo))))
 
 ;;;; COORD-DEMO
+;;
+;; In this example, we explain how to do model view projection matrix operation.
+;;
 
 (fude-gl:defshader coord-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
@@ -625,50 +628,47 @@
 
 (fude-gl:defvertices coord-demo
     (concatenate '(array single-float (*))
-                 (make-instance 'coord-demo :x -0.5 :y 0.5 :s 0.0 :t 1.0) ; top
-                                                                          ; left
-                 (make-instance 'coord-demo :x 0.5 :y 0.5 :s 1.0 :t 1.0) ; top
-                                                                         ; right
-                 (make-instance 'coord-demo :x -0.5 :y -0.5 :s 0.0 :t 0.0) ; bottom
-                                                                           ; left
+                 ;; top left
+                 (make-instance 'coord-demo :x -0.5 :y 0.5 :s 0.0 :t 1.0)
+                 ;; top right
+                 (make-instance 'coord-demo :x 0.5 :y 0.5 :s 1.0 :t 1.0)
+                 ;; bottom left
+                 (make-instance 'coord-demo :x -0.5 :y -0.5 :s 0.0 :t 0.0)
+                 ;; bottom right
                  (make-instance 'coord-demo :x 0.5 :y -0.5 :s 1.0 :t 0.0))
   :indices `((0 1 2 2 3 1)))
 
 (defun coord-demo ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Coord demo"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'coord-demo)
-          (let ((m
-                 (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
-                                       (fude-gl:radians -55)))
-                (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
-                (p
-                 (3d-matrices:mperspective 45
-                                           (multiple-value-call #'/
-                                             (sdl2:get-window-size win))
-                                           0.1 100)))
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                (fude-gl:with-clear (win (:color-buffer-bit))
-                  (fude-gl:with-uniforms (tex1 tex2 model view projection)
-                      'coord-demo
-                    (setf tex1
-                            (fude-gl:find-texture 'container
-                                                  :if-does-not-exist :create)
-                          tex2
-                            (fude-gl:find-texture 'face
-                                                  :if-does-not-exist :create)
-                          model m
-                          view v
-                          projection p))
-                  (fude-gl:draw 'coord-demo))))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((m
+           (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vx+
+                                 (fude-gl:radians -55)))
+          (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
+          (p
+           (3d-matrices:mperspective 45
+                                     (multiple-value-call #'/
+                                       (sdl2:get-window-size win))
+                                     0.1 100))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 model view projection)
+          'coord-demo
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
+              model m
+              view v
+              projection p))
+      (fude-gl:draw 'coord-demo))))
 
 ;;;; ORTHO-DEMO
 
