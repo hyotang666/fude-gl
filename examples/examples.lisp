@@ -136,22 +136,21 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'uniform-demo))
+    (fude-gl:with-shader ())
     ;; In order to avoid inner loop alocating.
     (let ((vec (vector 0 0 0))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
-        t)
-      (:idle ()
-        (fude-gl:with-clear (win (:color-buffer-bit))
-          ;; Update RED of the vec.
-          (setf (aref vec 0)
-                  (/ (+ 1.0 (sin (get-internal-real-time))) 2))
-          ;; To send a data, you can use SETF with fude-gl:UNIFORM.
-          ;; The first argument of fude-gl:uniform is a shader name.
-          ;; The second argument of fude-gl:uniform is a uniform name.
-          (setf (fude-gl:uniform 'uniform-demo "triangleColor") vec)
-          (fude-gl:draw 'uniform-demo))))))
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      ;; Update RED of the vec.
+      (setf (aref vec 0) (/ (+ 1.0 (sin (get-internal-real-time))) 2))
+      ;; To send a data, you can use SETF with fude-gl:UNIFORM.
+      ;; The first argument of fude-gl:uniform is a shader name.
+      ;; The second argument of fude-gl:uniform is a uniform name.
+      (setf (fude-gl:uniform 'uniform-demo "triangleColor") vec)
+      (fude-gl:draw 'uniform-demo))))
 
 ;;;; COLORED-TRIANGLE
 ;; You can specify some attributes in the attributes list.
