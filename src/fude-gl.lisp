@@ -342,6 +342,92 @@
 (defmethod no-applicable-method ((gf (eql #'uniforms)) &rest args)
   (error 'missing-shader :name (car args) :interface gf))
 
+(defgeneric construct (thing)
+  (:documentation "Requesting openGL to construct objects."))
+
+(defgeneric destruct (thing)
+  ;; NOTE!
+  ;; When code fails while constructing,
+  ;; DESTRUCT may be called before bound slot.
+  (:documentation "Requesting openGL to destruct objects."))
+
+(defgeneric create-vertex-array (vertices))
+
+(define-compiler-macro draw (&whole whole thing)
+  (when (constantp thing)
+    (handler-case (find-vertices (eval thing) :if-does-not-exist nil)
+      (missing-vertices (c)
+        (warn 'missing-definition :condition c))))
+  whole)
+
+(defgeneric draw (thing))
+
+(defgeneric send (object to &key))
+
+(defstruct uniform
+  (name (error "NAME is required.") :type string :read-only t)
+  (type (error "TYPE is required.") :type string :read-only t))
+
+(defmethod make-load-form ((this uniform) &optional environment)
+  (make-load-form-saving-slots this :environment environment))
+
+(define-compiler-macro shader (&whole whole o)
+  (declare (notinline shader))
+  (if (constantp o)
+      `',(shader (find-vertices (eval o) :if-does-not-exist nil))
+      whole))
+
+(define-condition uniform-error (fude-gl-error cell-error)
+  ((shader :initarg :shader :reader shader)))
+
+(define-condition missing-uniform (uniform-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing uniform named ~S. ~:@_~? ~:@_To see all supported uniforms, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (cell-error-name this)
+                                      (mapcar #'uniform-name
+                                              (uniforms (shader this))))
+             `(uniforms ',(shader this))))))
+
+(define-condition non-active-uniform (uniform-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Uniform ~S is not active in shader ~S. ~:@_Active uniforms in GL are ~S."
+             (cell-error-name this) (shader this)
+             (gl:get-program (program-id (find-shader (shader this)))
+                             :active-uniforms)))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; Compiler macro and setf expander below needs this eval-when.
+  (defun check-uniform-args (shader name)
+    "Compile time argument validation for UNIFORM."
+    (when (constantp shader)
+      (let ((shader (eval shader)))
+        (find-shader shader)
+        (when (constantp name)
+          (let ((name (eval name)))
+            (declare (string name))
+            (assert (find (subseq name 0 (position #\[ name))
+                          (the list (uniforms shader))
+                          :test #'equal
+                          :key #'uniform-name)
+              ()
+              'missing-uniform :name name
+                               :shader shader)))))))
+
+(define-compiler-macro send
+                       (&whole whole object to &key uniform &allow-other-keys)
+  (declare (ignore object))
+  ;; Compile time uniform existance check.
+  (and uniform (check-uniform-args to uniform))
+  whole)
+
 ;;;; DEFSHADER
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
@@ -355,13 +441,6 @@
 (deftype complex-type-spec () 'list)
 
 (deftype index () '(mod #.array-total-size-limit))
-
-(defstruct uniform
-  (name (error "NAME is required.") :type string :read-only t)
-  (type (error "TYPE is required.") :type string :read-only t))
-
-(defmethod make-load-form ((this uniform) &optional environment)
-  (make-load-form-saving-slots this :environment environment))
 
 (declaim
  (ftype (function
@@ -430,12 +509,6 @@
           :and :collect (format nil "~[~;float~:;~:*vec~D~]"
                                 (list-length slots))
           :and :collect (symbol-camel-case (class-name c))))
-
-(define-compiler-macro shader (&whole whole o)
-  (declare (notinline shader))
-  (if (constantp o)
-      `',(shader (find-vertices (eval o) :if-does-not-exist nil))
-      whole))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
@@ -631,81 +704,6 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   (when (constantp name)
     (find-shader (eval name)))
   `(gl:use-program (find-program ,name :if-does-not-exist :create)))
-
-;;;; GENERIC-FUNCTIONS
-
-(defgeneric construct (thing)
-  (:documentation "Requesting openGL to construct objects."))
-
-(defgeneric destruct (thing)
-  ;; NOTE!
-  ;; When code fails while constructing,
-  ;; DESTRUCT may be called before bound slot.
-  (:documentation "Requesting openGL to destruct objects."))
-
-(defgeneric create-vertex-array (vertices))
-
-(define-compiler-macro draw (&whole whole thing)
-  (when (constantp thing)
-    (handler-case (find-vertices (eval thing) :if-does-not-exist nil)
-      (missing-vertices (c)
-        (warn 'missing-definition :condition c))))
-  whole)
-
-(defgeneric draw (thing))
-
-(defgeneric send (object to &key))
-
-(define-condition uniform-error (fude-gl-error cell-error)
-  ((shader :initarg :shader :reader shader)))
-
-(define-condition missing-uniform (uniform-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output
-             "Missing uniform named ~S. ~:@_~? ~:@_To see all supported uniforms, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (cell-error-name this)
-                                      (mapcar #'uniform-name
-                                              (uniforms (shader this))))
-             `(uniforms ',(shader this))))))
-
-(define-condition non-active-uniform (uniform-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output
-             "Uniform ~S is not active in shader ~S. ~:@_Active uniforms in GL are ~S."
-             (cell-error-name this) (shader this)
-             (gl:get-program (program-id (find-shader (shader this)))
-                             :active-uniforms)))))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; Compiler macro and setf expander below needs this eval-when.
-  (defun check-uniform-args (shader name)
-    "Compile time argument validation for UNIFORM."
-    (when (constantp shader)
-      (let ((shader (eval shader)))
-        (find-shader shader)
-        (when (constantp name)
-          (let ((name (eval name)))
-            (declare (string name))
-            (assert (find (subseq name 0 (position #\[ name))
-                          (the list (uniforms shader))
-                          :test #'equal
-                          :key #'uniform-name)
-              ()
-              'missing-uniform :name name
-                               :shader shader)))))))
-
-(define-compiler-macro send
-                       (&whole whole object to &key uniform &allow-other-keys)
-  (declare (ignore object))
-  ;; Compile time uniform existance check.
-  (and uniform (check-uniform-args to uniform))
-  whole)
 
 ;;;; UNIFORM
 
