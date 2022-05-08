@@ -581,18 +581,6 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
 
-(define-condition context-not-achieved (fude-gl-error cell-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output "Context is not achieved. ~:_Wrap your code with ~S."
-             (cell-error-name this)))))
-
-(defmacro with-context-assertion ((&key name) &body body)
-  `(handler-case (progn ,@body)
-     (error ()
-       (error 'context-not-achieved :name ,name))))
-
 (defun compile-shader (program-id vertex-shader fragment-shader)
   "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
