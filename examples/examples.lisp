@@ -427,6 +427,10 @@
       (fude-gl:draw 'mix-demo))))
 
 ;;;; MATRIX-OPERATIONS
+;;
+;; In these examples, we explain how to operate a matrix.
+;; In other words, these are 3d-matrices tutorials.
+;;
 
 (defparameter *image*
   (let ((pathname (merge-pathnames "container.jpg" (user-homedir-pathname))))
@@ -459,12 +463,13 @@
 
 (fude-gl:defvertices transform-demo
     (concatenate '(array single-float (*))
-                 (make-instance 'transform-demo :x -0.5 :y 0.5 :s 0.0 :t 1.0) ; top
-                                                                              ; left
-                 (make-instance 'transform-demo :x 0.5 :y 0.5 :s 1.0 :t 1.0) ; top
-                                                                             ; right
-                 (make-instance 'transform-demo :x -0.5 :y -0.5 :s 0.0 :t 0.0) ; bottom
-                                                                               ; left
+                 ;; top left
+                 (make-instance 'transform-demo :x -0.5 :y 0.5 :s 0.0 :t 1.0)
+                 ;; top right
+                 (make-instance 'transform-demo :x 0.5 :y 0.5 :s 1.0 :t 1.0)
+                 ;; bottom left
+                 (make-instance 'transform-demo :x -0.5 :y -0.5 :s 0.0 :t 0.0)
+                 ;; bottom right
                  (make-instance 'transform-demo :x 0.5 :y -0.5 :s 1.0 :t 0.0))
   :indices `((0 1 2 2 3 1)))
 
@@ -476,7 +481,13 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'transform-demo))
+    (fude-gl:with-shader ())
+    ;; FUDE-GL uses 3d-matrices as its matrix representation, but not limited.
+    ;; You can use any object.
+    ;; But in such cases, you need to defmethod SEND for it.
+    ;;
+    ;; NOTE: In order to avoid inner loop allocation.
+    (let ((matrix (3d-matrices:meye 4))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -488,9 +499,9 @@
               (fude-gl:find-texture 'face :if-does-not-exist :create)
             (fude-gl:uniform 'transform-demo "transform")
               (3d-matrices:nmscale
-                (3d-matrices:nmrotate (3d-matrices:meye 4) 3d-vectors:+vz+
-                                      (fude-gl:radians 90))
-                (3d-vectors:vec 0.5 0.5 0.5)))
+                (3d-matrices:nmrotate (fude-gl::re-eye matrix) 3d-vectors:+vz+
+                                      #.(fude-gl:radians 90))
+                #.(3d-vectors:vec 0.5 0.5 0.5)))
       (fude-gl:draw 'transform-demo))))
 
 (defun translate-x ()
@@ -502,6 +513,7 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader () (fude-gl:in-vertices 'transform-demo))
+    (let ((matrix (3d-matrices:meye 4)) (position (3d-vectors:vec 0 0 0))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -514,95 +526,88 @@
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
               transform
-                (3d-matrices:mtranslation
-                  (3d-vectors:vec (sin (get-internal-real-time)) 0.0 0.0))))
+                (progn
+                 (setf (3d-vectors:vx position) (sin (get-internal-real-time)))
+                 (3d-matrices:nmtranslate (fude-gl:re-eye matrix) position))))
       (fude-gl:draw 'transform-demo))))
 
 (defun translate-y ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Translate y"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'transform-demo)
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:with-uniforms (tex1 tex2 transform)
-                    'transform-demo
-                  (setf tex1
-                          (fude-gl:find-texture 'container
-                                                :if-does-not-exist :create)
-                        tex2
-                          (fude-gl:find-texture 'face
-                                                :if-does-not-exist :create)
-                        transform
-                          (3d-matrices:mtranslation
-                            (3d-vectors:vec 0.0 (sin (get-internal-real-time))
-                                            0.0))))
-                (fude-gl:draw 'transform-demo)))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((matrix (3d-matrices:meye 4)) (position (3d-vectors:vec 0 0 0))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 transform)
+          'transform-demo
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
+              transform
+                (progn
+                 (setf (3d-vectors:vy position) (sin (get-internal-real-time)))
+                 (3d-matrices:nmtranslate (fude-gl:re-eye matrix) position))))
+      (fude-gl:draw 'transform-demo))))
 
 (defun scaling ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Scaling"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'transform-demo)
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:with-uniforms (tex1 tex2 transform)
-                    'transform-demo
-                  (setf tex1
-                          (fude-gl:find-texture 'container
-                                                :if-does-not-exist :create)
-                        tex2
-                          (fude-gl:find-texture 'face
-                                                :if-does-not-exist :create)
-                        transform
-                          (3d-matrices:nmscale
-                            (3d-matrices:mtranslation (3d-vectors:vec 0 0 0))
-                            (let ((v (abs (sin (get-internal-real-time)))))
-                              (3d-vectors:vec v v 0.0)))))
-                (fude-gl:draw 'transform-demo)))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((matrix (3d-matrices:meye 4)) (scale (3d-vectors:vec 0 0 0))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 transform)
+          'transform-demo
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
+              transform
+                (3d-matrices:nmscale
+                  (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                           #.(3d-vectors:vec 0 0 0))
+                  (let ((v (abs (sin (get-internal-real-time)))))
+                    (3d-vectors:vsetf scale v v)))))
+      (fude-gl:draw 'transform-demo))))
 
 (defun rotating ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Rotating"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'transform-demo)
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:with-uniforms (tex1 tex2 transform)
-                    'transform-demo
-                  (setf tex1
-                          (fude-gl:find-texture 'container
-                                                :if-does-not-exist :create)
-                        tex2
-                          (fude-gl:find-texture 'face
-                                                :if-does-not-exist :create)
-                        transform
-                          (3d-matrices:nmrotate
-                            (3d-matrices:mtranslation (3d-vectors:vec 0 0 0))
-                            3d-vectors:+vz+
-                            (fude-gl:radians (get-internal-real-time)))))
-                (fude-gl:draw 'transform-demo)))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((matrix (3d-matrices:meye 4))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 transform)
+          'transform-demo
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
+              transform
+                (3d-matrices:nmrotate
+                  (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                           #.(3d-vectors:vec 0 0 0))
+                  3d-vectors:+vz+ (fude-gl:radians (get-internal-real-time)))))
+      (fude-gl:draw 'transform-demo))))
 
 ;;;; COORD-DEMO
 
