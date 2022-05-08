@@ -600,29 +600,29 @@ Use a macro WITH-SHADER to achieve this context.")
   ()
   (:report
    (lambda (this output)
-     (format output
-             "Shader program named ~S is not created in GL yet."
+     (format output "Shader program named ~S is not created in GL yet."
              (cell-error-name this)))))
 
 (defun program-id (name &key (error t))
   (or (cached-program-id name) (and error (error 'missing-program :name name))))
 
-(defun compile-shader (prog vertex-shader fragment-shader)
+(defun compile-shader (program-id vertex-shader fragment-shader)
+  "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
         (fs (gl:create-shader :fragment-shader)))
     (unwind-protect
-        (labels ((compile-s (prog id source)
+        (labels ((compile-s (program-id id source)
                    (gl:shader-source id source)
                    (gl:compile-shader id)
                    (may-warn (gl:get-shader-info-log id))
-                   (gl:attach-shader prog id))
+                   (gl:attach-shader program-id id))
                  (may-warn (log)
                    (unless (equal "" log)
                      (warn log))))
-          (compile-s prog vs vertex-shader)
-          (compile-s prog fs fragment-shader)
-          (gl:link-program prog)
-          (may-warn (gl:get-program-info-log prog)))
+          (compile-s program-id vs vertex-shader)
+          (compile-s program-id fs fragment-shader)
+          (gl:link-program program-id)
+          (may-warn (gl:get-program-info-log program-id)))
       (gl:delete-shader fs)
       (gl:delete-shader vs))))
 
