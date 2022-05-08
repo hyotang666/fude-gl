@@ -1223,6 +1223,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defvar *toplevel-p* t)
 
 (defmacro with-shader (() &body body)
+  "Ensure cleanup fude-gl environment."
   (let ((toplevelp (gensym "TOPLEVELP")))
     `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
        (unwind-protect (progn ,@body)
