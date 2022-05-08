@@ -10,7 +10,7 @@
   (restart-case (mapc #'funcall
                       '(hello-triangle uniform-demo colored-triangle
                                        element-buffer texture-demo mix-demo
-                                       hello double transform-demo translate-x
+                                       double transform-demo translate-x
                                        translate-y scaling rotating coord-demo
                                        depth-demo cubes cameras walk-around
                                        text instancing instanced-arrays-demo
@@ -425,39 +425,6 @@
       (setf (fude-gl:uniform 'mix-demo "tex2" :unit 1)
               (fude-gl:find-texture 'lisp-logo))
       (fude-gl:draw 'mix-demo))))
-
-;;;; HELLO from glut-examples.
-
-(fude-gl:defshader hello 330 (fude-gl:xy)
-  (:vertex ()
-    (declaim (ftype (function nil (values)) main))
-    (defun main () (setf gl-position (vec4 fude-gl:xy 0.0 1.0))))
-  (:fragment ((color :vec4))
-    (declaim (ftype (function nil (values)) main))
-    (defun main () (setf color (vec4 1.0 1.0 1.0 1.0)))))
-
-(fude-gl:defvertices hello
-    (concatenate '(array single-float (*))
-                 (make-instance 'hello :x -0.5 :y 0.5) ; top-left
-                 (make-instance 'hello :x 0.5 :y 0.5) ; top-right
-                 (make-instance 'hello :x -0.5 :y -0.5) ; bottom-left
-                 (make-instance 'hello :x 0.5 :y -0.5))
-  :indices (list '(0 1 2 2 3 1)))
-
-(defun hello ()
-  (uiop:nest
-    (sdl2:with-init (:everything))
-    (sdl2:with-window (win :flags '(:shown :opengl)
-                           :w 250
-                           :h 250
-                           :title "hello"))
-    (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (fude-gl:in-vertices 'hello))
-    (sdl2:with-event-loop (:method :poll)
-      (:quit ()
-        t))
-    (:idle nil)
-    (fude-gl:with-clear (win (:color-buffer-bit)) (fude-gl:draw 'hello))))
 
 ;;;; DOUBLE from glut-examples.
 
