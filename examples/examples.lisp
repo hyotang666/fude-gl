@@ -94,9 +94,7 @@
                            :title "Hello triangle"))
     (sdl2:with-gl-context (context win))
     ;; For cleanup, macro WITH-SHADER is recommended.
-    (fude-gl:with-shader ()
-      ;; To construct vertices.
-      (fude-gl:in-vertices 'hello-triangle))
+    (fude-gl:with-shader ())
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
