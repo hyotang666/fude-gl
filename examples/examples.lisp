@@ -1009,6 +1009,9 @@
                   (fude-gl:draw 'cubes))))))
 
 ;;;; FONT
+;;
+;; In this example, we explain how to render text.
+;;
 
 (defun text ()
   (uiop:nest
@@ -1020,19 +1023,22 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :blend)
       (gl:blend-func :src-alpha :one-minus-src-alpha))
-    ;; To render text, you can use a macro WITH-TEXT as setup.
+    ;; To render text, you can use a macro WITH-TEXT instead of WITH-SHADER.
+    ;; More correctly, WITH-TEXT is expanded to WITH-SHADER form.
     ;; The first argument is spec.
-    ;; The first element of the spec must be a symbol that evaluated to sdl2-ffi:sdl-window.
-    ;; The keyword parameter :SIZE specify font size.
+    ;; The first element of the spec must be a symbol that is evaluated to sdl2-ffi:sdl-window.
+    ;; The keyword parameter :SIZE specifies the font size.
     (fude-gl:with-text (win :size 32))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
-          ;; The first arument of the text renderer is a string to render.
+          ;; The first argument of the text renderer is a string to render.
           ;; The keyword parameter :X and :Y specifies position.
           ;; You can use :CENTER to specify centering the text.
+          ;; In such cases, you must specify keyword argument :WIN.
+          ;; In other words, if you do not use :center you do not need to specify :WIN.
           (fude-gl:render-text "Hello world! g" :x 0 :y :center :win win))))))
 
 ;;;; INSTANCING
