@@ -1158,10 +1158,14 @@
       (fude-gl:draw 'instanced-arrays-demo))))
 
 ;;;; INSTANCE-ID-DEMO
+;;
+;; One more example to show how instance ID works.
+;;
 
 (fude-gl:defshader instance-id-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:offset)
   (:vertex ((f-color :vec3))
     (declaim (ftype (function nil (values)) main))
+    ;; |gl_InstanceID| or gl-instance-i-d, use which you like.
     (defun main ()
       (setf gl-position
               (vec4 (+ (* fude-gl:xy (/ |gl_InstanceID| 100.0)) fude-gl:offset)
@@ -1175,19 +1179,20 @@
   :instances `((fude-gl:offset ,*translations*)))
 
 (defun instance-id-demo ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :w 800
                            :h 600
-                           :title "InstanceID demo")
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:draw 'instance-id-demo)))))))))
+                           :title "InstanceID demo"))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:draw 'instance-id-demo))))
 
 ;;;; SOME-INSTANCES-DEMO
 
