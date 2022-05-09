@@ -773,8 +773,7 @@
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader ()
-      (gl:enable :depth-test)) ; <---
+    (fude-gl:with-shader () (gl:enable :depth-test)) ; <---
     (let ((m (3d-matrices:meye 4))
           (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
           (p
@@ -801,6 +800,9 @@
       (fude-gl:draw 'depth-demo))))
 
 ;;;; CUBES
+;;
+;; Here is one more depth demo.
+;;
 
 (fude-gl:defshader cubes 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
@@ -817,55 +819,50 @@
 (fude-gl:defvertices cubes *depth-demo*)
 
 (defun cubes ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Cubes"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (let ((cube-positions
-                 (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                       (3d-vectors:vec -1.5 -2.2 -2.5)
-                       (3d-vectors:vec -3.8 -2.0 -12.3)
-                       (3d-vectors:vec 2.4 -0.4 -3.5)
-                       (3d-vectors:vec -1.7 3 -7.5)
-                       (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                       (3d-vectors:vec 1.5 0.2 -1.5)
-                       (3d-vectors:vec -1.3 1 -1.5))))
-            (gl:enable :depth-test) ; <--- When enable :depth-test...
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                ;; you should clear :depth-buffer-bit.
-                (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
-                  (fude-gl:with-uniforms (tex1 tex2 model view projection)
-                      'cubes
-                    (setf tex1
-                            (fude-gl:find-texture 'container
-                                                  :if-does-not-exist :create)
-                          tex2
-                            (fude-gl:find-texture 'face
-                                                  :if-does-not-exist :create))
-                    (loop :for pos :in cube-positions
-                          :for i :upfrom 0
-                          :do (setf model
-                                      (3d-matrices:nmrotate
-                                        (3d-matrices:mtranslation pos)
-                                        (3d-vectors:vec 1 0.3 0.5)
-                                        (fude-gl:radians (* 20 i)))
-                                    view
-                                      (3d-matrices:mtranslation
-                                        (3d-vectors:vec 0 0 -3))
-                                    projection
-                                      (3d-matrices:mperspective 45
-                                                                (multiple-value-call
-                                                                    #'/
-                                                                  (sdl2:get-window-size
-                                                                    win))
-                                                                0.1 100))
-                              (fude-gl:draw 'cubes))))))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((cube-positions
+           (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+                 (3d-vectors:vec -1.5 -2.2 -2.5)
+                 (3d-vectors:vec -3.8 -2.0 -12.3)
+                 (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
+                 (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
+                 (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
+          (matrix (3d-matrices:meye 4))
+          (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
+          (p
+           (3d-matrices:mperspective 45
+                                     (multiple-value-call #'/
+                                       (sdl2:get-window-size win))
+                                     0.1 100)))
+      (gl:enable :depth-test)) ; <--- When enable :depth-test...
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    ;; you should clear :depth-buffer-bit.
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
+      (fude-gl:with-uniforms (tex1 tex2 model view projection)
+          'cubes
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
+        (loop :for pos :in cube-positions
+              :for i :upfrom 0
+              :do (setf model
+                          (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                                     pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i)))
+                        view v
+                        projection p)
+                  (fude-gl:draw 'cubes))))))
 
 ;;;; CAMERAS
 
