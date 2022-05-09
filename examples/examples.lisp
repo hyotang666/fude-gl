@@ -717,6 +717,9 @@
                   (fude-gl:draw 'ortho-demo))))))))))
 
 ;;;; DEPTH-DEMO
+;;
+;; In this example, we explain how to do depth testing.
+;;
 
 (fude-gl:defshader depth-demo 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
@@ -763,43 +766,39 @@
 (fude-gl:defvertices depth-demo *depth-demo*)
 
 (defun depth-demo ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Depth demo"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'depth-demo)
-          (gl:enable :depth-test)
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                (let ((m
-                       (3d-matrices:nmrotate (3d-matrices:meye 4)
-                                             (3d-vectors:vec 0.5 1 0)
-                                             (fude-gl:radians
-                                               (get-internal-real-time))))
-                      (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
-                      (p
-                       (3d-matrices:mperspective 45
-                                                 (multiple-value-call #'/
-                                                   (sdl2:get-window-size win))
-                                                 0.1 100)))
-                  (fude-gl:with-uniforms (tex1 tex2 model view projection)
-                      'depth-demo
-                    (setf tex1
-                            (fude-gl:find-texture 'container
-                                                  :if-does-not-exist :create)
-                          tex2
-                            (fude-gl:find-texture 'face
-                                                  :if-does-not-exist :create)
-                          model m
-                          view v
-                          projection p))
-                  (fude-gl:draw 'depth-demo))))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ()
+      (gl:enable :depth-test)) ; <---
+    (let ((m (3d-matrices:meye 4))
+          (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
+          (p
+           (3d-matrices:mperspective 45
+                                     (multiple-value-call #'/
+                                       (sdl2:get-window-size win))
+                                     0.1 100))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)) ; <---
+      (fude-gl:with-uniforms (tex1 tex2 model view projection)
+          'depth-demo
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
+              model
+                (3d-matrices:nmrotate (fude-gl:re-eye m)
+                                      #.(3d-vectors:vec 0.5 1 0)
+                                      (fude-gl:radians
+                                        (get-internal-real-time)))
+              view v
+              projection p))
+      (fude-gl:draw 'depth-demo))))
 
 ;;;; CUBES
 
