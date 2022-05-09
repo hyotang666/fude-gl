@@ -1519,14 +1519,24 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 (defun list-all-framebuffers () (alexandria:hash-table-keys *framebuffers*))
 
+(define-condition missing-framebuffer (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing framebuffer named ~S. ~:@_~? ~:@_To see all known framebuffer, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (list-all-framebuffers))
+             '(list-all-framebuffers)))))
+
 (defun find-framebuffer (name &key (construct t) (error t))
   (let ((framebuffer (gethash name *framebuffers*)))
     (cond
       ((null framebuffer)
        (when error
-         (error
-           "Unknown framebuffer named ~S. Eval (fude-gl:list-all-framebuffers)"
-           name)))
+         (error 'missing-framebuffer :name name)))
       ((framebuffer-id framebuffer) framebuffer)
       ((not construct) framebuffer)
       (t
