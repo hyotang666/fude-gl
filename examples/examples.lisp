@@ -928,6 +928,9 @@
                     (fude-gl:draw 'cubes)))))))
 
 ;;;; WALK-AROUND
+;;
+;; One more camera example with handling cursor input.
+;;
 
 (defparameter *cube-positions*
   (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
@@ -941,6 +944,7 @@
     (case (sdl2:scancode keysym)
       ;; To modify CAMERA-POSITION,
       ;; you should use 3D-VECTORS's N prefixed functions.
+      ;; I.e. destructively modify it.
       (:scancode-up
        (3d-vectors:nv+ (fude-gl:camera-position camera)
                        (3d-vectors:v* camera-speed
@@ -965,46 +969,44 @@
                          camera-speed))))))
 
 (defun walk-around ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Walk around"
                            :w 800
-                           :h 600)
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (fude-gl:in-vertices 'cubes)
-          (let ((camera (fude-gl:make-camera))
-                (p
-                 (3d-matrices:mperspective 45
-                                           (multiple-value-call #'/
-                                             (sdl2:get-window-size win))
-                                           0.1 100)))
-            (gl:enable :depth-test)
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:keydown (:keysym keysym)
-                (move-camera keysym camera))
-              (:idle ()
-                (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-                  (fude-gl:with-uniforms (tex1 tex2 model view projection)
-                      'cubes
-                    (setf tex1
-                            (fude-gl:find-texture 'container
-                                                  :if-does-not-exist :create)
-                          tex2
-                            (fude-gl:find-texture 'face
-                                                  :if-does-not-exist :create))
-                    (loop :for pos :in *cube-positions*
-                          :for i :upfrom 0
-                          :do (setf model
-                                      (3d-matrices:nmrotate
-                                        (3d-matrices:mtranslation pos)
-                                        (3d-vectors:vec 1 0.3 0.5)
-                                        (fude-gl:radians (* 20 i)))
-                                    view (fude-gl:view camera)
-                                    projection p)
-                              (fude-gl:draw 'cubes))))))))))))
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let ((camera (fude-gl:make-camera))
+          (matrix (3d-matrices:meye 4))
+          (p
+           (3d-matrices:mperspective 45
+                                     (multiple-value-call #'/
+                                       (sdl2:get-window-size win))
+                                     0.1 100)))
+      (gl:enable :depth-test))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera)))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 model view projection)
+          'cubes
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
+        (loop :for pos :in *cube-positions*
+              :for i :upfrom 0
+              :do (setf model
+                          (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                                     pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i)))
+                        view (fude-gl:view camera)
+                        projection p)
+                  (fude-gl:draw 'cubes))))))
 
 ;;;; FONT
 
