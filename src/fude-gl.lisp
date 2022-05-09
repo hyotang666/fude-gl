@@ -1153,8 +1153,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                (table (find-vertices vertices :if-does-not-exist :create))))
       (error "Missing vertices ~S in ~S" name vertices)))
 
-(defmethod send ((o symbol) (to symbol) &key (method #'gl:buffer-data))
-  (let ((buffer (instances-buffer to o)))
+(defmethod send
+           ((o symbol) (vertices-name symbol) &key (method #'gl:buffer-data))
+  (let ((buffer (instances-buffer vertices-name o)))
     (send (buffer-source buffer) buffer :method method)))
 
 ;;;; DEFVERTICES
