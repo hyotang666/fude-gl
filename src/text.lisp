@@ -18,24 +18,31 @@
 
 (defparameter *font-size* 16)
 
-(defun find-font (name &optional (errorp t))
-  (or (values (gethash name *fonts*))
-      (and errorp (error "Missing font named: ~S" name))))
-
 (defun list-all-fonts ()
   (loop :for k :being :each :hash-key :of *fonts*
         :collect k))
 
+(define-condition missing-font (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing font named ~S. ~:@_~? ~:@_To see all known fonts, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (cell-error-name this) (list-all-fonts))
+             '(list-all-fonts)))))
+
+(defun find-font (name &optional (errorp t))
+  (or (values (gethash name *fonts*))
+      (and errorp (error 'missing-font :name name))))
+
 (defun font-loader (font-name)
-  (let ((loader (find-font font-name nil)))
-    (typecase loader
+  (let ((loader (find-font font-name)))
+    (etypecase loader
       (zpb-ttf::font-loader loader)
       ((or string pathname)
-       (setf (gethash font-name *fonts*) (zpb-ttf::open-font-loader loader)))
-      (otherwise
-       (error
-         "Unknown font. ~S ~:_Eval (fude-gl:list-all-fonts) for supported fonts."
-         font-name)))))
+       (setf (gethash font-name *fonts*) (zpb-ttf::open-font-loader loader))))))
 
 (defstruct char-glyph
   (texture (alexandria:required-argument :texture)
