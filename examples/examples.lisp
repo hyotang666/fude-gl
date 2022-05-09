@@ -1195,6 +1195,9 @@
       (fude-gl:draw 'instance-id-demo))))
 
 ;;;; SOME-INSTANCES-DEMO
+;;
+;; In this example, we explain how to handle some instanced-array.
+;;
 
 (fude-gl:defshader some-instances-demo 330 (fude-gl:xy fude-gl:rgb
                                             fude-gl:offset fude-gl:a)
@@ -1223,21 +1226,23 @@
                 ,(make-random-alpha-array (array-dimension *translations* 0)))))
 
 (defun some-instance-demo ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :w 800
                            :h 600
-                           :title "Some instance demo")
-      (sdl2:with-gl-context (context win)
-        (gl:enable :blend)
-        (gl:blend-func :src-alpha :one-minus-src-alpha)
-        (fude-gl:with-shader ()
-          (sdl2:with-event-loop (:method :poll)
-            (:quit ()
-              t)
-            (:idle ()
-              (fude-gl:with-clear (win (:color-buffer-bit))
-                (fude-gl:draw 'some-instances-demo)))))))))
+                           :title "Some instance demo"))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :blend)
+      ;; To enable alpha blending.
+      (gl:blend-func :src-alpha :one-minus-src-alpha))
+    (fude-gl:with-shader ())
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      (fude-gl:draw 'some-instances-demo))))
 
 ;;;; SOME-INSTANCE-DYNAMICS
 
