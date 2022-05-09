@@ -15,7 +15,7 @@
                                        cubes cameras walk-around text
                                        instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
-                                       some-instance-dynamics))
+                                       some-instance-dynamics depth-testing))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -1344,9 +1344,10 @@
                            :title "Depth testing"))
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test)
-      (gl:depth-func :less))
+      (gl:depth-func :less)) ; <---
     (fude-gl:with-shader ())
     (let* ((camera (fude-gl:make-camera))
+           (matrix (3d-matrices:meye 4))
            (v (fude-gl:view camera))
            (p
             (3d-matrices:mperspective 60
@@ -1368,16 +1369,16 @@
         (setf tex
                 (fude-gl:find-texture 'cube-texture :if-does-not-exist :create)
               model
-                (3d-matrices:nmtranslate (3d-matrices:meye 4)
-                                         (3d-vectors:vec3 -1 0 -1)))
+                (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                         #.(3d-vectors:vec3 -1 0 -1)))
         (fude-gl:draw 'depth-testing-cubes)
         (setf model
-                (3d-matrices:nmtranslate (3d-matrices:meye 4)
-                                         (3d-vectors:vec3 2 0 0)))
+                (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
+                                         #.(3d-vectors:vec3 2 0 0)))
         (fude-gl:draw 'depth-testing-cubes)
         (fude-gl:in-vertices 'depth-testing-plane)
         (setf tex (fude-gl:find-texture 'metal :if-does-not-exist :create)
-              model (3d-matrices:meye 4))
+              model (fude-gl:re-eye matrix))
         (fude-gl:draw 'depth-testing-plane)))))
 
 ;;;; FRAMEBUFFER
