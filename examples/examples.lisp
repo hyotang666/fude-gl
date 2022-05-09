@@ -1042,6 +1042,9 @@
           (fude-gl:render-text "Hello world! g" :x 0 :y :center :win win))))))
 
 ;;;; INSTANCING
+;;
+;; In this example, we explain how to use instancing with array uniform.
+;;
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *instancing*
@@ -1058,6 +1061,7 @@
 (fude-gl:defshader instancing 330 (fude-gl:xy fude-gl:rgb)
   ;; When you want to use array for uniform variable,
   ;; you can specify its size in the third element of the uniform spec.
+  ;; (e.g. 100 in the :vertex clause below.)
   (:vertex ((f-color :vec3) &uniform (offsets :vec2 100))
     (declaim (ftype (function nil (values)) main))
     ;; With S-Expression glsl, LET needs type-spec in the second element of the bind.
@@ -1100,7 +1104,8 @@
       (:idle ()
         (fude-gl:with-clear (win (:color-buffer-bit))
           ;; NOTE: Could not use fude-gl:draw
-          ;; due to instancing is not INSTANCED-VERTEX class.
+          ;; due to instancing is not INSTANCED-VERTICES class.
+          ;; How to make INSTANCED-VERTICES class, see next demo.
           (%gl:draw-arrays-instanced :triangles 0 6 (length translations)))))))
 
 ;;;; INSTANCED-ARRAYS
