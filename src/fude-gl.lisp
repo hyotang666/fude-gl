@@ -1129,6 +1129,20 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                              (array-dimension
                                (buffer-original (cdar (table o))) 0)))
 
+(define-compiler-macro instances-buffer
+                       (&whole whole vertices name &environment env)
+  ;; Trivial definition check.
+  (when (constantp vertices env)
+    (let ((instance (find-vertices (eval vertices) :if-does-not-exist nil)))
+      (when (constantp name env)
+        (assert (assoc (the symbol (eval name)) (table instance)) ()
+          "Attribute named ~S does not exist for instanced vertices. ~:@_~? ~:@_To see all instances, evaluate ~S."
+          (eval name) "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+          (fuzzy-match:fuzzy-match (symbol-name (eval name))
+                                   (mapcar #'car (table instance)))
+          `(table (find-vertices ,vertices :if-does-not-exist nil))))))
+  whole)
+
 (declaim
  (ftype (function (symbol symbol) (values (or null buffer) &optional))
         instances-buffer))
