@@ -1129,18 +1129,33 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                              (array-dimension
                                (buffer-original (cdar (table o))) 0)))
 
+(define-condition missing-instanced-vertices (fude-gl-error cell-error)
+  ((vertices :initarg :vertices :reader vertices))
+  (:report
+   (lambda (this output)
+     (format output
+             "Missing instanced vertices named ~S. ~:@_~? ~:@_To see all instanced vertices, evaluate ~S."
+             (cell-error-name this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (mapcar #'car
+                                              (table
+                                                (find-vertices (vertices this)
+                                                               :if-does-not-exist nil))))
+             `(table
+                (find-vertices ',(vertices this) :if-does-not-exist nil))))))
+
 (define-compiler-macro instances-buffer
                        (&whole whole vertices name &environment env)
-  ;; Trivial definition check.
+  ;; Compile time checking.
   (when (constantp vertices env)
+    ;; Is VERTICES defined?
     (let ((instance (find-vertices (eval vertices) :if-does-not-exist nil)))
       (when (constantp name env)
+        ;; Is attribute NAME exist?
         (assert (assoc (the symbol (eval name)) (table instance)) ()
-          "Attribute named ~S does not exist for instanced vertices. ~:@_~? ~:@_To see all instances, evaluate ~S."
-          (eval name) "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-          (fuzzy-match:fuzzy-match (symbol-name (eval name))
-                                   (mapcar #'car (table instance)))
-          `(table (find-vertices ,vertices :if-does-not-exist nil))))))
+          'missing-instanced-vertices :name (eval name)
+                                      :vertices (eval vertices)))))
   whole)
 
 (declaim
@@ -1151,7 +1166,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (or (cdr
         (assoc name
                (table (find-vertices vertices :if-does-not-exist :create))))
-      (error "Missing vertices ~S in ~S" name vertices)))
+      (error 'missing-instanced-vertices :name name :vertices vertices)))
 
 (defmethod send
            ((o symbol) (vertices-name symbol) &key (method #'gl:buffer-data))
