@@ -1245,6 +1245,9 @@
       (fude-gl:draw 'some-instances-demo))))
 
 ;;;; SOME-INSTANCE-DYNAMICS
+;;
+;; In this example, we explain how to handle instanced array dynamically.
+;;
 
 (fude-gl:defvertices some-instance-dynamics *instancing*
   :shader 'some-instances-demo
@@ -1253,36 +1256,38 @@
                 ,(make-array (array-dimension *translations* 0)
                              :element-type 'single-float
                              :initial-element 0.0)
-                ;; To specify buffer usage.
+                ;; To specify buffer usage as dynamic.
                 :usage :dynamic-draw)))
 
 (defun some-instance-dynamics ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :w 800
                            :h 600
-                           :title "Some instance dynamic")
-      (sdl2:with-gl-context (context win)
-        (gl:enable :blend)
-        (gl:blend-func :src-alpha :one-minus-src-alpha)
-        (fude-gl:with-shader ()
-          (let ((vec
-                 ;; To get gl-array object.
-                 (fude-gl:buffer-source ;; To get buffer object.
-                                        ;; The first argument is a vertices name.
-                                        ;; The second argument is an attribute name.
-                                        (fude-gl:instances-buffer
-                                          'some-instance-dynamics 'fude-gl:a))))
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                (fude-gl:with-clear (win (:color-buffer-bit))
-                  (setf (gl:glaref vec (random (gl::gl-array-size vec)))
-                          (sin (get-internal-real-time)))
-                  ;; To update.
-                  (fude-gl:send 'fude-gl:a 'some-instance-dynamics)
-                  (fude-gl:draw 'some-instance-dynamics))))))))))
+                           :title "Some instance dynamic"))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :blend)
+      (gl:blend-func :src-alpha :one-minus-src-alpha))
+    (fude-gl:with-shader ())
+    (let ((vec
+           ;; To get gl-array object.
+           (fude-gl:buffer-source ;; To get buffer object.
+                                  ;; The first argument is a vertices name.
+                                  ;; The second argument is an attribute name.
+                                  (fude-gl:instances-buffer
+                                    'some-instance-dynamics 'fude-gl:a)))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      ;; Destructively modify buffer source.
+      (setf (gl:glaref vec (random (gl::gl-array-size vec)))
+              (sin (get-internal-real-time)))
+      ;; Send buffer source to GL side buffer.
+      (fude-gl:send 'fude-gl:a 'some-instance-dynamics)
+      (fude-gl:draw 'some-instance-dynamics))))
 
 ;;;; DEPTH-TESTING
 
