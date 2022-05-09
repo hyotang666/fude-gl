@@ -1531,19 +1531,22 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                                       (list-all-framebuffers))
              '(list-all-framebuffers)))))
 
-(defun find-framebuffer (name &key (construct t) (error t))
+(defun find-framebuffer (name &key (if-does-not-exist :error))
   (let ((framebuffer (gethash name *framebuffers*)))
-    (cond
-      ((null framebuffer)
-       (when error
-         (error 'missing-framebuffer :name name)))
-      ((framebuffer-id framebuffer) framebuffer)
-      ((not construct) framebuffer)
-      (t
-       (restart-case (construct framebuffer)
-         (continue ()
-             :report "Return framebuffer without constructing."
-           framebuffer))))))
+    (assert framebuffer () 'missing-framebuffer :name name)
+    (if (framebuffer-id framebuffer)
+        framebuffer
+        (ecase if-does-not-exist
+          (:error
+           (cerror "Return framebuffer without constructing."
+                   "Framebuffer ~S is not constructed in openGL yet." name)
+           framebuffer)
+          (:create
+           (restart-case (construct framebuffer)
+             (continue ()
+                 :report "Return framebuffer without constructing."
+               framebuffer)))
+          ((nil) framebuffer)))))
 
 (defmethod construct ((o framebuffer))
   (with-slots (id texture render-buffer format width height pixel-type options
@@ -1597,7 +1600,8 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defun in-framebuffer (name)
   (gl:bind-framebuffer :framebuffer (if name
                                         (framebuffer-id
-                                          (find-framebuffer name))
+                                          (find-framebuffer name
+                                                            :if-does-not-exist :create))
                                         0)))
 
 (defvar *framebuffer-toplevelp* t)
@@ -1610,11 +1614,11 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
             (win (alexandria:required-argument :win)))
            &body body)
   (check-type name symbol)
-  (find-framebuffer name :construct nil :error t)
+  (find-framebuffer name :if-does-not-exist nil)
   `(progn
     (in-framebuffer ',name)
     (with-slots (width height)
-        (find-framebuffer ',name)
+        (find-framebuffer ',name :if-does-not-exist :create)
       (gl:viewport 0 0 width height))
     ,@(when color
         `((apply #'gl:clear-color ,color)))
