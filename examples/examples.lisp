@@ -15,7 +15,8 @@
                                        cubes cameras walk-around text
                                        instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
-                                       some-instance-dynamics depth-testing))
+                                       some-instance-dynamics depth-testing
+                                       framebuffer-step1))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -1433,67 +1434,62 @@
 (fude-gl:deframebuf step1 :width 800 :height 600)
 
 (defun framebuffer-step1 ()
-  (sdl2:with-init (:everything)
+  (uiop:nest
+    (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :w 800
                            :h 600
-                           :title "Frame buffer Step1")
-      (sdl2:with-gl-context (context win)
-        (fude-gl:with-shader ()
-          (gl:enable :depth-test)
-          (let* ((camera (fude-gl:make-camera))
-                 (view (fude-gl:view camera))
-                 (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
-            (setf (fude-gl:uniform 'framebuffer-screen "screen") 0)
-            (sdl2:with-event-loop (:method :poll)
-              (:quit ()
-                t)
-              (:idle ()
-                (fude-gl:with-clear (win (:color-buffer-bit))
-                  ;; bind to framebuffer and draw scene as we normally would to color texture
-                  ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
-                  (fude-gl:with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
-                                                   :color '(0.1 0.1 0.1 1) :win win)
-                    (gl:enable :depth-test)
-                    ;; You can specify alias for uniform name.
-                    ;; In the example below,
-                    ;; specify alias 'v' for uniform "view" and
-                    ;; alias 'p' for uniform 'projection".
-                    (fude-gl:with-uniforms (tex (v "view") (p "projection")
-                                            model)
-                        'framebuffer-vertices
-                      ;; Actually this IN-VERTICES is needless.
-                      ;; Just for understanding code structure.
-                      ;;; Cubes
-                      (fude-gl:in-vertices 'fb-cube)
-                      (setf tex
-                              (fude-gl:find-texture 'container
-                                                    :if-does-not-exist :create)
-                            v view
-                            p projection
-                            model
-                              (3d-matrices:mtranslation
-                                (3d-vectors:vec3 -1 0 -1)))
-                      (fude-gl:draw 'fb-cube)
-                      (setf model
-                              (3d-matrices:mtranslation
-                                (3d-vectors:vec3 2 0 0)))
-                      (fude-gl:draw 'fb-cube)
-                      ;;; floor
-                      (fude-gl:in-vertices 'plane-vertices)
-                      (setf tex
-                              (fude-gl:find-texture 'metal
-                                                    :if-does-not-exist :create)
-                            model (3d-matrices:meye 4))
-                      (fude-gl:draw 'plane-vertices)))
-                  ;; draw a quad plane with the attached framebuffer color texture
-                  ;; disable depth test so screen-space quad isn't discarded due to depth test.
-                  (gl:disable :depth-test)
-                  (fude-gl:in-vertices 'framebuffer-quad)
-                  (fude-gl:in-texture
-                   (fude-gl:framebuffer-texture
-                     (fude-gl:find-framebuffer 'step1)))
-                  (fude-gl:draw 'framebuffer-quad))))))))))
+                           :title "Frame buffer Step1"))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader () (gl:enable :depth-test))
+    (let* ((camera (fude-gl:make-camera))
+           (matrix (3d-matrices:meye 4))
+           (view (fude-gl:view camera))
+           (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
+      (setf (fude-gl:uniform 'framebuffer-screen "screen") 0))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t))
+    (:idle nil)
+    (fude-gl:with-clear (win (:color-buffer-bit))
+      ;; bind to framebuffer and draw scene as we normally would to color texture
+      ;; For cleanup, macro WITH-FRAMEBUFFER is recommended.
+      (fude-gl:with-framebuffer (step1 (:color-buffer-bit :depth-buffer-bit)
+                                       :color '(0.1 0.1 0.1 1) :win win)
+        (gl:enable :depth-test)
+        ;; You can specify alias for uniform name.
+        ;; In the example below,
+        ;; specify alias 'v' for uniform "view" and
+        ;; alias 'p' for uniform 'projection".
+        (fude-gl:with-uniforms (tex (v "view") (p "projection") model)
+            'framebuffer-vertices
+          ;;; Cubes
+          (setf tex
+                  (fude-gl:find-texture 'container :if-does-not-exist :create)
+                v view
+                p projection
+                model
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload matrix fude-gl:+meye4+)
+                    #.(3d-vectors:vec3 -1 0 -1)))
+          (fude-gl:draw 'fb-cube)
+          (setf model
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload matrix fude-gl:+meye4+)
+                    #.(3d-vectors:vec3 2 0 0)))
+          (fude-gl:draw 'fb-cube)
+          ;;; floor
+          (fude-gl:in-vertices 'plane-vertices)
+          (setf tex (fude-gl:find-texture 'metal :if-does-not-exist :create)
+                model (fude-gl:reload matrix fude-gl:+meye4+))
+          (fude-gl:draw 'plane-vertices)))
+      ;; draw a quad plane with the attached framebuffer color texture
+      ;; disable depth test so screen-space quad isn't discarded due to depth test.
+      (gl:disable :depth-test)
+      (fude-gl:in-vertices 'framebuffer-quad)
+      (fude-gl:in-texture
+       (fude-gl:framebuffer-texture (fude-gl:find-framebuffer 'step1)))
+      (fude-gl:draw 'framebuffer-quad))))
 
 ;;;; DEPTH-MAP-DEMO
 
