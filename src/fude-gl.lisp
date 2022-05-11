@@ -1517,23 +1517,28 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
     (gl:bind-renderbuffer :renderbuffer 0))
   (values))
 
-(defstruct framebuffer
-  (id nil :type (or null (unsigned-byte 32)))
-  texture
-  render-buffer
-  (format :rgb :type base-internal-format :read-only t)
-  (pixel-type :unsigned-byte :type pixel-type :read-only t)
-  (options nil :type list :read-only t)
-  (attachment :color-attachment0 :type attachment :read-only t)
-  (renderbuffer-initializer #'default-renderbuffer-initializer
-                            :type function
-                            :read-only t)
-  (width (alexandria:required-argument :width)
-         :type (mod #.most-positive-fixnum)
-         :read-only t)
-  (height (alexandria:required-argument :height)
-          :type (mod #.most-positive-fixnum)
-          :read-only t))
+(defclass framebuffer ()
+  ((id :initform nil :type (or null (unsigned-byte 32)) :reader framebuffer-id)
+   (texture :initform nil :reader framebuffer-texture)
+   (render-buffer :initform nil)
+   (format :initarg :format :initform :rgb :type base-internal-format)
+   (pixel-type :initarg :pixel-type :initform :unsigned-byte :type pixel-type)
+   (options :initarg :options :initform nil :type list)
+   (attachment :initarg :attachment
+               :initform :color-attachment0
+               :type attachment)
+   (renderbuffer-initializer :initarg :renderbuffer-initializer
+                             :initform #'default-renderbuffer-initializer
+                             :type function)
+   (width :initarg :width
+          :initform (alexandria:required-argument :width)
+          :type (mod #.most-positive-fixnum))
+   (height :initarg :height
+           :initform (alexandria:required-argument :height)
+           :type (mod #.most-positive-fixnum))))
+
+(defmethod framebuffer-texture ((o symbol))
+  (framebuffer-texture (find-framebuffer o :if-does-not-exist :create)))
 
 (defvar *framebuffers* (make-hash-table :test #'eq))
 
@@ -1650,7 +1655,8 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defmacro deframebuf (name &rest params)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      ;; We need EVAL-WHEN for compile time checkings.
-     (setf (gethash ',name *framebuffers*) (make-framebuffer ,@params))))
+     (setf (gethash ',name *framebuffers*)
+             (make-instance 'framebuffer ,@params))))
 
 (defun pprint-deframebuf (stream exp)
   (funcall
