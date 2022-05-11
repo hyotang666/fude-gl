@@ -197,6 +197,10 @@
   (destructuring-bind
       (slots type &body body)
       (cdr exp)
+    (unless (gethash type *shader-vars*)
+      (error 'unknown-variable
+             :name type
+             :known-vars (alexandria:hash-table-keys *shader-vars*)))
     (let ((*alias*
            (pairlis (mapcar #'alexandria:ensure-car slots)
                     (loop :for slot :in slots
