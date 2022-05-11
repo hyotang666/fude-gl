@@ -16,7 +16,7 @@
                                        instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
                                        some-instance-dynamics depth-testing
-                                       framebuffer-step1))
+                                       framebuffer-step1 framebuffer-shadow))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -1644,10 +1644,15 @@
                            :title "Framebuffer depth-map"))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader () (gl:enable :depth-test))
-    (let ((light-position (3d-vectors:vec3 -2 4 -1))
-          (near-plane 1.0) ; When projection is perspective,
-          (far-plane 7.5) ; these vars will be refered.
-          ))
+    (let* ((light-position (3d-vectors:vec3 -2 4 -1))
+           (near-plane 1.0) ; When projection is perspective,
+           (far-plane 7.5) ; these vars will be refered.
+           (ortho-origin
+            (3d-matrices:mortho -10 10 -10 10 near-plane far-plane))
+           (ortho (3d-matrices:mortho -10 10 -10 10 near-plane far-plane))
+           (lookat
+            (3d-matrices:mlookat light-position (3d-vectors:vec3 0 0 0)
+                                 (3d-vectors:vec3 0 1 0)))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -1660,10 +1665,7 @@
                                             ;; To specify not clear color.
                                             :color nil :win win)
          (setf (fude-gl:uniform 'simple-depth "lightSpaceMatrix")
-                 (3d-matrices:m*
-                   (3d-matrices:mortho -10 10 -10 10 near-plane far-plane)
-                   (3d-matrices:mlookat light-position (3d-vectors:vec3 0 0 0)
-                                        (3d-vectors:vec3 0 1 0))))
+                 (3d-matrices:nm* (fude-gl:reload ortho ortho-origin) lookat))
          (render-scene 'plane-vao))
        (gl:clear :color-buffer-bit :depth-buffer-bit)
        ;; render Depth map to quad for visual debugging
@@ -1676,34 +1678,32 @@
                  #|
                np near-plane
                fp far-plane ; |#
-               depth-map
-                 (fude-gl:framebuffer-texture
-                   (fude-gl:find-framebuffer 'depth-map)))
+               depth-map (fude-gl:framebuffer-texture 'depth-map))
          (fude-gl:draw 'shadow-quad))))))
 
 (defun render-scene (vertices)
   ;; floor
   (fude-gl:in-vertices vertices)
-  (let ((shader (fude-gl:shader vertices)))
+  (let ((shader (fude-gl:shader vertices)) (m (3d-matrices:meye 4)))
     (fude-gl:with-uniforms (model)
         shader
-      (setf model (3d-matrices:meye 4))
+      (setf model (fude-gl:reload m fude-gl:+meye4+))
       (fude-gl:draw vertices)
-      (let ((m (3d-matrices:meye 4)))
-        (3d-matrices:nmtranslate m (3d-vectors:vec3 0 1.5 0))
-        (3d-matrices:nmscale m (3d-vectors:vec3 0.5 0.5 0.5))
+      (let ((m (fude-gl:reload m fude-gl:+meye4+)))
+        (3d-matrices:nmtranslate m #.(3d-vectors:vec3 0 1.5 0))
+        (3d-matrices:nmscale m #.(3d-vectors:vec3 0.5 0.5 0.5))
         (setf model m)
         (fude-gl:draw 'shadow-cube))
-      (let ((m (3d-matrices:meye 4)))
-        (3d-matrices:nmtranslate m (3d-vectors:vec3 2 0 1))
-        (3d-matrices:nmscale m (3d-vectors:vec3 0.5 0.5 0.5))
+      (let ((m (fude-gl:reload m fude-gl:+meye4+)))
+        (3d-matrices:nmtranslate m #.(3d-vectors:vec3 2 0 1))
+        (3d-matrices:nmscale m #.(3d-vectors:vec3 0.5 0.5 0.5))
         (setf model m)
         (fude-gl:draw 'shadow-cube))
-      (let ((m (3d-matrices:meye 4)))
-        (3d-matrices:nmtranslate m (3d-vectors:vec3 -1 0 2))
-        (3d-matrices:nmrotate m (3d-vectors:vunit (3d-vectors:vec3 1 0 1))
-                              (fude-gl:radians 60))
-        (3d-matrices:nmscale m (3d-vectors:vec3 0.25 0.25 0.25))
+      (let ((m (fude-gl:reload m fude-gl:+meye4+)))
+        (3d-matrices:nmtranslate m #.(3d-vectors:vec3 -1 0 2))
+        (3d-matrices:nmrotate m #.(3d-vectors:vunit (3d-vectors:vec3 1 0 1))
+                              #.(fude-gl:radians 60))
+        (3d-matrices:nmscale m #.(3d-vectors:vec3 0.25 0.25 0.25))
         (setf model m)
         (fude-gl:draw 'shadow-cube)))))
 
