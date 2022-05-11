@@ -1487,8 +1487,7 @@
       ;; disable depth test so screen-space quad isn't discarded due to depth test.
       (gl:disable :depth-test)
       (fude-gl:in-vertices 'framebuffer-quad)
-      (fude-gl:in-texture
-       (fude-gl:framebuffer-texture (fude-gl:find-framebuffer 'step1)))
+      (fude-gl:in-texture (fude-gl:framebuffer-texture 'step1))
       (fude-gl:draw 'framebuffer-quad))))
 
 ;;;; DEPTH-MAP-DEMO
