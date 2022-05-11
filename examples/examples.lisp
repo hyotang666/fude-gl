@@ -499,8 +499,8 @@
               (fude-gl:find-texture 'face :if-does-not-exist :create)
             (fude-gl:uniform 'transform-demo "transform")
               (3d-matrices:nmscale
-                (3d-matrices:nmrotate (fude-gl::re-eye matrix) 3d-vectors:+vz+
-                                      #.(fude-gl:radians 90))
+                (3d-matrices:nmrotate (fude-gl:reload matrix fude-gl:+meye4+)
+                                      3d-vectors:+vz+ #.(fude-gl:radians 90))
                 #.(3d-vectors:vec 0.5 0.5 0.5)))
       (fude-gl:draw 'transform-demo))))
 
@@ -528,7 +528,8 @@
               transform
                 (progn
                  (setf (3d-vectors:vx position) (sin (get-internal-real-time)))
-                 (3d-matrices:nmtranslate (fude-gl:re-eye matrix) position))))
+                 (3d-matrices:nmtranslate
+                   (fude-gl:reload matrix fude-gl:+meye4+) position))))
       (fude-gl:draw 'transform-demo))))
 
 (defun translate-y ()
@@ -553,7 +554,8 @@
               transform
                 (progn
                  (setf (3d-vectors:vy position) (sin (get-internal-real-time)))
-                 (3d-matrices:nmtranslate (fude-gl:re-eye matrix) position))))
+                 (3d-matrices:nmtranslate
+                   (fude-gl:reload matrix fude-gl:+meye4+) position))))
       (fude-gl:draw 'transform-demo))))
 
 (defun scaling ()
@@ -577,8 +579,9 @@
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
               transform
                 (3d-matrices:nmscale
-                  (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                           #.(3d-vectors:vec 0 0 0))
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload matrix fude-gl:+meye4+)
+                    #.(3d-vectors:vec 0 0 0))
                   (let ((v (abs (sin (get-internal-real-time)))))
                     (3d-vectors:vsetf scale v v)))))
       (fude-gl:draw 'transform-demo))))
@@ -604,8 +607,9 @@
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
               transform
                 (3d-matrices:nmrotate
-                  (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                           #.(3d-vectors:vec 0 0 0))
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload matrix fude-gl:+meye4+)
+                    #.(3d-vectors:vec 0 0 0))
                   3d-vectors:+vz+ (fude-gl:radians (get-internal-real-time)))))
       (fude-gl:draw 'transform-demo))))
 
@@ -791,7 +795,7 @@
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create)
               model
-                (3d-matrices:nmrotate (fude-gl:re-eye m)
+                (3d-matrices:nmrotate (fude-gl:reload m fude-gl:+meye4+)
                                       #.(3d-vectors:vec 0.5 1 0)
                                       (fude-gl:radians
                                         (get-internal-real-time)))
@@ -856,8 +860,8 @@
               :for i :upfrom 0
               :do (setf model
                           (3d-matrices:nmrotate
-                            (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                                     pos)
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload matrix fude-gl:+meye4+) pos)
                             #.(3d-vectors:vec 1 0.3 0.5)
                             (fude-gl:radians (* 20 i)))
                         view v
@@ -919,8 +923,8 @@
                 :for i :upfrom 0
                 :do (setf model
                             (3d-matrices:nmrotate
-                              (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                                       pos)
+                              (3d-matrices:nmtranslate
+                                (fude-gl:reload matrix fude-gl:+meye4+) pos)
                               #.(3d-vectors:vec 1 0.3 0.5)
                               (fude-gl:radians (* 20 i)))
                           view v
@@ -1000,8 +1004,8 @@
               :for i :upfrom 0
               :do (setf model
                           (3d-matrices:nmrotate
-                            (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                                     pos)
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload matrix fude-gl:+meye4+) pos)
                             #.(3d-vectors:vec 1 0.3 0.5)
                             (fude-gl:radians (* 20 i)))
                         view (fude-gl:view camera)
@@ -1369,16 +1373,18 @@
         (setf tex
                 (fude-gl:find-texture 'cube-texture :if-does-not-exist :create)
               model
-                (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                         #.(3d-vectors:vec3 -1 0 -1)))
+                (3d-matrices:nmtranslate
+                  (fude-gl:reload matrix fude-gl:+meye4+)
+                  #.(3d-vectors:vec3 -1 0 -1)))
         (fude-gl:draw 'depth-testing-cubes)
         (setf model
-                (3d-matrices:nmtranslate (fude-gl:re-eye matrix)
-                                         #.(3d-vectors:vec3 2 0 0)))
+                (3d-matrices:nmtranslate
+                  (fude-gl:reload matrix fude-gl:+meye4+)
+                  #.(3d-vectors:vec3 2 0 0)))
         (fude-gl:draw 'depth-testing-cubes)
         (fude-gl:in-vertices 'depth-testing-plane)
         (setf tex (fude-gl:find-texture 'metal :if-does-not-exist :create)
-              model (fude-gl:re-eye matrix))
+              model (fude-gl:reload matrix fude-gl:+meye4+))
         (fude-gl:draw 'depth-testing-plane)))))
 
 ;;;; FRAMEBUFFER
