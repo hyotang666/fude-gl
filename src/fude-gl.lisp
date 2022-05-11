@@ -2,6 +2,26 @@
 
 (declaim (optimize speed))
 
+;;;; UNWIND-PROTECTS
+
+(defvar *cleaner* (constantly nil))
+
+(defmacro unwind-protects (form &rest cleaners)
+  `(unwind-protect ,form
+     ,@(mapcar
+         (lambda (cleaner)
+           `(handler-case ,cleaner
+              (error (c)
+                (setq *cleaner* (lambda () ,cleaner))
+                (restart-case (error
+                                "~A ~:@_FYI: Current cleanup form is assigned to *cleaner* as nullary closure."
+                                c)
+                  (continue () :report "Go to next cleanup form.")))))
+         cleaners)))
+
+(set-pprint-dispatch '(cons (member unwind-protects))
+                     (pprint-dispatch '(unwind-protect)))
+
 ;;;; VERBOSE OPENGL
 
 (deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
@@ -658,7 +678,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
         (fs (gl:create-shader :fragment-shader)))
-    (unwind-protect
+    (unwind-protects
         (labels ((compile-s (program-id id source)
                    (gl:shader-source id source)
                    (gl:compile-shader id)
@@ -1252,7 +1272,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   "Ensure cleanup fude-gl environment."
   (let ((toplevelp (gensym "TOPLEVELP")))
     `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
-       (unwind-protect (progn ,@body)
+       (unwind-protects (progn ,@body)
          (when ,toplevelp
            (loop :for shader :being :each :hash-value :of *vertices*
                  :when (slot-boundp shader 'vertex-array)
