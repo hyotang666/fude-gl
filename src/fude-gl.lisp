@@ -506,6 +506,12 @@
             :do (setf collector #'varying)
           :else
             :do (vars (car elt))
+                (when (listp (cadr elt)) ; set
+                  (dolist (private-name-spec (cadr elt))
+                    (vars
+                     (intern
+                       (format nil "~A.~A" (symbol-camel-case (car elt))
+                               (symbol-camel-case (car private-name-spec)))))))
                 (mapc collector (parse-shader-lambda-list-spec elt)))))
 
 (defun <uniforms> (name shader*)

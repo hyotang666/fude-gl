@@ -63,8 +63,6 @@
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
-(defvar *alias* nil)
-
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
 
 (defvar *var-check-p* nil)
@@ -96,30 +94,28 @@
                                                    :when (uiop:string-prefix-p
                                                            "gl_" key)
                                                      :collect key)))))
-    (let ((alias (assoc exp *alias*)))
-      (cond (alias (glsl-symbol stream (cdr alias) nil))
-            ((uiop:string-prefix-p "gl_" exp)
-             (check-builtin-var-existence (symbol-name exp) exp)
-             (write-string (symbol-name exp) stream))
-            ((uiop:string-prefix-p "GL-" exp)
-             (let ((name
-                    (format nil "gl_~A"
-                            (change-case:pascal-case
-                              (subseq (symbol-name exp) 3)))))
-               (check-builtin-var-existence name exp)
-               (write-string name stream)))
-            ((progn
-              (when colonp
-                (unless (gethash exp *shader-vars*)
-                  (error 'unknown-variable
-                         :name exp
-                         :known-vars (alexandria:hash-table-keys
-                                       *shader-vars*))))
-              (find-if #'lower-case-p (symbol-name exp)))
-             (write-string (symbol-name exp) stream))
-            (t
-             (write-string (change-case:camel-case (symbol-name exp))
-                           stream))))))
+    (cond
+      ((uiop:string-prefix-p "gl_" exp)
+       (check-builtin-var-existence (symbol-name exp) exp)
+       (write-string (symbol-name exp) stream))
+      ((uiop:string-prefix-p "GL-" exp)
+       (let ((name
+              (format nil "gl_~A"
+                      (change-case:pascal-case (subseq (symbol-name exp) 3)))))
+         (check-builtin-var-existence name exp)
+         (write-string name stream)))
+      ((let ((exists? (gethash exp *shader-vars*)))
+         (when (not (typep exists? 'boolean))
+           (write-string (symbol-name exists?) stream))))
+      ((progn
+        (when colonp
+          (unless (gethash exp *shader-vars*)
+            (error 'unknown-variable
+                   :name exp
+                   :known-vars (alexandria:hash-table-keys *shader-vars*))))
+        (find-if #'lower-case-p (symbol-name exp)))
+       (write-string (symbol-name exp) stream))
+      (t (write-string (change-case:camel-case (symbol-name exp)) stream)))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
@@ -192,24 +188,57 @@
   (setf stream (or stream *standard-output*))
   (format stream "~{~W~^ ~};" exp))
 
+(defun parse-slot-spec (spec)
+  (etypecase spec
+    (symbol (values spec spec))
+    ((cons symbol (cons symbol null)) (values-list spec))))
+
+(define-condition unknown-slot (fude-gl-error cell-error)
+  ((type :initarg :type :reader slot-type)
+   (known-vars :initarg :known-vars :reader known-vars))
+  (:report
+   (lambda (this output)
+     (format output "Unknown slot named ~S for type ~S. ~:@_~?"
+             (cell-error-name this) (slot-type this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (known-vars this))))))
+
 (defun glsl-with-slots (stream exp)
   (setf stream (or stream *standard-output*))
   (destructuring-bind
       (slots type &body body)
       (cdr exp)
-    (unless (gethash type *shader-vars*)
-      (error 'unknown-variable
-             :name type
-             :known-vars (alexandria:hash-table-keys *shader-vars*)))
-    (let ((*alias*
-           (pairlis (mapcar #'alexandria:ensure-car slots)
-                    (loop :for slot :in slots
-                          :collect (intern
-                                     (format nil "~A.~A" type
-                                             (if (symbolp slot)
-                                                 slot
-                                                 (cadr slot)))))
-                    *alias*)))
+    ;; TYPE existence checking.
+    (assert (gethash type *shader-vars*) ()
+      'unknown-variable :name type
+                        :known-vars (alexandria:hash-table-keys *shader-vars*))
+    (let ((*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
+      (flet ((known-vars ()
+               (loop :for known :being :each :hash-keys :of *shader-vars*
+                     :for dot := (position #\. (symbol-name known))
+                     :when dot
+                       :collect (let ((name
+                                       (subseq (symbol-name known) (1+ dot))))
+                                  (if (find-if #'upper-case-p name)
+                                      (intern name)
+                                      (read-from-string name))))))
+        ;; Extend known vars.
+        (dolist (slot slots)
+          (multiple-value-bind (alias truename)
+              (parse-slot-spec slot)
+            (let ((full-name
+                   (intern
+                     (format nil "~A.~A" (symbol-camel-case type)
+                             (symbol-camel-case truename)))))
+              ;; Private var existence checking.
+              (assert (gethash full-name *shader-vars*) ()
+                'unknown-slot :name truename
+                              :type type
+                              :known-vars (known-vars))
+              ;; The body.
+              (setf (gethash alias *shader-vars*) full-name)))))
+      ;; The body.
       (dolist (exp body) (write exp :stream stream)))))
 
 (defun glsl-if (stream exp)
