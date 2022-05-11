@@ -1710,9 +1710,12 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
       (3d-vectors:vec (* -0.5 w) (* -0.5 h) 0))
     (3d-vectors:vec w h 1)))
 
-(defun re-eye (mat4)
-  (replace (3d-matrices:marr mat4) #.(3d-matrices:marr (3d-matrices:meye 4)))
-  mat4)
+(unless (boundp '+meye4+)
+  (defconstant +meye4+ (3d-matrices:meye 4)))
+
+(defun reload (dest source)
+  (replace (3d-matrices:marr dest) (3d-matrices:marr source))
+  dest)
 
 ;;;; IMAGE-LOADER
 ;; *IMAGES*

@@ -74,7 +74,8 @@
            #:radians
            #:ortho
            #:model-matrix
-           #:re-eye
+           #:reload
+           #:+meye4+
            ;;;; IMAGE-LOADER
            #:defimage ; dsl macro.
            #:list-all-images ; dev helpers.
