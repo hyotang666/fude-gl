@@ -97,7 +97,7 @@
                                                            "gl_" key)
                                                      :collect key)))))
     (let ((alias (assoc exp *alias*)))
-      (cond (alias (glsl-symbol stream (cdr alias)))
+      (cond (alias (glsl-symbol stream (cdr alias) nil))
             ((uiop:string-prefix-p "gl_" exp)
              (check-builtin-var-existence (symbol-name exp) exp)
              (write-string (symbol-name exp) stream))
