@@ -61,6 +61,11 @@
 
 (defvar *shader-vars*)
 
+(defun variable-information (symbol &optional env) (gethash symbol env))
+
+(defun (setf variable-information) (new symbol &optional env)
+  (setf (gethash symbol env) new))
+
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
@@ -104,12 +109,12 @@
                       (change-case:pascal-case (subseq (symbol-name exp) 3)))))
          (check-builtin-var-existence name exp)
          (write-string name stream)))
-      ((let ((exists? (gethash exp *shader-vars*)))
+      ((let ((exists? (variable-information exp *shader-vars*)))
          (when (not (typep exists? 'boolean))
            (write-string (symbol-name exists?) stream))))
       ((progn
         (when colonp
-          (unless (gethash exp *shader-vars*)
+          (unless (variable-information exp *shader-vars*)
             (error 'unknown-variable
                    :name exp
                    :known-vars (alexandria:hash-table-keys *shader-vars*))))
@@ -173,7 +178,7 @@
   (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
            (loop :for (name type init) :in (cadr exp)
                  :do (check-type type glsl-type)
-                     (setf (gethash name *shader-vars*) t)
+                     (setf (variable-information name *shader-vars*) t)
                  :collect type
                  :collect name
                  :collect init)
@@ -210,7 +215,7 @@
       (slots type &body body)
       (cdr exp)
     ;; TYPE existence checking.
-    (assert (gethash type *shader-vars*) ()
+    (assert (variable-information type *shader-vars*) ()
       'unknown-variable :name type
                         :known-vars (alexandria:hash-table-keys *shader-vars*))
     (let ((*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
@@ -232,12 +237,12 @@
                      (format nil "~A.~A" (symbol-camel-case type)
                              (symbol-camel-case truename)))))
               ;; Private var existence checking.
-              (assert (gethash full-name *shader-vars*) ()
+              (assert (variable-information full-name *shader-vars*) ()
                 'unknown-slot :name truename
                               :type type
                               :known-vars (known-vars))
               ;; The body.
-              (setf (gethash alias *shader-vars*) full-name)))))
+              (setf (variable-information alias *shader-vars*) full-name)))))
       ;; The body.
       (dolist (exp body) (write exp :stream stream)))))
 
@@ -275,7 +280,8 @@
   (setf stream (or stream *standard-output*))
   (let ((ftype (gethash (second exp) *declaims*))
         (*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
-    (dolist (var (third exp)) (setf (gethash var *shader-vars*) t))
+    (dolist (var (third exp))
+      (setf (variable-information var *shader-vars*) t))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
     (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
