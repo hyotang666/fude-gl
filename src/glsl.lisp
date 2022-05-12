@@ -68,6 +68,11 @@
 
 (defun list-all-known-vars () (alexandria:hash-table-keys *shader-vars*))
 
+(defun argument-environment (env &key variable)
+  (let ((new (alexandria:copy-hash-table env)))
+    (dolist (var variable) (setf (gethash var new) t))
+    new))
+
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
@@ -177,14 +182,16 @@
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
-  (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
-           (loop :for (name type init) :in (cadr exp)
-                 :do (check-type type glsl-type)
-                     (setf (variable-information name *shader-vars*) t)
-                 :collect type
-                 :collect name
-                 :collect init)
-           (cddr exp)))
+  (let ((*shader-vars*
+         (argument-environment *shader-vars*
+                               :variable (mapcar #'car (cadr exp)))))
+    (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
+             (loop :for (name type init) :in (cadr exp)
+                   :do (check-type type glsl-type)
+                   :collect type
+                   :collect name
+                   :collect init)
+             (cddr exp))))
 
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
@@ -281,9 +288,8 @@
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
   (let ((ftype (gethash (second exp) *declaims*))
-        (*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
-    (dolist (var (third exp))
-      (setf (variable-information var *shader-vars*) t))
+        (*shader-vars*
+         (argument-environment *shader-vars* :variable (third exp))))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
     (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
