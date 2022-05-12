@@ -66,6 +66,8 @@
 (defun (setf variable-information) (new symbol &optional env)
   (setf (gethash symbol env) new))
 
+(defun list-all-known-vars () (alexandria:hash-table-keys *shader-vars*))
+
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
@@ -117,7 +119,7 @@
           (unless (variable-information exp *shader-vars*)
             (error 'unknown-variable
                    :name exp
-                   :known-vars (alexandria:hash-table-keys *shader-vars*))))
+                   :known-vars (list-all-known-vars))))
         (find-if #'lower-case-p (symbol-name exp)))
        (write-string (symbol-name exp) stream))
       (t (write-string (change-case:camel-case (symbol-name exp)) stream)))))
@@ -217,7 +219,7 @@
     ;; TYPE existence checking.
     (assert (variable-information type *shader-vars*) ()
       'unknown-variable :name type
-                        :known-vars (alexandria:hash-table-keys *shader-vars*))
+                        :known-vars (list-all-known-vars))
     (let ((*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
       (flet ((known-vars ()
                (loop :for known :being :each :hash-keys :of *shader-vars*
