@@ -70,7 +70,10 @@
 
 (defun argument-environment (env &key variable)
   (let ((new (alexandria:copy-hash-table env)))
-    (dolist (var variable) (setf (gethash var new) t))
+    (dolist (var variable)
+      (etypecase var
+        (symbol (setf (gethash var new) t))
+        ((cons symbol symbol) (setf (gethash (car var) new) (cdr var)))))
     new))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
@@ -227,31 +230,57 @@
     (assert (variable-information type *shader-vars*) ()
       'unknown-variable :name type
                         :known-vars (list-all-known-vars))
-    (let ((*shader-vars* (alexandria:copy-hash-table *shader-vars*)))
-      (flet ((known-vars ()
-               (loop :for known :being :each :hash-keys :of *shader-vars*
-                     :for dot := (position #\. (symbol-name known))
-                     :when dot
-                       :collect (let ((name
-                                       (subseq (symbol-name known) (1+ dot))))
-                                  (if (find-if #'upper-case-p name)
-                                      (intern name)
-                                      (read-from-string name))))))
-        ;; Extend known vars.
-        (dolist (slot slots)
-          (multiple-value-bind (alias truename)
-              (parse-slot-spec slot)
-            (let ((full-name
-                   (intern
-                     (format nil "~A.~A" (symbol-camel-case type)
-                             (symbol-camel-case truename)))))
-              ;; Private var existence checking.
-              (assert (variable-information full-name *shader-vars*) ()
-                'unknown-slot :name truename
-                              :type type
-                              :known-vars (known-vars))
-              ;; The body.
-              (setf (variable-information alias *shader-vars*) full-name)))))
+    (let ((*shader-vars*
+           (argument-environment *shader-vars*
+                                 :variable (flet ((known-vars ()
+                                                    (loop :for known
+                                                               :being :each
+                                                               :hash-keys :of
+                                                               *shader-vars*
+                                                          :for dot
+                                                               := (position #\.
+                                                                            (symbol-name
+                                                                              known))
+                                                          :when dot
+                                                            :collect (let ((name
+                                                                            (subseq
+                                                                              (symbol-name
+                                                                                known)
+                                                                              (1+
+                                                                                dot))))
+                                                                       (if (find-if
+                                                                             #'upper-case-p
+                                                                             name)
+                                                                           (intern
+                                                                             name)
+                                                                           (read-from-string
+                                                                             name))))))
+                                             (loop :for slot :in slots
+                                                   :collect (multiple-value-bind
+                                                                (alias
+                                                                  truename)
+                                                                (parse-slot-spec
+                                                                  slot)
+                                                              (let ((full-name
+                                                                     (intern
+                                                                       (format
+                                                                         nil
+                                                                         "~A.~A"
+                                                                         (symbol-camel-case
+                                                                           type)
+                                                                         (symbol-camel-case
+                                                                           truename)))))
+                                                                ;; Private var existence checking.
+                                                                (assert (variable-information
+                                                                          full-name
+                                                                          *shader-vars*)
+                                                                  ()
+                                                                  'unknown-slot :name truename
+                                                                                :type type
+                                                                                :known-vars (known-vars))
+                                                                ;; The body.
+                                                                (cons alias
+                                                                      full-name))))))))
       ;; The body.
       (dolist (exp body) (write exp :stream stream)))))
 
