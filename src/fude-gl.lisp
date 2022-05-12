@@ -493,11 +493,11 @@
               (symbol-camel-case name)))))
 
 (declaim
- (ftype (function (list) (values list list list list &optional))
+ (ftype (function (list) (values list list list &optional))
         split-shader-lambda-list))
 
 (defun split-shader-lambda-list (lambda-list)
-  (uiop:while-collecting (out uniform varying vars)
+  (uiop:while-collecting (out uniform varying)
     (loop :with collector = #'out
           :for elt :in lambda-list
           :if (uniform-keywordp elt)
@@ -505,14 +505,7 @@
           :else :if (varying-keywordp elt)
             :do (setf collector #'varying)
           :else
-            :do (vars (car elt))
-                (when (listp (cadr elt)) ; set
-                  (dolist (private-name-spec (cadr elt))
-                    (vars
-                     (intern
-                       (format nil "~A.~A" (symbol-camel-case (car elt))
-                               (symbol-camel-case (car private-name-spec)))))))
-                (mapc collector (parse-shader-lambda-list-spec elt)))))
+            :do (funcall collector elt))))
 
 (defun <uniforms> (name shader*)
   ;; Shader NAME becomes VECTOR-CLASS.
@@ -522,7 +515,10 @@
      (list
        ,@(loop :for (nil lambda-list) :in shader*
                :for uniforms
-                    = (nth-value 1 (split-shader-lambda-list lambda-list))
+                    = (mapcan #'parse-shader-lambda-list-spec
+                              (nth-value 1
+                                         (split-shader-lambda-list
+                                           lambda-list)))
                :nconc (loop :for (nil type name) :on uniforms :by #'cdddr
                             :collect (make-uniform :name name :type type))))))
 
@@ -547,7 +543,8 @@
                          "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
                          )))
         (*shader-vars*
-         (argument-environment *shader-vars* :variable superclasses)))
+         (argument-environment *shader-vars*
+                               :variable (var-info :attribute superclasses))))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
                    (nreverse acc)
@@ -556,17 +553,29 @@
                (destructuring-bind
                    (type shader-lambda-list &rest main)
                    shader
-                 (multiple-value-bind (out uniform varying% vars)
+                 (multiple-value-bind (out uniform varying%)
                      (split-shader-lambda-list shader-lambda-list)
                    (let ((*glsl-functions*
                           (alexandria:copy-hash-table *glsl-functions*))
                          (*shader-vars*
-                          (argument-environment *shader-vars* :variable vars)))
+                          (argument-environment *shader-vars*
+                                                :variable (var-info :io out)))
+                         (local-vars
+                          (append (var-info :uniform uniform)
+                                  (var-info :varying varying%))))
+                     (setq out (mapcan #'parse-shader-lambda-list-spec out)
+                           uniform
+                             (mapcan #'parse-shader-lambda-list-spec uniform)
+                           varying%
+                             (mapcan #'parse-shader-lambda-list-spec varying%))
                      (rec rest out (append varying varying%)
                           (cons
                             (let ((method
                                    (intern (format nil "~A-SHADER" type)
-                                           :fude-gl)))
+                                           :fude-gl))
+                                  (*shader-vars*
+                                   (argument-environment *shader-vars*
+                                                         :variable local-vars)))
                               `(defmethod ,method ((type (eql ',name)))
                                  ,(if (typep main
                                              '(cons
@@ -576,7 +585,7 @@
                                       `(,method ',(cadar main))
                                       (format nil format version in
                                               (remove nil out)
-                                              (delete nil uniform)
+                                              (delete nil (the list uniform))
                                               (remove nil
                                                       (append varying
                                                               varying%))

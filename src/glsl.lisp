@@ -59,19 +59,61 @@
       "*" "/" "+" "-" "<" ">" "<=" ">=" "==" "&&" "^^" "||" "%" "<<" ">>" "&"
       "^" "|")))
 
-(defvar *shader-vars* (make-hash-table :test #'eq))
+(defvar *shader-vars* nil)
 
-(defun variable-information (symbol &optional env) (gethash symbol env))
+(defstruct variable-information
+  (name (error "NAME is required.") :type string :read-only t)
+  (type (error "TYPE is required.")
+        :type (member :attribute :io :uniform :varying :local :global :slot)
+        :read-only t))
 
-(defun list-all-known-vars () (alexandria:hash-table-keys *shader-vars*))
+(defun variable-information (symbol &optional env)
+  (find (symbol-camel-case symbol) env :key #'variable-information-name :test #'equal))
 
-(defun argument-environment (env &key variable)
-  (let ((new (alexandria:copy-hash-table env)))
-    (dolist (var variable)
-      (etypecase var
-        (symbol (setf (gethash var new) t))
-        ((cons symbol symbol) (setf (gethash (car var) new) (cdr var)))))
-    new))
+(defgeneric var-info (type source)
+  (:method ((type (eql :local)) (source list))
+    (mapcar
+      (lambda (symbol)
+        (make-variable-information :name (symbol-camel-case symbol)
+                                   :type type))
+      source))
+  (:method ((type (eql :slot)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (etypecase spec
+					   (symbol (symbol-camel-case spec))
+					   ((cons symbol (cons symbol null))
+					    (symbol-camel-case (car spec))))
+				   :type type))
+      source))
+  (:method ((type (eql :attribute)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (symbol-camel-case spec) :type type))
+      source))
+  (:method ((type (eql :io)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (symbol-camel-case (car spec))
+                                   :type type))
+      source))
+  (:method ((type (eql :uniform)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (symbol-camel-case (car spec))
+                                   :type type))
+      source))
+  (:method ((type (eql :varying)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (symbol-camel-case (car spec))
+                                   :type type))
+      source)))
+
+(defun list-all-known-vars ()
+  (mapcar #'variable-information-name *shader-vars*))
+
+(defun argument-environment (env &key variable) (append variable env))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
@@ -116,9 +158,9 @@
                       (change-case:pascal-case (subseq (symbol-name exp) 3)))))
          (check-builtin-var-existence name exp)
          (write-string name stream)))
-      ((let ((exists? (variable-information exp *shader-vars*)))
-         (when (not (typep exists? 'boolean))
-           (write-string (symbol-name exists?) stream))))
+      ((let ((info (variable-information exp *shader-vars*)))
+         (when (and info (eq :slot (variable-information-type info)))
+           (write-string (variable-information-name info) stream))))
       ((progn
         (when colonp
           (unless (variable-information exp *shader-vars*)
@@ -184,7 +226,9 @@
   (setf stream (or stream *standard-output*))
   (let ((*shader-vars*
          (argument-environment *shader-vars*
-                               :variable (mapcar #'car (cadr exp)))))
+                               :variable (var-info :local (mapcar #'car
+                                                                  (cadr
+                                                                    exp))))))
     (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
              (loop :for (name type init) :in (cadr exp)
                    :do (check-type type glsl-type)
@@ -229,55 +273,7 @@
                         :known-vars (list-all-known-vars))
     (let ((*shader-vars*
            (argument-environment *shader-vars*
-                                 :variable (flet ((known-vars ()
-                                                    (loop :for known
-                                                               :being :each
-                                                               :hash-keys :of
-                                                               *shader-vars*
-                                                          :for dot
-                                                               := (position #\.
-                                                                            (symbol-name
-                                                                              known))
-                                                          :when dot
-                                                            :collect (let ((name
-                                                                            (subseq
-                                                                              (symbol-name
-                                                                                known)
-                                                                              (1+
-                                                                                dot))))
-                                                                       (if (find-if
-                                                                             #'upper-case-p
-                                                                             name)
-                                                                           (intern
-                                                                             name)
-                                                                           (read-from-string
-                                                                             name))))))
-                                             (loop :for slot :in slots
-                                                   :collect (multiple-value-bind
-                                                                (alias
-                                                                  truename)
-                                                                (parse-slot-spec
-                                                                  slot)
-                                                              (let ((full-name
-                                                                     (intern
-                                                                       (format
-                                                                         nil
-                                                                         "~A.~A"
-                                                                         (symbol-camel-case
-                                                                           type)
-                                                                         (symbol-camel-case
-                                                                           truename)))))
-                                                                ;; Private var existence checking.
-                                                                (assert (variable-information
-                                                                          full-name
-                                                                          *shader-vars*)
-                                                                  ()
-                                                                  'unknown-slot :name truename
-                                                                                :type type
-                                                                                :known-vars (known-vars))
-                                                                ;; The body.
-                                                                (cons alias
-                                                                      full-name))))))))
+                                 :variable (var-info :slot slots))))
       ;; The body.
       (dolist (exp body) (write exp :stream stream)))))
 
@@ -315,7 +311,8 @@
   (setf stream (or stream *standard-output*))
   (let ((ftype (gethash (second exp) *declaims*))
         (*shader-vars*
-         (argument-environment *shader-vars* :variable (third exp))))
+         (argument-environment *shader-vars*
+                               :variable (var-info :local (third exp)))))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
     (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
