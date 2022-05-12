@@ -81,7 +81,7 @@
       (rec env))))
 
 (defgeneric var-info (type source)
-  (:method ((type (eql :local)) (source list))
+  (:method (type (source list))
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case (car spec))
@@ -101,27 +101,6 @@
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case spec) :type type))
-      source))
-  (:method ((type (eql :io)) (source list))
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type
-                                   :glsl-type (cadr spec)))
-      source))
-  (:method ((type (eql :uniform)) (source list))
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type
-                                   :glsl-type (cadr spec)))
-      source))
-  (:method ((type (eql :varying)) (source list))
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type
-                                   :glsl-type (cadr spec)))
       source))
   (:method ((type (eql :global)) (source list))
     (mapcar
