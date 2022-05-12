@@ -1534,7 +1534,7 @@
               (near-plane :float) (far-plane :float))
     ;; You can specify local function for shader with defun clause.
     ;; NOTE: DECLAIM is required.
-    (declaim (ftype (function (float) float) linearize-depth))
+    (declaim (ftype (function (:float) :float) linearize-depth))
     (defun linearize-depth (depth)
       (let ((z :float (- (* depth 2.0) 1.0))) ; Back to NDC.
         (return

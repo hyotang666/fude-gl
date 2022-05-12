@@ -61,30 +61,36 @@
 
 (defvar *shader-vars* nil)
 
+(deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
+
 (defstruct variable-information
   (name (error "NAME is required.") :type string :read-only t)
   (type (error "TYPE is required.")
         :type (member :attribute :io :uniform :varying :local :global :slot)
-        :read-only t))
+        :read-only t)
+  (glsl-type nil :type (or list glsl-type) :read-only t))
 
 (defun variable-information (symbol &optional env)
-  (find (symbol-camel-case symbol) env :key #'variable-information-name :test #'equal))
+  (find (symbol-camel-case symbol) env
+        :key #'variable-information-name
+        :test #'equal))
 
 (defgeneric var-info (type source)
   (:method ((type (eql :local)) (source list))
     (mapcar
-      (lambda (symbol)
-        (make-variable-information :name (symbol-camel-case symbol)
-                                   :type type))
+      (lambda (spec)
+        (make-variable-information :name (symbol-camel-case (car spec))
+                                   :type type
+                                   :glsl-type (cadr spec)))
       source))
   (:method ((type (eql :slot)) (source list))
     (mapcar
       (lambda (spec)
         (make-variable-information :name (etypecase spec
-					   (symbol (symbol-camel-case spec))
-					   ((cons symbol (cons symbol null))
-					    (symbol-camel-case (car spec))))
-				   :type type))
+                                           (symbol (symbol-camel-case spec))
+                                           ((cons symbol (cons symbol null))
+                                            (symbol-camel-case (car spec))))
+                                   :type type))
       source))
   (:method ((type (eql :attribute)) (source list))
     (mapcar
@@ -95,19 +101,22 @@
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type))
+                                   :type type
+                                   :glsl-type (cadr spec)))
       source))
   (:method ((type (eql :uniform)) (source list))
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type))
+                                   :type type
+                                   :glsl-type (cadr spec)))
       source))
   (:method ((type (eql :varying)) (source list))
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case (car spec))
-                                   :type type))
+                                   :type type
+                                   :glsl-type (cadr spec)))
       source)))
 
 (defun list-all-known-vars ()
@@ -116,8 +125,6 @@
 (defun argument-environment (env &key variable) (append variable env))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
-
-(deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
 
 (defvar *var-check-p* nil)
 
@@ -226,9 +233,7 @@
   (setf stream (or stream *standard-output*))
   (let ((*shader-vars*
          (argument-environment *shader-vars*
-                               :variable (var-info :local (mapcar #'car
-                                                                  (cadr
-                                                                    exp))))))
+                               :variable (var-info :local (cadr exp)))))
     (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
              (loop :for (name type init) :in (cadr exp)
                    :do (check-type type glsl-type)
@@ -309,10 +314,13 @@
 
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
-  (let ((ftype (gethash (second exp) *declaims*))
-        (*shader-vars*
-         (argument-environment *shader-vars*
-                               :variable (var-info :local (third exp)))))
+  (let* ((ftype (gethash (second exp) *declaims*))
+         (*shader-vars*
+          (argument-environment *shader-vars*
+                                :variable (var-info :local (mapcar #'list
+                                                                   (third exp)
+                                                                   (cadr
+                                                                     ftype))))))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
     (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
