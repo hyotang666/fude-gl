@@ -555,9 +555,7 @@
                    shader
                  (multiple-value-bind (out uniform varying%)
                      (split-shader-lambda-list shader-lambda-list)
-                   (let ((*glsl-functions*
-                          (alexandria:copy-hash-table *glsl-functions*))
-                         (*environment*
+                   (let ((*environment*
                           (argument-environment *environment*
                                                 :variable (var-info :io out)))
                          (local-vars

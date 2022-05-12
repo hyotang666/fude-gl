@@ -2,63 +2,13 @@
 
 (defstruct environment
   (variable nil :type list :read-only t)
-  (function nil :type list :read-only t)
+  (function nil :type list)
   (next nil :type (or null environment) :read-only t))
 
 (defmethod print-object ((o environment) output)
   (print-unreadable-object (o output :type t :identity t)))
 
 (defvar *environment* nil)
-
-(defvar *glsl-functions*
-  (uiop:list-to-hash-set
-    '(;;;; Built in functions.
-      ;;;; https://www.khronos.org/registry/OpenGL-Refpages/gl4/index.php
-      "abs" "acos" "acosh" "all" "any" "asin" "asinh" "atan" "atanh"
-      "atomicAdd" "atomicAnd" "atomicCompSwap" "atomicCounter"
-      "atomicCounterDecrement" "atomicCounterIncrement" "atomicExchange"
-      "atomicMax" "atomicMin" "atomicOr" "atomicXor" "barrier" "bitCount"
-      "bitfieldExtract" "bitfieldInsert" "bitfieldReverse" "ceil" "clamp" "cos"
-      "cosh" "cross" "degrees" "determinant" "dFdx" "dFdxCoarse" "dFdxFine"
-      "dFdy" "dFdyCoarse" "dFdyFine" "distance" "dot" "EmitStreamVertex"
-      "EmitVertex" "EndPrimitive" "EndStreamPrimitive" "equal" "exp" "exp2"
-      "faceforward" "findLSB" "findMSB" "floatBitsToInt" "floatBitsToUint"
-      "floor" "fma" "fract" "frexp" "fwidth" "fwidthCoarse" "fwidthFine"
-      "greaterThan" "greaterThanEqual" "groupMemoryBarrier" "imageAtomicAdd"
-      "imageAtomicAnd" "imageAtomicCompSwap" "imageAtomicExchange"
-      "imageAtomicMax" "imageAtomicMin" "imageAtomicOr" "imageAtomicXor"
-      "imageLoad" "imageSamples" "imageSize" "imageStore" "imulExtended"
-      "intBitsToFloat" "interpolateAtCentroid" "interpolateAtOffset"
-      "interpolateAtSample" "inverse" "inversesqrt" "isinf" "isnan" "ldexp"
-      "length" "lessThan" "lessThanEqual" "log" "log2" "matrixCompMult" "max"
-      "memoryBarrier" "memoryBarrierAtomicCounter" "memoryBarrierBuffer"
-      "memoryBarrierImage" "memoryBarrierShared" "min" "mix" "mod" "modf"
-      "noise" "noise1" "noise2" "noise3" "noise4" "normalize" "not" "notEqual"
-      "outerProduct" "packDouble2x32" "packHalf2x16" "packSnorm2x16"
-      "packSnorm4x8" "packUnorm" "packUnorm2x16" "packUnorm4x8" "pow" "radians"
-      "reflect" "refract" "round" "roundEven" "sign" "sin" "sinh" "smoothstep"
-      "sqrt" "step" "tan" "tanh" "texelFetch" "texelFetchOffset" "texture"
-      "textureGather" "textureGatherOffset" "textureGatherOffsets"
-      "textureGrad" "textureGradOffset" "textureLod" "textureLodOffset"
-      "textureOffset" "textureProj" "textureProjGrad" "textureProjGradOffset"
-      "textureProjLod" "textureProjLodOffset" "textureProjOffset"
-      "textureQueryLevels" "textureQueryLod" "textureSamples" "textureSize"
-      "transpose" "trunc" "uaddCarry" "uintBitsToFloat" "umulExtended"
-      "unpackDouble2x32" "unpackHalf2x16" "unpackSnorm2x16" "unpackSnorm4x8"
-      "unpackUnorm" "unpackUnorm2x16" "unpackUnorm4x8" "usubBorrow"
-      ;;;; Type constructors.
-      ;;;; https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Basic_types
-      ;; > Vectors
-      ;; > Each of the scalar types, including booleans, have 2, 3, and 4-component vector equivalents. The n digit below can be 2, 3, or 4:
-      "bvec2" "bvec3" "bvec4" "ivec2" "ivec3" "ivec4" "uvec2" "uvec3" "uvec4"
-      "vec2" "vec3" "vec4" "dvec2" "dvec3" "dvec4"
-      ;; > Matrices
-      ;; > In addition to vectors, there are also matrix types. All matrix types are floating-point, either single-precision or double-precision. Matrix types are as follows, where n and m can be the numbers 2, 3, or 4:
-      "mat2x2" "mat2x3" "mat2x4" "mat3x2" "mat3x3" "mat3x4" "mat4x2" "mat4x3"
-      "mat4x4" "mat2" "mat3" "mat4"
-      ;;;; Operator
-      "*" "/" "+" "-" "<" ">" "<=" ">=" "==" "&&" "^^" "||" "%" "<<" ">>" "&"
-      "^" "|")))
 
 (deftype glsl-type ()
   '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
@@ -71,7 +21,15 @@
   (glsl-type nil :type (or list glsl-type) :read-only t))
 
 (defun variable-information (symbol &optional env)
-  (let ((name (symbol-camel-case symbol)))
+  (let ((name
+         (cond ((uiop:string-prefix-p "gl_" symbol) (symbol-name symbol))
+               ((uiop:string-prefix-p "GL-" symbol)
+                (let ((name
+                       (format nil "gl_~A"
+                               (change-case:pascal-case
+                                 (subseq (symbol-name symbol) 3)))))
+                  name))
+               (t (symbol-camel-case symbol)))))
     (labels ((rec (env)
                (unless (null env)
                  (or (find name (environment-variable env)
@@ -121,8 +79,27 @@
                        acc)))))
     (rec *environment* nil)))
 
-(defun argument-environment (env &key variable)
-  (make-environment :next env :variable variable))
+(defun function-information (symbol &optional env)
+  (let ((name (symbol-camel-case symbol)))
+    (labels ((rec (env)
+               (unless (null env)
+                 (or (find name (environment-function env) :test #'equal)
+                     (rec (environment-next env))))))
+      (rec env))))
+
+(defun list-all-known-functions ()
+  (labels ((rec (env acc)
+             (if (null env)
+                 acc
+                 (rec (environment-next env)
+                      (progn
+                       (loop :for name :in (environment-function env)
+                             :do (push name acc))
+                       acc)))))
+    (rec *environment* nil)))
+
+(defun argument-environment (env &key variable function)
+  (make-environment :next env :variable variable :function function))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
@@ -146,38 +123,15 @@
 
 (defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
   (declare (ignore atp))
-  (flet ((check-builtin-var-existence (name exp)
-           (when colonp
-             (assert (gethash name *glsl-functions*) ()
-               'unknown-variable :name exp
-                                 :known-vars (loop :for key :being :each
-                                                        :hash-key :of
-                                                        *glsl-functions*
-                                                   :when (uiop:string-prefix-p
-                                                           "gl_" key)
-                                                     :collect key)))))
-    (cond
-      ((uiop:string-prefix-p "gl_" exp)
-       (check-builtin-var-existence (symbol-name exp) exp)
-       (write-string (symbol-name exp) stream))
-      ((uiop:string-prefix-p "GL-" exp)
-       (let ((name
-              (format nil "gl_~A"
-                      (change-case:pascal-case (subseq (symbol-name exp) 3)))))
-         (check-builtin-var-existence name exp)
-         (write-string name stream)))
-      ((let ((info (variable-information exp *environment*)))
-         (when (and info (eq :slot (variable-information-type info)))
-           (write-string (variable-information-name info) stream))))
-      ((progn
-        (when colonp
-          (unless (variable-information exp *environment*)
-            (error 'unknown-variable
-                   :name exp
-                   :known-vars (list-all-known-vars))))
-        (find-if #'lower-case-p (symbol-name exp)))
-       (write-string (symbol-name exp) stream))
-      (t (write-string (change-case:camel-case (symbol-name exp)) stream)))))
+  (let ((info (variable-information exp *environment*)))
+    (cond (info (write-string (variable-information-name info) stream))
+          (colonp
+           (error 'unknown-variable
+                  :name exp
+                  :known-vars (list-all-known-vars)))
+          ((find-if #'lower-case-p (symbol-name exp))
+           (write-string (symbol-name exp) stream))
+          (t (write-string (symbol-camel-case exp) stream)))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
@@ -193,14 +147,14 @@
              "Unknown glsl function named ~S. ~:@_~? ~:@_To see all supported glsl functions, evaluate ~S."
              (cell-error-name this)
              "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (alexandria:hash-table-keys
-                                        *glsl-functions*))
-             '(alexandria:hash-table-keys *glsl-functions*)))))
+             (fuzzy-match:fuzzy-match
+               (symbol-camel-case (cell-error-name this))
+               (list-all-known-functions))
+             '(list-all-known-functions)))))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
-  (assert (gethash (symbol-camel-case (car exp)) *glsl-functions*) ()
+  (assert (function-information (car exp) *environment*) ()
     'unknown-glsl-function :name (car exp))
   (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
            (car exp) (cdr exp)))
@@ -317,14 +271,16 @@
   (setf stream (or stream *standard-output*))
   (let* ((ftype (gethash (second exp) *declaims*))
          (*environment*
-          (argument-environment *environment*
-                                :variable (var-info :local (mapcar #'list
-                                                                   (third exp)
-                                                                   (cadr
-                                                                     ftype))))))
+          (progn
+           (push (symbol-camel-case (second exp))
+                 (environment-function *environment*))
+           (argument-environment *environment*
+                                 :variable (var-info :local (mapcar #'list
+                                                                    (third exp)
+                                                                    (cadr
+                                                                      ftype)))))))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
-    (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
     (destructuring-bind
         (arg-types return)
         (cdr ftype)
@@ -425,4 +381,86 @@
                                                         ("gl_WorkGroupID"
                                                          :uvec3)
                                                         ("gl_WorkGroupSize"
-                                                         :uvec3)))))
+                                                         :uvec3)))
+                          :function '(;;;; Built in functions.
+                                      ;;;; https://www.khronos.org/registry/OpenGL-Refpages/gl4/index.php
+                                      "abs" "acos" "acosh" "all" "any" "asin"
+                                      "asinh" "atan" "atanh" "atomicAdd"
+                                      "atomicAnd" "atomicCompSwap"
+                                      "atomicCounter" "atomicCounterDecrement"
+                                      "atomicCounterIncrement" "atomicExchange"
+                                      "atomicMax" "atomicMin" "atomicOr"
+                                      "atomicXor" "barrier" "bitCount"
+                                      "bitfieldExtract" "bitfieldInsert"
+                                      "bitfieldReverse" "ceil" "clamp" "cos"
+                                      "cosh" "cross" "degrees" "determinant"
+                                      "dFdx" "dFdxCoarse" "dFdxFine" "dFdy"
+                                      "dFdyCoarse" "dFdyFine" "distance" "dot"
+                                      "EmitStreamVertex" "EmitVertex"
+                                      "EndPrimitive" "EndStreamPrimitive"
+                                      "equal" "exp" "exp2" "faceforward"
+                                      "findLSB" "findMSB" "floatBitsToInt"
+                                      "floatBitsToUint" "floor" "fma" "fract"
+                                      "frexp" "fwidth" "fwidthCoarse"
+                                      "fwidthFine" "greaterThan"
+                                      "greaterThanEqual" "groupMemoryBarrier"
+                                      "imageAtomicAdd" "imageAtomicAnd"
+                                      "imageAtomicCompSwap"
+                                      "imageAtomicExchange" "imageAtomicMax"
+                                      "imageAtomicMin" "imageAtomicOr"
+                                      "imageAtomicXor" "imageLoad"
+                                      "imageSamples" "imageSize" "imageStore"
+                                      "imulExtended" "intBitsToFloat"
+                                      "interpolateAtCentroid"
+                                      "interpolateAtOffset"
+                                      "interpolateAtSample" "inverse"
+                                      "inversesqrt" "isinf" "isnan" "ldexp"
+                                      "length" "lessThan" "lessThanEqual" "log"
+                                      "log2" "matrixCompMult" "max"
+                                      "memoryBarrier"
+                                      "memoryBarrierAtomicCounter"
+                                      "memoryBarrierBuffer"
+                                      "memoryBarrierImage"
+                                      "memoryBarrierShared" "min" "mix" "mod"
+                                      "modf" "noise" "noise1" "noise2" "noise3"
+                                      "noise4" "normalize" "not" "notEqual"
+                                      "outerProduct" "packDouble2x32"
+                                      "packHalf2x16" "packSnorm2x16"
+                                      "packSnorm4x8" "packUnorm"
+                                      "packUnorm2x16" "packUnorm4x8" "pow"
+                                      "radians" "reflect" "refract" "round"
+                                      "roundEven" "sign" "sin" "sinh"
+                                      "smoothstep" "sqrt" "step" "tan" "tanh"
+                                      "texelFetch" "texelFetchOffset" "texture"
+                                      "textureGather" "textureGatherOffset"
+                                      "textureGatherOffsets" "textureGrad"
+                                      "textureGradOffset" "textureLod"
+                                      "textureLodOffset" "textureOffset"
+                                      "textureProj" "textureProjGrad"
+                                      "textureProjGradOffset" "textureProjLod"
+                                      "textureProjLodOffset"
+                                      "textureProjOffset" "textureQueryLevels"
+                                      "textureQueryLod" "textureSamples"
+                                      "textureSize" "transpose" "trunc"
+                                      "uaddCarry" "uintBitsToFloat"
+                                      "umulExtended" "unpackDouble2x32"
+                                      "unpackHalf2x16" "unpackSnorm2x16"
+                                      "unpackSnorm4x8" "unpackUnorm"
+                                      "unpackUnorm2x16" "unpackUnorm4x8"
+                                      "usubBorrow"
+                                      ;;;; Type constructors.
+                                      ;;;; https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Basic_types
+                                      ;; > Vectors
+                                      ;; > Each of the scalar types, including booleans, have 2, 3, and 4-component vector equivalents. The n digit below can be 2, 3, or 4:
+                                      "bvec2" "bvec3" "bvec4" "ivec2" "ivec3"
+                                      "ivec4" "uvec2" "uvec3" "uvec4" "vec2"
+                                      "vec3" "vec4" "dvec2" "dvec3" "dvec4"
+                                      ;; > Matrices
+                                      ;; > In addition to vectors, there are also matrix types. All matrix types are floating-point, either single-precision or double-precision. Matrix types are as follows, where n and m can be the numbers 2, 3, or 4:
+                                      "mat2x2" "mat2x3" "mat2x4" "mat3x2"
+                                      "mat3x3" "mat3x4" "mat4x2" "mat4x3"
+                                      "mat4x4" "mat2" "mat3" "mat4"
+                                      ;;;; Operator
+                                      "*" "/" "+" "-" "<" ">" "<=" ">=" "=="
+                                      "&&" "^^" "||" "%" "<<" ">>" "&" "^"
+                                      "|")))
