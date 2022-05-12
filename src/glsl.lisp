@@ -140,7 +140,7 @@
        (apply #'format output
               "Unknown variable. ~S ~:@_Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
               (cell-error-name this)
-              (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+              (fuzzy-match:fuzzy-match (symbol-camel-case (cell-error-name this))
                                        (known-vars this)))))))
 
 (defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
