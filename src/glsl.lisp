@@ -278,6 +278,7 @@
     (dolist (var (third exp)) (setf (gethash var *shader-vars*) t))
     (unless ftype
       (error "DEFUN ~S needs ftype DECLAIMed." (second exp)))
+    (setf (gethash (symbol-camel-case (second exp)) *glsl-functions*) t)
     (destructuring-bind
         (arg-types return)
         (cdr ftype)

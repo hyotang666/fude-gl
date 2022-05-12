@@ -558,25 +558,28 @@
                  (multiple-value-bind (out uniform varying% vars)
                      (split-shader-lambda-list shader-lambda-list)
                    (dolist (var vars) (setf (gethash var *shader-vars*) t))
-                   (rec rest out (append varying varying%)
-                        (cons
-                          (let ((method
-                                 (intern (format nil "~A-SHADER" type)
-                                         :fude-gl)))
-                            `(defmethod ,method ((type (eql ',name)))
-                               ,(if (typep main
-                                           '(cons
-                                              (cons (eql quote)
-                                                    (cons symbol null))
-                                              null))
-                                    `(,method ',(cadar main))
-                                    (format nil format version in
-                                            (remove nil out)
-                                            (delete nil uniform)
-                                            (remove nil
-                                                    (append varying varying%))
-                                            main))))
-                          acc))))))
+                   (let ((*glsl-functions*
+                          (alexandria:copy-hash-table *glsl-functions*)))
+                     (rec rest out (append varying varying%)
+                          (cons
+                            (let ((method
+                                   (intern (format nil "~A-SHADER" type)
+                                           :fude-gl)))
+                              `(defmethod ,method ((type (eql ',name)))
+                                 ,(if (typep main
+                                             '(cons
+                                                (cons (eql quote)
+                                                      (cons symbol null))
+                                                null))
+                                      `(,method ',(cadar main))
+                                      (format nil format version in
+                                              (remove nil out)
+                                              (delete nil uniform)
+                                              (remove nil
+                                                      (append varying
+                                                              varying%))
+                                              main))))
+                            acc)))))))
       (rec shader-clause* (class-shader-inputs superclasses) nil nil))))
 
 (defvar *shaders*
