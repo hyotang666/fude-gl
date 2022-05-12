@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "4.10.0"
+  "4.10.1"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"

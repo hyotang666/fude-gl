@@ -223,19 +223,34 @@
                                       (known-vars this))))))
 
 (defun glsl-with-slots (stream exp)
-  (setf stream (or stream *standard-output*))
-  (destructuring-bind
-      (slots type &body body)
-      (cdr exp)
-    ;; TYPE existence checking.
-    (assert (variable-information type *environment*) ()
-      'unknown-variable :name type
-                        :known-vars (list-all-known-vars))
-    (let ((*environment*
-           (argument-environment *environment*
-                                 :variable (var-info :slot slots))))
-      ;; The body.
-      (dolist (exp body) (write exp :stream stream)))))
+  (flet ((slot-truename (spec)
+           (etypecase spec
+             (symbol spec)
+             ((cons symbol (cons symbol null)) (cadr spec)))))
+    (setf stream (or stream *standard-output*))
+    (destructuring-bind
+        (slots type &body body)
+        (cdr exp)
+      (let ((info (variable-information type *environment*)))
+        ;; TYPE existence checking.
+        (assert info ()
+          'unknown-variable :name type
+                            :known-vars (list-all-known-vars))
+        ;; SLOTS existence checking.
+        (dolist (slot slots)
+          (assert (assoc (slot-truename slot)
+                         (variable-information-glsl-type info))
+            ()
+            'unknown-slot :name (slot-truename slot)
+                          :type type
+                          :known-vars (mapcar #'car
+                                              (variable-information-glsl-type
+                                                info))))
+        (let ((*environment*
+               (argument-environment *environment*
+                                     :variable (var-info :slot slots))))
+          ;; The body.
+          (dolist (exp body) (write exp :stream stream)))))))
 
 (defun glsl-if (stream exp)
   (setf stream (or stream *standard-output*))
