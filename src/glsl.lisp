@@ -1,5 +1,12 @@
 (in-package :fude-gl)
 
+(defstruct environment
+  (variable nil :type list :read-only t)
+  (function nil :type list :read-only t)
+  (next nil :type (or null environment) :read-only t))
+
+(defvar *environment* nil)
+
 (defvar *glsl-functions*
   (uiop:list-to-hash-set
     '(;;;; Built in functions.
@@ -59,8 +66,6 @@
       "*" "/" "+" "-" "<" ">" "<=" ">=" "==" "&&" "^^" "||" "%" "<<" ">>" "&"
       "^" "|")))
 
-(defvar *shader-vars* nil)
-
 (deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
 
 (defstruct variable-information
@@ -71,9 +76,14 @@
   (glsl-type nil :type (or list glsl-type) :read-only t))
 
 (defun variable-information (symbol &optional env)
-  (find (symbol-camel-case symbol) env
-        :key #'variable-information-name
-        :test #'equal))
+  (let ((name (symbol-camel-case symbol)))
+    (labels ((rec (env)
+               (unless (null env)
+                 (or (find name (environment-variable env)
+                           :key #'variable-information-name
+                           :test #'equal)
+                     (rec (environment-next env))))))
+      (rec env))))
 
 (defgeneric var-info (type source)
   (:method ((type (eql :local)) (source list))
@@ -120,9 +130,18 @@
       source)))
 
 (defun list-all-known-vars ()
-  (mapcar #'variable-information-name *shader-vars*))
+  (labels ((rec (env acc)
+             (if (null env)
+                 acc
+                 (rec (environment-next env)
+                      (progn
+                       (loop :for info :in (environment-variable env)
+                             :do (push (variable-information-name info) acc))
+                       acc)))))
+    (rec *environment* nil)))
 
-(defun argument-environment (env &key variable) (append variable env))
+(defun argument-environment (env &key variable)
+  (make-environment :next env :variable variable))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
@@ -140,8 +159,9 @@
        (apply #'format output
               "Unknown variable. ~S ~:@_Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
               (cell-error-name this)
-              (fuzzy-match:fuzzy-match (symbol-camel-case (cell-error-name this))
-                                       (known-vars this)))))))
+              (fuzzy-match:fuzzy-match
+                (symbol-camel-case (cell-error-name this))
+                (known-vars this)))))))
 
 (defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
   (declare (ignore atp))
@@ -165,12 +185,12 @@
                       (change-case:pascal-case (subseq (symbol-name exp) 3)))))
          (check-builtin-var-existence name exp)
          (write-string name stream)))
-      ((let ((info (variable-information exp *shader-vars*)))
+      ((let ((info (variable-information exp *environment*)))
          (when (and info (eq :slot (variable-information-type info)))
            (write-string (variable-information-name info) stream))))
       ((progn
         (when colonp
-          (unless (variable-information exp *shader-vars*)
+          (unless (variable-information exp *environment*)
             (error 'unknown-variable
                    :name exp
                    :known-vars (list-all-known-vars))))
@@ -231,8 +251,8 @@
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
-  (let ((*shader-vars*
-         (argument-environment *shader-vars*
+  (let ((*environment*
+         (argument-environment *environment*
                                :variable (var-info :local (cadr exp)))))
     (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
              (loop :for (name type init) :in (cadr exp)
@@ -273,11 +293,11 @@
       (slots type &body body)
       (cdr exp)
     ;; TYPE existence checking.
-    (assert (variable-information type *shader-vars*) ()
+    (assert (variable-information type *environment*) ()
       'unknown-variable :name type
                         :known-vars (list-all-known-vars))
-    (let ((*shader-vars*
-           (argument-environment *shader-vars*
+    (let ((*environment*
+           (argument-environment *environment*
                                  :variable (var-info :slot slots))))
       ;; The body.
       (dolist (exp body) (write exp :stream stream)))))
@@ -315,8 +335,8 @@
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
   (let* ((ftype (gethash (second exp) *declaims*))
-         (*shader-vars*
-          (argument-environment *shader-vars*
+         (*environment*
+          (argument-environment *environment*
                                 :variable (var-info :local (mapcar #'list
                                                                    (third exp)
                                                                    (cadr

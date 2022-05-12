@@ -542,8 +542,8 @@
                          "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
                          "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
                          )))
-        (*shader-vars*
-         (argument-environment *shader-vars*
+        (*environment*
+         (argument-environment *environment*
                                :variable (var-info :attribute superclasses))))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
@@ -557,8 +557,8 @@
                      (split-shader-lambda-list shader-lambda-list)
                    (let ((*glsl-functions*
                           (alexandria:copy-hash-table *glsl-functions*))
-                         (*shader-vars*
-                          (argument-environment *shader-vars*
+                         (*environment*
+                          (argument-environment *environment*
                                                 :variable (var-info :io out)))
                          (local-vars
                           (append (var-info :uniform uniform)
@@ -573,8 +573,8 @@
                             (let ((method
                                    (intern (format nil "~A-SHADER" type)
                                            :fude-gl))
-                                  (*shader-vars*
-                                   (argument-environment *shader-vars*
+                                  (*environment*
+                                   (argument-environment *environment*
                                                          :variable local-vars)))
                               `(defmethod ,method ((type (eql ',name)))
                                  ,(if (typep main
