@@ -5,6 +5,9 @@
   (function nil :type list :read-only t)
   (next nil :type (or null environment) :read-only t))
 
+(defmethod print-object ((o environment) output)
+  (print-unreadable-object (o output :type t :identity t)))
+
 (defvar *environment* nil)
 
 (defvar *glsl-functions*
@@ -21,37 +24,28 @@
       "EmitVertex" "EndPrimitive" "EndStreamPrimitive" "equal" "exp" "exp2"
       "faceforward" "findLSB" "findMSB" "floatBitsToInt" "floatBitsToUint"
       "floor" "fma" "fract" "frexp" "fwidth" "fwidthCoarse" "fwidthFine"
-      "gl_ClipDistance" "gl_CullDistance" "gl_FragCoord" "gl_FragDepth"
-      "gl_FrontFacing" "gl_GlobalInvocationID" "gl_HelperInvocation"
-      "gl_InstanceID" "gl_InvocationID" "gl_Layer" "gl_LocalInvocationID"
-      "gl_LocalInvocationIndex" "gl_NumSamples" "gl_NumWorkGroups"
-      "gl_PatchVerticesIn" "gl_PointCoord" "gl_PointSize" "gl_Position"
-      "gl_PrimitiveID" "gl_PrimitiveIDIn" "gl_SampleID" "gl_SampleMask"
-      "gl_SampleMaskIn" "gl_SamplePosition" "gl_TessCoord" "gl_TessLevelInner"
-      "gl_TessLevelOuter" "gl_VertexID" "gl_ViewportIndex" "gl_WorkGroupID"
-      "gl_WorkGroupSize" "greaterThan" "greaterThanEqual" "groupMemoryBarrier"
-      "imageAtomicAdd" "imageAtomicAnd" "imageAtomicCompSwap"
-      "imageAtomicExchange" "imageAtomicMax" "imageAtomicMin" "imageAtomicOr"
-      "imageAtomicXor" "imageLoad" "imageSamples" "imageSize" "imageStore"
-      "imulExtended" "intBitsToFloat" "interpolateAtCentroid"
-      "interpolateAtOffset" "interpolateAtSample" "inverse" "inversesqrt"
-      "isinf" "isnan" "ldexp" "length" "lessThan" "lessThanEqual" "log" "log2"
-      "matrixCompMult" "max" "memoryBarrier" "memoryBarrierAtomicCounter"
-      "memoryBarrierBuffer" "memoryBarrierImage" "memoryBarrierShared" "min"
-      "mix" "mod" "modf" "noise" "noise1" "noise2" "noise3" "noise4"
-      "normalize" "not" "notEqual" "outerProduct" "packDouble2x32"
-      "packHalf2x16" "packSnorm2x16" "packSnorm4x8" "packUnorm" "packUnorm2x16"
-      "packUnorm4x8" "pow" "radians" "reflect" "refract" "round" "roundEven"
-      "sign" "sin" "sinh" "smoothstep" "sqrt" "step" "tan" "tanh" "texelFetch"
-      "texelFetchOffset" "texture" "textureGather" "textureGatherOffset"
-      "textureGatherOffsets" "textureGrad" "textureGradOffset" "textureLod"
-      "textureLodOffset" "textureOffset" "textureProj" "textureProjGrad"
-      "textureProjGradOffset" "textureProjLod" "textureProjLodOffset"
-      "textureProjOffset" "textureQueryLevels" "textureQueryLod"
-      "textureSamples" "textureSize" "transpose" "trunc" "uaddCarry"
-      "uintBitsToFloat" "umulExtended" "unpackDouble2x32" "unpackHalf2x16"
-      "unpackSnorm2x16" "unpackSnorm4x8" "unpackUnorm" "unpackUnorm2x16"
-      "unpackUnorm4x8" "usubBorrow"
+      "greaterThan" "greaterThanEqual" "groupMemoryBarrier" "imageAtomicAdd"
+      "imageAtomicAnd" "imageAtomicCompSwap" "imageAtomicExchange"
+      "imageAtomicMax" "imageAtomicMin" "imageAtomicOr" "imageAtomicXor"
+      "imageLoad" "imageSamples" "imageSize" "imageStore" "imulExtended"
+      "intBitsToFloat" "interpolateAtCentroid" "interpolateAtOffset"
+      "interpolateAtSample" "inverse" "inversesqrt" "isinf" "isnan" "ldexp"
+      "length" "lessThan" "lessThanEqual" "log" "log2" "matrixCompMult" "max"
+      "memoryBarrier" "memoryBarrierAtomicCounter" "memoryBarrierBuffer"
+      "memoryBarrierImage" "memoryBarrierShared" "min" "mix" "mod" "modf"
+      "noise" "noise1" "noise2" "noise3" "noise4" "normalize" "not" "notEqual"
+      "outerProduct" "packDouble2x32" "packHalf2x16" "packSnorm2x16"
+      "packSnorm4x8" "packUnorm" "packUnorm2x16" "packUnorm4x8" "pow" "radians"
+      "reflect" "refract" "round" "roundEven" "sign" "sin" "sinh" "smoothstep"
+      "sqrt" "step" "tan" "tanh" "texelFetch" "texelFetchOffset" "texture"
+      "textureGather" "textureGatherOffset" "textureGatherOffsets"
+      "textureGrad" "textureGradOffset" "textureLod" "textureLodOffset"
+      "textureOffset" "textureProj" "textureProjGrad" "textureProjGradOffset"
+      "textureProjLod" "textureProjLodOffset" "textureProjOffset"
+      "textureQueryLevels" "textureQueryLod" "textureSamples" "textureSize"
+      "transpose" "trunc" "uaddCarry" "uintBitsToFloat" "umulExtended"
+      "unpackDouble2x32" "unpackHalf2x16" "unpackSnorm2x16" "unpackSnorm4x8"
+      "unpackUnorm" "unpackUnorm2x16" "unpackUnorm4x8" "usubBorrow"
       ;;;; Type constructors.
       ;;;; https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Basic_types
       ;; > Vectors
@@ -66,7 +60,8 @@
       "*" "/" "+" "-" "<" ">" "<=" ">=" "==" "&&" "^^" "||" "%" "<<" ">>" "&"
       "^" "|")))
 
-(deftype glsl-type () '(member :float :vec2 :vec3 :vec4 :mat4 :|sampler2D|))
+(deftype glsl-type ()
+  '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
 
 (defstruct variable-information
   (name (error "NAME is required.") :type string :read-only t)
@@ -125,6 +120,13 @@
     (mapcar
       (lambda (spec)
         (make-variable-information :name (symbol-camel-case (car spec))
+                                   :type type
+                                   :glsl-type (cadr spec)))
+      source))
+  (:method ((type (eql :global)) (source list))
+    (mapcar
+      (lambda (spec)
+        (make-variable-information :name (car spec)
                                    :type type
                                    :glsl-type (cadr spec)))
       source)))
@@ -393,3 +395,55 @@
 (defun pprint-glsl (stream exp &rest noise)
   (declare (ignore noise))
   (print-glsl exp stream))
+
+(setq *environment*
+        (make-environment :next nil
+                          :variable (var-info :global '(("gl_ClipDistance"
+                                                         :float)
+                                                        ("gl_CullDistance"
+                                                         :float)
+                                                        ("gl_FragCoord" :vec4)
+                                                        ("gl_FragDepth" :float)
+                                                        ("gl_FrontFacing"
+                                                         :bool)
+                                                        ("gl_GlobalInvocationID"
+                                                         :uvec3)
+                                                        ("gl_HelperInvocation"
+                                                         :bool)
+                                                        ("gl_InstanceID" :int)
+                                                        ("gl_InvocationID"
+                                                         :int)
+                                                        ("gl_Layer" :int)
+                                                        ("gl_LocalInvocationID"
+                                                         :uvec3)
+                                                        ("gl_LocalInvocationIndex"
+                                                         :uint)
+                                                        ("gl_NumSamples" :bool)
+                                                        ("gl_NumWorkGroups"
+                                                         :uvec3)
+                                                        ("gl_PatchVerticesIn"
+                                                         :int)
+                                                        ("gl_PointCoord" :vec2)
+                                                        ("gl_PointSize" :float)
+                                                        ("gl_Position" :vec4)
+                                                        ("gl_PrimitiveID" :int)
+                                                        ("gl_PrimitiveIDIn"
+                                                         :int)
+                                                        ("gl_SampleID" :int)
+                                                        ("gl_SampleMask" :int)
+                                                        ("gl_SampleMaskIn"
+                                                         :int)
+                                                        ("gl_SamplePosition"
+                                                         :vec2)
+                                                        ("gl_TessCoord" :vec3)
+                                                        ("gl_TessLevelInner"
+                                                         :float)
+                                                        ("gl_TessLevelOuter"
+                                                         :float)
+                                                        ("gl_VertexID" :int)
+                                                        ("gl_ViewportIndex"
+                                                         :int)
+                                                        ("gl_WorkGroupID"
+                                                         :uvec3)
+                                                        ("gl_WorkGroupSize"
+                                                         :uvec3)))))
