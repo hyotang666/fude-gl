@@ -546,7 +546,8 @@
                          "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
                          "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
                          )))
-        (*shader-vars* (uiop:list-to-hash-set superclasses)))
+        (*shader-vars*
+         (argument-environment *shader-vars* :variable superclasses)))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
                    (nreverse acc)
@@ -557,9 +558,10 @@
                    shader
                  (multiple-value-bind (out uniform varying% vars)
                      (split-shader-lambda-list shader-lambda-list)
-                   (dolist (var vars) (setf (gethash var *shader-vars*) t))
                    (let ((*glsl-functions*
-                          (alexandria:copy-hash-table *glsl-functions*)))
+                          (alexandria:copy-hash-table *glsl-functions*))
+                         (*shader-vars*
+                          (argument-environment *shader-vars* :variable vars)))
                      (rec rest out (append varying varying%)
                           (cons
                             (let ((method

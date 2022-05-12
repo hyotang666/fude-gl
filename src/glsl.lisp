@@ -59,7 +59,7 @@
       "*" "/" "+" "-" "<" ">" "<=" ">=" "==" "&&" "^^" "||" "%" "<<" ">>" "&"
       "^" "|")))
 
-(defvar *shader-vars*)
+(defvar *shader-vars* (make-hash-table :test #'eq))
 
 (defun variable-information (symbol &optional env) (gethash symbol env))
 
