@@ -63,9 +63,6 @@
 
 (defun variable-information (symbol &optional env) (gethash symbol env))
 
-(defun (setf variable-information) (new symbol &optional env)
-  (setf (gethash symbol env) new))
-
 (defun list-all-known-vars () (alexandria:hash-table-keys *shader-vars*))
 
 (defun argument-environment (env &key variable)
