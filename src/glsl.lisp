@@ -14,6 +14,7 @@
   '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
 
 (defstruct variable-information
+  (var (error "VAR is required.") :type symbol :read-only t)
   (name (error "NAME is required.") :type string :read-only t)
   (type (error "TYPE is required.")
         :type (member :attribute :io :uniform :varying :local :global :slot)
@@ -22,49 +23,60 @@
   (ref? nil :type boolean))
 
 (defun variable-information (symbol &optional env)
-  (let ((name
-         (cond ((uiop:string-prefix-p "gl_" symbol) (symbol-name symbol))
-               ((uiop:string-prefix-p "GL-" symbol)
-                (let ((name
-                       (format nil "gl_~A"
-                               (change-case:pascal-case
-                                 (subseq (symbol-name symbol) 3)))))
-                  name))
-               (t (symbol-camel-case symbol)))))
+  (let* ((global?
+          (cond ((uiop:string-prefix-p "gl_" symbol) (symbol-name symbol))
+                ((uiop:string-prefix-p "GL-" symbol)
+                 (let ((name
+                        (format nil "gl_~A"
+                                (change-case:pascal-case
+                                  (subseq (symbol-name symbol) 3)))))
+                   name))))
+         (pred
+          (if global?
+              (lambda (info)
+                (and (null (variable-information-var info))
+                     (equal global? (variable-information-name info))))
+              (lambda (info) (eq symbol (variable-information-var info))))))
     (labels ((rec (env)
                (unless (null env)
-                 (or (find name (environment-variable env)
-                           :key #'variable-information-name
-                           :test #'equal)
+                 (or (find-if pred (environment-variable env))
                      (rec (environment-next env))))))
       (rec env))))
 
-(defgeneric var-info (type source)
-  (:method (type (source list))
+(defun slot-truename (spec)
+  (etypecase spec (symbol spec) ((cons symbol (cons symbol null)) (cadr spec))))
+
+(defgeneric var-info (type source &key)
+  (:method (type (source list) &key)
     (mapcar
       (lambda (spec)
-        (make-variable-information :name (symbol-camel-case (car spec))
+        (make-variable-information :var (car spec)
+                                   :name (symbol-camel-case (car spec))
                                    :type type
                                    :glsl-type (cadr spec)))
       source))
-  (:method ((type (eql :slot)) (source list))
+  (:method ((type (eql :slot)) (source list) &key structure)
     (mapcar
       (lambda (spec)
-        (make-variable-information :name (etypecase spec
-                                           (symbol (symbol-camel-case spec))
-                                           ((cons symbol (cons symbol null))
-                                            (symbol-camel-case (car spec))))
+        (make-variable-information :var (alexandria:ensure-car spec)
+                                   :name (format nil "~A.~A"
+                                                 (symbol-camel-case structure)
+                                                 (symbol-camel-case
+                                                   (slot-truename spec)))
                                    :type type))
       source))
-  (:method ((type (eql :attribute)) (source list))
+  (:method ((type (eql :attribute)) (source list) &key)
     (mapcar
       (lambda (spec)
-        (make-variable-information :name (symbol-camel-case spec) :type type))
+        (make-variable-information :var spec
+                                   :name (symbol-camel-case spec)
+                                   :type type))
       source))
-  (:method ((type (eql :global)) (source list))
+  (:method ((type (eql :global)) (source list) &key)
     (mapcar
       (lambda (spec)
-        (make-variable-information :name (car spec)
+        (make-variable-information :var nil
+                                   :name (car spec)
                                    :type type
                                    :glsl-type (cadr spec)))
       source)))
@@ -88,20 +100,19 @@
 
 (defun check-ref (vars)
   (dolist (var vars)
-    (let ((name (symbol-camel-case var)))
-      (labels ((rec (env)
-                 (unless (null env)
-                   (let ((info
-                          (find name (environment-variable env)
-                                :test #'equal
-                                :key #'variable-information-name)))
-                     (if info
-                         (when (not (variable-information-ref? info))
-                           (let ((*print-pprint-dispatch*
-                                  (copy-pprint-dispatch nil)))
-                             (warn 'unused-variable :name var)))
-                         (rec (environment-next env)))))))
-        (rec *environment*)))))
+    (labels ((rec (env)
+               (unless (null env)
+                 (let ((info
+                        (find var (environment-variable env)
+                              :test #'eq
+                              :key #'variable-information-var)))
+                   (if info
+                       (when (not (variable-information-ref? info))
+                         (let ((*print-pprint-dispatch*
+                                (copy-pprint-dispatch nil)))
+                           (warn 'unused-variable :name var)))
+                       (rec (environment-next env)))))))
+      (rec *environment*))))
 
 (defun function-information (symbol &optional env)
   (let ((name (symbol-camel-case symbol)))
@@ -273,34 +284,31 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                       (known-vars this))))))
 
 (defun glsl-with-slots (stream exp)
-  (flet ((slot-truename (spec)
-           (etypecase spec
-             (symbol spec)
-             ((cons symbol (cons symbol null)) (cadr spec)))))
-    (setf stream (or stream *standard-output*))
-    (destructuring-bind
-        (slots type &body body)
-        (cdr exp)
-      (let ((info (variable-information type *environment*)))
-        ;; TYPE existence checking.
-        (assert info ()
-          'unknown-variable :name type
-                            :known-vars (list-all-known-vars))
-        ;; SLOTS existence checking.
-        (dolist (slot slots)
-          (assert (assoc (slot-truename slot)
-                         (variable-information-glsl-type info))
-            ()
-            'unknown-slot :name (slot-truename slot)
-                          :type type
-                          :known-vars (mapcar #'car
-                                              (variable-information-glsl-type
-                                                info))))
-        (let ((*environment*
-               (argument-environment *environment*
-                                     :variable (var-info :slot slots))))
-          ;; The body.
-          (dolist (exp body) (write exp :stream stream)))))))
+  (setf stream (or stream *standard-output*))
+  (destructuring-bind
+      (slots type &body body)
+      (cdr exp)
+    (let ((info (variable-information type *environment*)))
+      ;; TYPE existence checking.
+      (assert info ()
+        'unknown-variable :name type
+                          :known-vars (list-all-known-vars))
+      ;; SLOTS existence checking.
+      (dolist (slot slots)
+        (assert (assoc (slot-truename slot)
+                       (variable-information-glsl-type info))
+          ()
+          'unknown-slot :name (slot-truename slot)
+                        :type type
+                        :known-vars (mapcar #'car
+                                            (variable-information-glsl-type
+                                              info))))
+      (let ((*environment*
+             (argument-environment *environment*
+                                   :variable (var-info :slot slots
+                                                       :structure type))))
+        ;; The body.
+        (dolist (exp body) (write exp :stream stream))))))
 
 (defun glsl-if (stream exp)
   (setf stream (or stream *standard-output*))
