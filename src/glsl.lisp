@@ -201,12 +201,20 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                (list-all-known-functions))
              '(list-all-known-functions)))))
 
+(defun glsl-swizzling (stream exp)
+  (setf stream (or stream *standard-output*))
+  (let ((*var-check-p* t))
+    (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
+
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
-  (assert (function-information (car exp) *environment*) ()
-    'unknown-glsl-function :name (car exp))
-  (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
-           (car exp) (cdr exp)))
+  (if (find (car exp) '(r rgb z w xy xyz) :test #'string=)
+      (glsl-swizzling stream exp)
+      (progn
+       (assert (function-information (car exp) *environment*) ()
+         'unknown-glsl-function :name (car exp))
+       (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
+                (car exp) (cdr exp)))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
@@ -257,11 +265,6 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                                                              binds))))))
                    (rec (cdr binds))))))
     (rec (cadr exp))))
-
-(defun glsl-swizzling (stream exp)
-  (setf stream (or stream *standard-output*))
-  (let ((*var-check-p* t))
-    (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
@@ -384,7 +387,6 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member * + / - <)) 'glsl-operator)
     (set-pprint-dispatch '(cons (member let)) 'glsl-let)
     (set-pprint-dispatch '(cons symbol) 'glsl-funcall -1)
-    (set-pprint-dispatch '(cons (member r rgb z w xy xyz)) 'glsl-swizzling)
     (set-pprint-dispatch '(cons (member return)) 'glsl-return)
     (set-pprint-dispatch '(cons (member with-slots)) 'glsl-with-slots)
     (set-pprint-dispatch '(cons (member if)) 'glsl-if)
