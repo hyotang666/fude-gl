@@ -18,7 +18,8 @@
   (type (error "TYPE is required.")
         :type (member :attribute :io :uniform :varying :local :global :slot)
         :read-only t)
-  (glsl-type nil :type (or list glsl-type) :read-only t))
+  (glsl-type nil :type (or list glsl-type) :read-only t)
+  (ref? nil :type boolean))
 
 (defun variable-information (symbol &optional env)
   (let ((name
@@ -79,6 +80,29 @@
                        acc)))))
     (rec *environment* nil)))
 
+(define-condition unused-variable (style-warning)
+  ((name :initarg :name :reader unused-var))
+  (:report
+   (lambda (this output)
+     (format output "Variable ~S is not used." (unused-var this)))))
+
+(defun check-ref (vars)
+  (dolist (var vars)
+    (let ((name (symbol-camel-case var)))
+      (labels ((rec (env)
+                 (unless (null env)
+                   (let ((info
+                          (find name (environment-variable env)
+                                :test #'equal
+                                :key #'variable-information-name)))
+                     (if info
+                         (when (not (variable-information-ref? info))
+                           (let ((*print-pprint-dispatch*
+                                  (copy-pprint-dispatch nil)))
+                             (warn 'unused-variable :name var)))
+                         (rec (environment-next env)))))))
+        (rec *environment*)))))
+
 (defun function-information (symbol &optional env)
   (let ((name (symbol-camel-case symbol)))
     (labels ((rec (env)
@@ -121,17 +145,31 @@
                 (symbol-camel-case (cell-error-name this))
                 (known-vars this)))))))
 
-(defun glsl-symbol (stream exp &optional (colonp *var-check-p*) atp)
-  (declare (ignore atp))
+(defun glsl-symbol (stream exp &optional (errorp *var-check-p*) not-ref-p)
+  ;; Ideally, we want to use REFERED-P rather than NOT-REF-P.
+  ;; But, unfortunately, it is hard because this function is designed to
+  ;; be used as a format function that specifies T when at-sign is specified.
+  ;; (i.e. the default should be NIL.)
+  ;; Of course, we can use (refered-p t suppliedp) with additional conditional branching.
+  ;; Anyway, we choose to take a disgusting name rather than
+  ;; a disgusting conditional branching code.
+  "Print a symbol EXP to STREAM as GLSL code.
+If EXP is unknown for compiler and ERRORP is true, condition UNKNOWN-VARIABLE is signaled
+otherwise do nothing. The default is NIL. You can specify this by colon in format control.
+If EXP is known for compiler and NOT-REF-P is ture, compiler memos it is refered
+otherwise compiler do nothing. The default it NIL. You can specify this by at-sign in format control."
   (let ((info (variable-information exp *environment*)))
-    (cond (info (write-string (variable-information-name info) stream))
-          (colonp
-           (error 'unknown-variable
-                  :name exp
-                  :known-vars (list-all-known-vars)))
-          ((find-if #'lower-case-p (symbol-name exp))
-           (write-string (symbol-name exp) stream))
-          (t (write-string (symbol-camel-case exp) stream)))))
+    (cond
+      (info
+       (unless not-ref-p ; means refered-p
+         (unless (eq :global (variable-information-type info))
+           (setf (variable-information-ref? info) t)))
+       (write-string (variable-information-name info) stream))
+      (errorp
+       (error 'unknown-variable :name exp :known-vars (list-all-known-vars)))
+      ((find-if #'lower-case-p (symbol-name exp))
+       (write-string (symbol-name exp) stream))
+      (t (write-string (symbol-camel-case exp) stream)))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
@@ -186,16 +224,28 @@
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
-  (let ((*environment*
-         (argument-environment *environment*
-                               :variable (var-info :local (cadr exp)))))
-    (funcall (formatter "~<~@{~W~^ ~W~^ = ~W;~:@_~}~:>~{~W~^ ~_~}") stream
-             (loop :for (name type init) :in (cadr exp)
-                   :do (check-type type glsl-type)
-                   :collect type
-                   :collect name
-                   :collect init)
-             (cddr exp))))
+  (labels ((rec (binds)
+             (if (endp binds)
+                 (progn
+                  (funcall
+                    (formatter
+                     "~<~@{~W~^ ~:@/fude-gl:glsl-symbol/~^ = ~W;~:@_~}~:>~{~W~^ ~_~}")
+                    stream
+                    (loop :for (name type init) :in (cadr exp)
+                          :do (check-type type glsl-type)
+                          :collect type
+                          :collect name
+                          :collect init)
+                    (cddr exp))
+                  (when (every #'listp (cddr exp))
+                    (check-ref (mapcar #'car (cadr exp)))))
+                 (let ((*environment*
+                        (argument-environment *environment*
+                                              :variable (var-info :local (list
+                                                                           (car
+                                                                             binds))))))
+                   (rec (cdr binds))))))
+    (rec (cadr exp))))
 
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
@@ -314,7 +364,9 @@
         (if (equal '(values) return)
             :void
             return)
-        (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))))
+        (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))
+    (when (every #'listp (cdddr exp))
+      (check-ref (third exp)))))
 
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
