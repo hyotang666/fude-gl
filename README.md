@@ -7,21 +7,21 @@ Not a game engine.
 
 ## Alternatives and differences.
 
-* [cl-glut]
-* [cl-glfw3]
-* [glkit]
+* [cl-glut]: Common Lisp bindings to Freeglut.
+* [cl-glfw3]: Common Lisp bindings to GLFW version 3.x.
+* [glkit]: OpenGL utilities for math, shaders, etc.
 
 ### See also.
 #### GLSL
-* [3bgl-shader]
-* [varjo]
-* [glsl-spec]
-* [glsl-packing]
-* [glsl-toolkit]
+* [3bgl-shader]: CL-hosted CL-like DSL for generating GLSL.
+* [varjo]: Lisp to GLSL Language Translator.
+* [glsl-spec]: The GLSL spec as a datastructure.
+* [glsl-packing]: calculate std140/std430 layout for a glsl UBO/SSBO.
+* [glsl-toolkit]: A parser for OpenGL Shader Language source files.
 
 #### Text rendering.
-* [glisph]
-* [cl-fond]
+* [glisph]: Glyph rendering engine using OpenGL shading language for Common Lisp.
+* [cl-fond]: Bindings to libfond, a simple text rendering engine for OpenGL.
 
 ## Usage
 See [examples] and [breakout-cl].
