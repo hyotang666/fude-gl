@@ -8,19 +8,34 @@
 (defmethod print-object ((o environment) output)
   (print-unreadable-object (o output :type t :identity t)))
 
-(defvar *environment* nil)
+(defvar *environment*
+  (make-environment :next nil
+                    :variable glsl-spec:*variables*
+                    :function (append glsl-spec:*functions*
+                                      glsl-spec:*operators*
+                                      glsl-spec:*vector-constructors*
+                                      glsl-spec:*matrix-constructors*)))
 
 (deftype glsl-type ()
   '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
 
-(defstruct variable-information
-  (var (error "VAR is required.") :type symbol :read-only t)
-  (name (error "NAME is required.") :type string :read-only t)
-  (type (error "TYPE is required.")
-        :type (member :attribute :io :uniform :varying :local :global :slot)
-        :read-only t)
-  (glsl-type nil :type (or list glsl-type) :read-only t)
-  (ref? nil :type boolean))
+(defun variable-information-var (info) (getf info :lisp-name))
+
+(defun variable-information-name (info) (getf info :name))
+
+(defun variable-information-type (info) (getf info :attribute))
+
+(defun variable-information-glsl-type (info) (getf info :type))
+
+(defun variable-information-ref? (info) (getf info :ref?))
+
+(defun (setf variable-information-ref?) (new info) (setf (getf info :ref?) new))
+
+(defun make-variable-information (&key var name type glsl-type)
+  (list :lisp-name (symbol-name var)
+        :name name
+        :type glsl-type
+        :attribute type))
 
 (defun variable-information (symbol &optional env)
   (let* ((global?
@@ -34,9 +49,10 @@
          (pred
           (if global?
               (lambda (info)
-                (and (null (variable-information-var info))
+                (and (null (variable-information-type info))
                      (equal global? (variable-information-name info))))
-              (lambda (info) (eq symbol (variable-information-var info))))))
+              (let ((name (symbol-name symbol)))
+                (lambda (info) (equal name (variable-information-var info)))))))
     (labels ((rec (env)
                (unless (null env)
                  (or (find-if pred (environment-variable env))
@@ -415,59 +431,3 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun pprint-glsl (stream exp &rest noise)
   (declare (ignore noise))
   (print-glsl exp stream))
-
-(setq *environment*
-        (make-environment :next nil
-                          :variable (var-info :global '(("gl_ClipDistance"
-                                                         :float)
-                                                        ("gl_CullDistance"
-                                                         :float)
-                                                        ("gl_FragCoord" :vec4)
-                                                        ("gl_FragDepth" :float)
-                                                        ("gl_FrontFacing"
-                                                         :bool)
-                                                        ("gl_GlobalInvocationID"
-                                                         :uvec3)
-                                                        ("gl_HelperInvocation"
-                                                         :bool)
-                                                        ("gl_InstanceID" :int)
-                                                        ("gl_InvocationID"
-                                                         :int)
-                                                        ("gl_Layer" :int)
-                                                        ("gl_LocalInvocationID"
-                                                         :uvec3)
-                                                        ("gl_LocalInvocationIndex"
-                                                         :uint)
-                                                        ("gl_NumSamples" :bool)
-                                                        ("gl_NumWorkGroups"
-                                                         :uvec3)
-                                                        ("gl_PatchVerticesIn"
-                                                         :int)
-                                                        ("gl_PointCoord" :vec2)
-                                                        ("gl_PointSize" :float)
-                                                        ("gl_Position" :vec4)
-                                                        ("gl_PrimitiveID" :int)
-                                                        ("gl_PrimitiveIDIn"
-                                                         :int)
-                                                        ("gl_SampleID" :int)
-                                                        ("gl_SampleMask" :int)
-                                                        ("gl_SampleMaskIn"
-                                                         :int)
-                                                        ("gl_SamplePosition"
-                                                         :vec2)
-                                                        ("gl_TessCoord" :vec3)
-                                                        ("gl_TessLevelInner"
-                                                         :float)
-                                                        ("gl_TessLevelOuter"
-                                                         :float)
-                                                        ("gl_VertexID" :int)
-                                                        ("gl_ViewportIndex"
-                                                         :int)
-                                                        ("gl_WorkGroupID"
-                                                         :uvec3)
-                                                        ("gl_WorkGroupSize"
-                                                         :uvec3)))
-                          :function (append glsl-spec:*functions*
-                                            glsl-spec:*operators*
-                                            glsl-spec:*vector-constructors*
-                                            glsl-spec:*matrix-constructors*)))
