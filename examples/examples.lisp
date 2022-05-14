@@ -1398,8 +1398,7 @@
             coord fude-gl:st)))
   (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
     (declaim (ftype (function nil (values)) main))
-    (defun main ()
-      (setf color (vec4 (fude-gl:rgb (texture screen coord)) 1.0)))))
+    (defun main () (setf color (vec4 (rgb (texture screen coord)) 1.0)))))
 
 (fude-gl:defvertices framebuffer-quad
     (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
@@ -1542,7 +1541,7 @@
             (- (+ far-plane near-plane) (* z (- far-plane near-plane)))))))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (let ((depth-value :float (fude-gl::r (texture depth-map coord))))
+      (let ((depth-value :float (r (texture depth-map coord))))
         ;; Perspective
         ;; (setf color (vec4 (vec3 (/ (linearize-depth depth-value) far-plane)) 1.0))
         ;; orthographic.
