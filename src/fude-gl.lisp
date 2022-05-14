@@ -777,33 +777,41 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
             `(progn (send ,new ,shader :uniform ,name ,@args) ,new))))
 
 (defmacro with-uniforms ((&rest var*) shader &body body)
-  ;; Trivial-syntax-check
-  (when (constantp shader)
-    (dolist (var var*)
-      (let ((name
-             (if (symbolp var)
-                 (symbol-camel-case var)
-                 (if (stringp (cadr var))
-                     (cadr var)
-                     (symbol-camel-case (car var))))))
-        (check-uniform-args shader name))))
-  (let ((s (gensym "SHADER")))
-    `(let ((,s ,shader))
-       (symbol-macrolet ,(loop :for spec :in var*
-                               :if (symbolp spec)
-                                 :collect `(,spec
-                                            (uniform ,s
-                                                     ,(symbol-camel-case spec)))
-                               :else :if (stringp (cadr spec))
-                                 :collect `(,(car spec)
-                                            (uniform ,s ,@(cdr spec)))
-                               :else
-                                 :collect `(,(car spec)
-                                            (uniform ,s
-                                                     ,(symbol-camel-case
-                                                        (car spec))
-                                                     ,@(cdr spec))))
-         ,@body))))
+  (flet ((parse-var-spec (spec)
+           (etypecase spec
+             (symbol (values spec (symbol-camel-case spec) nil))
+             ((cons symbol (cons string t))
+              (values (car spec) (cadr spec) (cddr spec)))
+             ((cons symbol (cons keyword t))
+              (values (car spec) (symbol-camel-case (car spec)) (cdr spec)))
+             ((cons symbol (cons symbol t))
+              (values (car spec)
+                      (symbol-camel-case (cadr spec))
+                      (cddr spec))))))
+    ;; Trivial-syntax-check
+    (when (constantp shader)
+      (dolist (var var*)
+        (check-uniform-args shader (nth-value 1 (parse-var-spec var)))))
+    (let ((s (gensym "SHADER")))
+      `(let ((,s ,shader))
+         (symbol-macrolet ,(loop :for spec :in var*
+                                 :collect (multiple-value-bind
+                                              (symbol name option)
+                                              (parse-var-spec spec)
+                                            `(,symbol
+                                              (uniform ,s ,name ,@option))))
+           ,@body)))))
+
+(defmethod documentation ((o (eql 'with-uniforms)) (type (eql 'function)))
+  "Evaluate the BODY in the context that each VAR is bound by the uniform of the SHADER.
+
+VAR := [ symbol | (symbol alias? { :unit unsigned-byte }?) ]
+ALIAS := [ (and symbol (not (or keyword boolean))) | string ]
+SHADER := The form that generates a shader name symbol.
+BODY := Implicit progn.
+
+NOTE: Each VAR is SETFable.
+NOTE: When ALIAS is a symbol, it will be filtered by symbol-camel-case to generate a uniform name.")
 
 (defmethod send
            ((o integer) (to symbol)
