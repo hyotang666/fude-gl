@@ -115,21 +115,23 @@
       (rec *environment*))))
 
 (defun function-information (symbol &optional env)
-  (let ((name (symbol-camel-case symbol)))
+  (let ((name (symbol-name symbol)))
     (labels ((rec (env)
                (unless (null env)
-                 (or (find name (environment-function env) :test #'equal)
+                 (or (remove-if-not
+                       (lambda (spec) (equal name (getf spec :lisp-name)))
+                       (environment-function env))
                      (rec (environment-next env))))))
       (rec env))))
 
 (defun list-all-known-functions ()
   (labels ((rec (env acc)
              (if (null env)
-                 acc
+                 (delete-duplicates acc :test #'equal)
                  (rec (environment-next env)
                       (progn
-                       (loop :for name :in (environment-function env)
-                             :do (push name acc))
+                       (loop :for spec :in (environment-function env)
+                             :do (push (getf spec :name) acc))
                        acc)))))
     (rec *environment* nil)))
 
@@ -348,8 +350,14 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (let* ((ftype (gethash (second exp) *declaims*))
          (*environment*
           (progn
-           (push (symbol-camel-case (second exp))
-                 (environment-function *environment*))
+           (push
+            `(:lisp-name ,(symbol-name (second exp)) :name
+              (symbol-camel-case (second exp)) :return (third ftype) :args
+              (mapcar
+                (lambda (var type)
+                  (list (symbol-camel-case var) (symbol-camel-case type)))
+                (third exp) (second ftype)))
+            (environment-function *environment*))
            (argument-environment *environment*
                                  :variable (var-info :local (mapcar #'list
                                                                     (third exp)
@@ -459,85 +467,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                                          :uvec3)
                                                         ("gl_WorkGroupSize"
                                                          :uvec3)))
-                          :function '(;;;; Built in functions.
-                                      ;;;; https://www.khronos.org/registry/OpenGL-Refpages/gl4/index.php
-                                      "abs" "acos" "acosh" "all" "any" "asin"
-                                      "asinh" "atan" "atanh" "atomicAdd"
-                                      "atomicAnd" "atomicCompSwap"
-                                      "atomicCounter" "atomicCounterDecrement"
-                                      "atomicCounterIncrement" "atomicExchange"
-                                      "atomicMax" "atomicMin" "atomicOr"
-                                      "atomicXor" "barrier" "bitCount"
-                                      "bitfieldExtract" "bitfieldInsert"
-                                      "bitfieldReverse" "ceil" "clamp" "cos"
-                                      "cosh" "cross" "degrees" "determinant"
-                                      "dFdx" "dFdxCoarse" "dFdxFine" "dFdy"
-                                      "dFdyCoarse" "dFdyFine" "distance" "dot"
-                                      "EmitStreamVertex" "EmitVertex"
-                                      "EndPrimitive" "EndStreamPrimitive"
-                                      "equal" "exp" "exp2" "faceforward"
-                                      "findLSB" "findMSB" "floatBitsToInt"
-                                      "floatBitsToUint" "floor" "fma" "fract"
-                                      "frexp" "fwidth" "fwidthCoarse"
-                                      "fwidthFine" "greaterThan"
-                                      "greaterThanEqual" "groupMemoryBarrier"
-                                      "imageAtomicAdd" "imageAtomicAnd"
-                                      "imageAtomicCompSwap"
-                                      "imageAtomicExchange" "imageAtomicMax"
-                                      "imageAtomicMin" "imageAtomicOr"
-                                      "imageAtomicXor" "imageLoad"
-                                      "imageSamples" "imageSize" "imageStore"
-                                      "imulExtended" "intBitsToFloat"
-                                      "interpolateAtCentroid"
-                                      "interpolateAtOffset"
-                                      "interpolateAtSample" "inverse"
-                                      "inversesqrt" "isinf" "isnan" "ldexp"
-                                      "length" "lessThan" "lessThanEqual" "log"
-                                      "log2" "matrixCompMult" "max"
-                                      "memoryBarrier"
-                                      "memoryBarrierAtomicCounter"
-                                      "memoryBarrierBuffer"
-                                      "memoryBarrierImage"
-                                      "memoryBarrierShared" "min" "mix" "mod"
-                                      "modf" "noise" "noise1" "noise2" "noise3"
-                                      "noise4" "normalize" "not" "notEqual"
-                                      "outerProduct" "packDouble2x32"
-                                      "packHalf2x16" "packSnorm2x16"
-                                      "packSnorm4x8" "packUnorm"
-                                      "packUnorm2x16" "packUnorm4x8" "pow"
-                                      "radians" "reflect" "refract" "round"
-                                      "roundEven" "sign" "sin" "sinh"
-                                      "smoothstep" "sqrt" "step" "tan" "tanh"
-                                      "texelFetch" "texelFetchOffset" "texture"
-                                      "textureGather" "textureGatherOffset"
-                                      "textureGatherOffsets" "textureGrad"
-                                      "textureGradOffset" "textureLod"
-                                      "textureLodOffset" "textureOffset"
-                                      "textureProj" "textureProjGrad"
-                                      "textureProjGradOffset" "textureProjLod"
-                                      "textureProjLodOffset"
-                                      "textureProjOffset" "textureQueryLevels"
-                                      "textureQueryLod" "textureSamples"
-                                      "textureSize" "transpose" "trunc"
-                                      "uaddCarry" "uintBitsToFloat"
-                                      "umulExtended" "unpackDouble2x32"
-                                      "unpackHalf2x16" "unpackSnorm2x16"
-                                      "unpackSnorm4x8" "unpackUnorm"
-                                      "unpackUnorm2x16" "unpackUnorm4x8"
-                                      "usubBorrow"
-                                      ;;;; Type constructors.
-                                      ;;;; https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Basic_types
-                                      ;; > Vectors
-                                      ;; > Each of the scalar types, including booleans, have 2, 3, and 4-component vector equivalents. The n digit below can be 2, 3, or 4:
-                                      "bvec2" "bvec3" "bvec4" "ivec2" "ivec3"
-                                      "ivec4" "uvec2" "uvec3" "uvec4" "vec2"
-                                      "vec3" "vec4" "dvec2" "dvec3" "dvec4"
-                                      ;; > Matrices
-                                      ;; > In addition to vectors, there are also matrix types. All matrix types are floating-point, either single-precision or double-precision. Matrix types are as follows, where n and m can be the numbers 2, 3, or 4:
-                                      "mat2x2" "mat2x3" "mat2x4" "mat3x2"
-                                      "mat3x3" "mat3x4" "mat4x2" "mat4x3"
-                                      "mat4x4" "mat2" "mat3" "mat4"
-                                      ;;;; Operator
-                                      "*" "/" "+" "-" "<" ">" "<=" ">=" "=="
-                                      "&&" "^^" "||" "%" "<<" ">>" "&" "^"
-                                      "|")))
+                          :function (append glsl-spec:*functions*
+                                            glsl-spec:*operators*
+                                            glsl-spec:*vector-constructors*
+                                            glsl-spec:*matrix-constructors*)))
