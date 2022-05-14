@@ -16,7 +16,8 @@
                                        instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
                                        some-instance-dynamics depth-testing
-                                       framebuffer-step1 framebuffer-shadow))
+                                       framebuffer-step1 framebuffer-shadow
+                                       framebuffer-shadow-base))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -1714,116 +1715,59 @@
   ;; To specify user defined complex type (ARGSET in the example below),
   ;; var-spec list is used for second element of var-spec.
   (:vertex ((argset
-             ((|fragPos| :vec3) (normal :vec3) (coord :vec2)
-              (|fragPosLightSpace| :vec4)))
+             ((frag-pos :vec3) (normal :vec3) (coord :vec2)
+              (frag-pos-light-space :vec4)))
             &uniform (projection :mat4) (view :mat4) (model :mat4)
-            (|lightSpaceMatrix| :mat4))
+            (light-space-matrix :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "argset.fragPos = vec3(model * vec4(xyz, 1.0));"
-      "argset.normal = transpose(inverse(mat3(model))) * normal;"
-      "argset.coord = st;"
-      "argset.fragPosLightSpace = lightSpaceMatrix * vec4(argset.fragPos, 1.0);"
-      "gl_Position = projection * view * model * vec4(xyz, 1.0);"))
-  (:fragment ((|outColor| :vec4) &uniform (|diffuseTexture| :|sampler2D|)
-              (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
-    (declaim (ftype (function (3d-vectors:vec4) float) |calculateShadow|))
-    (defun |calculateShadow| (|fragPosLightSpace|)
-      "// Perform perspective divide"
-      "vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;"
-      "// Transform to [0,1] range."
-      "projCoords = projCoords * 0.5 + 0.5;"
-      "// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)"
-      "float closestDepth = texture(shadowMap, projCoords.xy).r;"
-      "// get depth of current fragment from light's perspective"
-      "float currentDepth = projCoords.z;"
-      "// check whether current frag pos is in shadow"
-      "float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;"
-      "return shadow;")
+      (with-slots (frag-pos (n normal) coord frag-pos-light-space)
+          argset
+        (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+              n (* (transpose (inverse (mat3 model))) normal)
+              coord fude-gl:st
+              frag-pos-light-space (* light-space-matrix (vec4 frag-pos 1.0))
+              gl-position (* projection view model (vec4 fude-gl:xyz 1.0))))))
+  (:fragment ((out-color :vec4) &uniform (diffuse-texture :|sampler2D|)
+              (shadow-map :|sampler2D|) (light-pos :vec3) (view-pos :vec3))
+    (declaim (ftype (function (:vec4) float) calculate-shadow))
+    (defun calculate-shadow (frag-pos-light-space)
+      (let ((proj-coords
+             :vec3
+             (+ 0.5
+                (* 0.5
+                   (/ (xyz frag-pos-light-space) (w frag-pos-light-space))))))
+        (return
+         (if (< (r (texture shadow-map (xy proj-coords))) (z proj-coords))
+             1.0
+             0.0))))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      "vec3 color = texture(diffuseTexture, argset.coord).rgb;"
-      "vec3 normal = normalize(argset.normal);"
-      "vec3 lightColor = vec3(0.3);"
-      "// ambient"
-      "vec3 ambient = 0.3 * color;"
-      "// diffuse"
-      "vec3 lightDir = normalize(lightPos - argset.fragPos);"
-      "float diff = max(dot(lightDir, normal), 0.0);"
-      "vec3 diffuse = diff * lightColor;"
-      "// specular"
-      "vec3 viewDir = normalize(viewPos - argset.fragPos);"
-      "vec3 reflectDir = reflect(-lightDir, normal);"
-      "float spec = 0.0;"
-      "vec3 halfwayDir = normalize(lightDir + viewDir);"
-      "spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);"
-      "vec3 specular = spec * lightColor;"
-      "// calculate shadow"
-      "float shadow = calculateShadow(argset.fragPosLightSpace);"
-      "vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;"
-      "outColor = vec4(lighting, 1.0);")))
+      (with-slots (coord (n normal) frag-pos frag-pos-light-space)
+          argset
+        (let ((color :vec3 (rgb (texture diffuse-texture coord)))
+              (normal :vec3 (normalize n))
+              (light-color :vec3 (vec3 0.3))
+              (light-dir :vec3 (normalize (- light-pos frag-pos))))
+          (setf out-color
+                  (vec4
+                   (* color
+                      (+ (* 0.3 color) ; ambient.
+                         (- 1.0 (calculate-shadow frag-pos-light-space)))
+                      (+ (* light-color (max 0.0 (dot light-dir normal))) ; diffuse.
+                         (* light-color ; specular.
+                            (pow ; spec.
+                             (max 0.0
+                                  (dot normal
+                                   (normalize ; halway dir.
+                                    (+ light-dir
+                                       (normalize (- view-pos frag-pos))))))
+                             64.0))))
+                   1.0)))))))
 
 (fude-gl:defvertices plane-base-vao *framebuffer-plane-vertices*
   :shader 'shadow-mapping
   :attributes '(fude-gl:xyz fude-gl:rgb fude-gl:st))
-
-#++
-(fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
-  (:vertex ((argset
-             ((|fragPos| :vec3) (normal :vec3) (coord :vec2)
-              (|fragPosLightSpace| :vec4)))
-            &uniform (projection :mat4) (view :mat4) (model :mat4)
-            (|lightSpaceMatrix| :mat4))
-    (with-slots (frag-pos normal coord frag-pos-light-space)
-        argset
-      (setf frag-pos (vec3 (* model (vec4 xyz 1.0)))
-            normal (* (transpose (inverse (mat3 model))) normal)
-            coord st
-            frag-pos-light-space (* light-space-matrix (vec4 frag-pos 1.0))
-            gl-position (* projection view model (vec4 xyz 1.0)))))
-  (:fragment ((color :vec4) &uniform (|diffuseTexture| :|sampler2D|)
-              (|shadowMap| :|sampler2D|) (|lightPos| :vec3) (|viewPos| :vec3))
-    (flet :float |calculateShadow| ((|fragPosLightSpace| :vec4))
-      (let ((proj-coords
-             :vec3
-             (/ (xyz frag-pos-light-space) (w frag-pos-light-space))))
-        (setf proj-coords (+ (* proj-coords 0.5) 0.5))
-        (let ((closest-depth :float (r (texture shadow-map (xy proj.coords))))
-              (current-depth :float (z proj-coords))
-              (shadow
-               :float
-               (if (< closest-depth current-depth)
-                   1.0
-                   0.0)))
-          (return shadow))))
-    (with-slots (coord (norm normal) frag-pos frag-pos-light-space)
-        argset
-      (let ((color :vec3 (rgb (texture diffuse-texture coord)))
-            (normal :vec3 (normalize norm))
-            (light-color :vec3 (vec3 0.3))
-            #++ ; have side effect?
-            (reflect-dir :vec3 (reflect (- light-dir) normal)))
-        (setf color
-                (vec4
-                 (* color
-                    (+ (* 0.3 color)
-                       (* (- 1.0 (calculate-shadow frag-pos-light-space))
-                          (+
-                            (*
-                              (max
-                                (dot (normalize (- light-pos frag-pos)) normal)
-                                0.0)
-                              light-color)
-                            (*
-                              (pow
-                               (max
-                                 (dot normal
-                                  (normalize light-dir
-                                   (normalize (- view-pos frag-pos))))
-                                 0.0)
-                               64.0)
-                              light-color)))))
-                 1.0))))))
 
 (defun framebuffer-shadow-base ()
   (uiop:nest
