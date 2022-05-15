@@ -29,7 +29,12 @@
 
 (defun variable-information-ref? (info) (getf info :ref?))
 
-(defun (setf variable-information-ref?) (new info) (setf (getf info :ref?) new))
+(defun (setf variable-information-ref?) (new info)
+  (let ((sentinel '#:sentinel))
+    (if (eq sentinel (getf info :ref? sentinel))
+        (nconc info (list :ref? new))
+        (setf (getf info :ref?) new)))
+  new)
 
 (defun make-variable-information (&key var name type glsl-type)
   (list :lisp-name (symbol-name var)
@@ -116,19 +121,20 @@
 
 (defun check-ref (vars)
   (dolist (var vars)
-    (labels ((rec (env)
-               (unless (null env)
-                 (let ((info
-                        (find var (environment-variable env)
-                              :test #'eq
-                              :key #'variable-information-var)))
-                   (if info
-                       (when (not (variable-information-ref? info))
-                         (let ((*print-pprint-dispatch*
-                                (copy-pprint-dispatch nil)))
-                           (warn 'unused-variable :name var)))
-                       (rec (environment-next env)))))))
-      (rec *environment*))))
+    (let ((name (symbol-name var)))
+      (labels ((rec (env)
+                 (unless (null env)
+                   (let ((info
+                          (find name (environment-variable env)
+                                :test #'equal
+                                :key #'variable-information-var)))
+                     (if info
+                         (when (not (variable-information-ref? info))
+                           (let ((*print-pprint-dispatch*
+                                  (copy-pprint-dispatch nil)))
+                             (warn 'unused-variable :name var)))
+                         (rec (environment-next env)))))))
+        (rec *environment*)))))
 
 (defun function-information (symbol &optional env)
   (let ((name (symbol-name symbol)))
