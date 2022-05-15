@@ -367,12 +367,14 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
          (*environment*
           (progn
            (push
-            `(:lisp-name ,(symbol-name (second exp)) :name
-              (symbol-camel-case (second exp)) :return (third ftype) :args
-              (mapcar
-                (lambda (var type)
-                  (list (symbol-camel-case var) (symbol-camel-case type)))
-                (third exp) (second ftype)))
+            (list :lisp-name (symbol-name (second exp))
+                  :name (symbol-camel-case (second exp))
+                  :return (third ftype)
+                  :args (mapcar
+                          (lambda (var type)
+                            (list (symbol-camel-case var)
+                                  (symbol-camel-case type)))
+                          (third exp) (second ftype)))
             (environment-function *environment*))
            (argument-environment *environment*
                                  :variable (var-info :local (mapcar #'list
