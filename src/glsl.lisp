@@ -105,7 +105,7 @@
 (defun list-all-known-vars ()
   (labels ((rec (env acc)
              (if (null env)
-                 acc
+                 (delete-duplicates acc :test #'equal)
                  (rec (environment-next env)
                       (progn
                        (loop :for info :in (environment-variable env)
