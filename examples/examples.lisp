@@ -523,6 +523,8 @@
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; When set some values to the uniforms,
       ;; you can use WITH-UNIFORMS which is a family of CL:WITH-SLOTS.
+      ;; Each bind is a symbol that generates a uniform glsl name
+      ;; via FUDE-GL::SYMBOL-CAMEL-CASE.
       (fude-gl:with-uniforms (tex1 tex2 transform)
           'transform-demo
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
@@ -1460,8 +1462,12 @@
         ;; You can specify alias for uniform name.
         ;; In the example below,
         ;; specify alias 'v' for uniform "view" and
-        ;; alias 'p' for uniform 'projection".
-        (fude-gl:with-uniforms (tex (v "view") (p "projection") model)
+        ;; alias 'p' for uniform "projection".
+        ;; When a true name for uniform is a string like `"view"` in the example,
+        ;; it is used as uniform name.
+        ;; When a true name for uniform is a symbol like `projection` in the example,
+        ;; FUDE-GL::SYMBOL-CAMEL-CASEd string is used for uniform name.
+        (fude-gl:with-uniforms (tex (v "view") (p projection) model)
             'framebuffer-vertices
           ;;; Cubes
           (setf tex
