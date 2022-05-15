@@ -200,8 +200,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
          (unless (eq :global (variable-information-type info))
            (setf (variable-information-ref? info) t)))
        (write-string (variable-information-name info) stream))
-      (errorp
-       (error 'unknown-variable :name exp :known-vars (list-all-known-vars)))
+      ((and errorp
+            (cerror "Anyway print it." 'unknown-variable
+                    :name exp
+                    :known-vars (list-all-known-vars))))
       ((find-if #'lower-case-p (symbol-name exp))
        (write-string (symbol-name exp) stream))
       (t (write-string (symbol-camel-case exp) stream)))))
