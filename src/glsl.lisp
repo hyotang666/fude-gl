@@ -264,8 +264,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-aref (stream exp)
   (setf stream (or stream *standard-output*))
   (let ((*var-check-p* t))
-    (funcall (formatter "~:/fude-gl:glsl-symbol/~:<[~;~@{~W~^, ~@_~}~;]~:>")
-             stream (cadr exp) (cddr exp))))
+    (funcall (formatter "~:/fude-gl:glsl-symbol/~<~@{[~W]~^~@_~}~:>") stream
+             (cadr exp) (cddr exp))))
 
 (defun glsl-let (stream exp)
   (setf stream (or stream *standard-output*))
