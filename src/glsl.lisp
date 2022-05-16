@@ -23,7 +23,10 @@
 
 (defun variable-information-name (info) (getf info :name))
 
-(defun variable-information-type (info) (getf info :attribute))
+(defun variable-information-type (info)
+  (if (getf info :versions)
+      :global
+      (getf info :attribute)))
 
 (defun variable-information-glsl-type (info) (getf info :type))
 
@@ -54,7 +57,7 @@
          (pred
           (if global?
               (lambda (info)
-                (and (null (variable-information-type info))
+                (and (eq :global (variable-information-type info))
                      (equal global? (variable-information-name info))))
               (let ((name (symbol-name symbol)))
                 (lambda (info) (equal name (variable-information-var info)))))))
