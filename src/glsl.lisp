@@ -237,8 +237,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (if (find (car exp) '(r rgb z w xy xyz) :test #'string=)
       (glsl-swizzling stream exp)
       (progn
-       (assert (function-information (car exp) *environment*) ()
-         'unknown-glsl-function :name (car exp))
+       (unless (function-information (car exp) *environment*)
+         (cerror "Anyway, print it." 'unknown-glsl-function :name (car exp)))
        (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
                 (car exp) (cdr exp)))))
 
