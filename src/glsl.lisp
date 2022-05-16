@@ -130,9 +130,8 @@
                                 :key #'variable-information-var)))
                      (if info
                          (when (not (variable-information-ref? info))
-                           (let ((*print-pprint-dispatch*
-                                  (copy-pprint-dispatch nil)))
-                             (warn 'unused-variable :name var)))
+                           (with-standard-io-syntax
+                            (warn 'unused-variable :name var)))
                          (rec (environment-next env)))))))
         (rec *environment*)))))
 
