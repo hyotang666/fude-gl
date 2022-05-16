@@ -54,16 +54,16 @@
                                 (change-case:pascal-case
                                   (subseq (symbol-name symbol) 3)))))
                    name))))
-         (pred
+         (name (or global? (symbol-name symbol)))
+         (key
           (if global?
-              (lambda (info)
-                (and (eq :global (variable-information-type info))
-                     (equal global? (variable-information-name info))))
-              (let ((name (symbol-name symbol)))
-                (lambda (info) (equal name (variable-information-var info)))))))
+              #'variable-information-name
+              #'variable-information-var)))
     (labels ((rec (env)
                (unless (null env)
-                 (or (find-if pred (environment-variable env))
+                 (or (find name (environment-variable env)
+                           :test #'equal
+                           :key key)
                      (rec (environment-next env))))))
       (rec env))))
 
