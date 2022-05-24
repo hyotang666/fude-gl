@@ -234,9 +234,26 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (let ((*var-check-p* t))
     (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; To muffle the compiler claiming undefined variable.
+  (unless (boundp '+swizzling+)
+    (defconstant +swizzling+
+      (labels ((swizzling (components)
+                 (append (rec components 1 nil) (rec components 2 nil)
+                         (rec components 3 nil) (rec components 4 nil)))
+               (rec (components depth acc)
+                 (if (= 1 depth)
+                     (loop :for c :in components
+                           :collect (format nil "~{~A~}" (cons c acc)))
+                     (loop :for c :in components
+                           :append (rec components (1- depth) (cons c acc))))))
+        (uiop:list-to-hash-set
+          (append (swizzling '(x y z w)) (swizzling '(r g b a))
+                  (swizzling '(s t u v))))))))
+
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
-  (if (find (car exp) '(r rgb z w xy xyz) :test #'string=)
+  (if (gethash (symbol-name (car exp)) +swizzling+)
       (glsl-swizzling stream exp)
       (progn
        (unless (function-information (car exp) *environment*)
