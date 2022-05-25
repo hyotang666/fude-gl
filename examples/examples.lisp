@@ -1058,7 +1058,14 @@
           ;; You can use :CENTER to specify centering the text.
           ;; In such cases, you must specify keyword argument :WIN.
           ;; In other words, if you do not use :center you do not need to specify :WIN.
-          (fude-gl:render-text "Hello world! g" :x 0 :y :center :win win))))))
+          (fude-gl:render-text
+            (multiple-value-call #'format
+              nil
+              "Mouse: X=~D Y=~D Mask=~S"
+              (sdl2:mouse-state))
+            :x 0
+            :y :center
+            :win win))))))
 
 ;;;; INSTANCING
 ;;
