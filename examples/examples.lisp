@@ -377,11 +377,11 @@
       (setf texcoord fude-gl:st
             gl-position (vec4 fude-gl:xy 0.0 1.0))))
   (:fragment ((out-color :vec4) &uniform (tex1 :|sampler2D|)
-              (tex2 :|sampler2D|))
+              (tex2 :|sampler2D|) (weight :float))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
       (setf out-color
-              (mix (texture tex1 texcoord) (texture tex2 texcoord) 0.5)))))
+              (mix (texture tex1 texcoord) (texture tex2 texcoord) weight)))))
 
 (defparameter *logo*
   (opticl:read-png-file
@@ -409,7 +409,12 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader () (fude-gl:in-texture 'lisp-logo))
+    (let ((weight
+           (cons (constantly 0.5)
+                 (lambda () (/ (+ 1.0 (sin (get-internal-real-time))) 2))))))
     (sdl2:with-event-loop (:method :poll)
+      (:keydown ()
+        (rotatef (car weight) (cdr weight)))
       (:quit ()
         t))
     (:idle nil)
@@ -431,6 +436,7 @@
       ;; Case specifying unit location explicitly and using fude-gl:in-texture which in with-shader above.
       (setf (fude-gl:uniform 'mix-demo "tex2" :unit 1)
               (fude-gl:find-texture 'lisp-logo))
+      (setf (fude-gl:uniform 'mix-demo "weight") (funcall (car weight)))
       (fude-gl:draw 'mix-demo))))
 
 ;;;; MATRIX-OPERATIONS
