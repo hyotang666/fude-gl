@@ -1034,6 +1034,8 @@
                         projection p)
                   (fude-gl:draw 'cubes))))))
 
+;;;; LOOK-AROUND
+
 (defun look-around ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -1044,39 +1046,53 @@
     (sdl2:with-gl-context (context win)
       (sdl2:hide-cursor))
     (fude-gl:with-shader ())
-    (let* ((last-x)
-           (last-y)
-           (camera (fude-gl:make-camera))
+    (let* ((camera
+            ;; Eular angles supported camera.
+            (progn
+             (multiple-value-bind (w h)
+                 (sdl2:get-window-size win)
+               (sdl2:warp-mouse-in-window win (floor w 2) (floor h 2)))
+             (multiple-value-bind (x y mask)
+                 (sdl2:get-global-mouse-state)
+               (declare (ignore mask))
+               (fude-gl:make-first-person :last-position (3d-vectors:vec3 x y
+                                                                          0)))))
            (matrix (3d-matrices:meye 4))
            (p
             (3d-matrices:mperspective 45
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
-           (yaw 0)
-           (pitch 0))
+           (time (fude-gl:make-delta-time)))
       (gl:enable :depth-test))
-    (flet ((update-camera-front (camera x y mask)
-             (declare (ignore mask))
-             (let* ((sensitivity 0.1)
-                    (offset-x (* sensitivity (- x last-x)))
-                    ;; reversed. y ranges bottom to top.
-                    (offset-y (* sensitivity (- last-y y))))
-               (setq last-x x
-                     last-y y
-                     pitch (max -89.0 (min 89.0 (+ pitch offset-y)))
-                     yaw (+ yaw offset-x))
-               (3d-vectors:vsetf (fude-gl:camera-front camera)
-                                 (* (cos (fude-gl:radians yaw))
-                                    (cos (fude-gl:radians pitch)))
-                                 (sin (fude-gl:radians pitch))
-                                 (* (sin (fude-gl:radians yaw))
-                                    (cos (fude-gl:radians pitch)))))))
-      ;; Initialize.
-      (setf (values last-x last-y) (sdl2:get-global-mouse-state)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
+      (fude-gl:with-uniforms (tex1 tex2 model view projection)
+          'cubes
+        (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
+              tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
+        (loop :with camera-view
+                    := (fude-gl:view ;; To update camera view.
+                                     (multiple-value-call #'fude-gl:lookat
+                                       camera
+                                       (sdl2:get-global-mouse-state)))
+              :for pos :in *cube-positions*
+              :for i :upfrom 0
+              :do (setf model
+                          (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload matrix fude-gl:+meye4+) pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i)))
+                        view camera-view
+                        projection p)
+                  (fude-gl:draw 'cubes))))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera)))
     (:idle nil)
