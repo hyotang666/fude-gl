@@ -1484,31 +1484,47 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   `(let ((texture (find-texture ,name :if-does-not-exist :create)))
      (gl:bind-texture (texture-target texture) (texture-id texture))))
 
+;;;; WITH-DELTA-TIME
+
+(locally
+ #+sbcl ; due to not fixnum
+ (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+ (defstruct (delta-time (:constructor make-delta-time
+                         (&aux (last-frame (get-internal-real-time))
+                          (delta (- (get-internal-real-time) last-frame)))))
+   (last-frame 0 :type (integer 0 *))
+   (delta 0 :type (unsigned-byte 32))))
+
+(defun update-delta-time (time)
+  #+sbcl ; due to not fixnum
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (let ((current-frame (get-internal-real-time)))
+    (with-slots (last-frame delta)
+        time
+      (setf delta (- current-frame last-frame)
+            last-frame current-frame))
+    time))
+
+(defvar *delta*)
+
+(defmacro with-delta-time ((var) &body body)
+  `(progn (setq *delta* (delta-time-delta (update-delta-time ,var))) ,@body))
+
 ;;;; WITH-CLEAR
 
 (defmacro with-clear
-          (&whole whole
-           (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)) (fps 60))
+          (&whole whole (var-win (&rest buf*) &key (color ''(0.0 0.0 0.0 1.0)))
            &body body)
-  (declare ((mod #.most-positive-fixnum) fps)
-           (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (check-bnf:check-bnf (:whole whole)
     ((var-win symbol))
     ((buf* buffer-bit))
     ((color check-bnf:expression)))
-  (let ((time (gensym "TIME")) (idle (gensym "IDLE")) (delta (gensym "DELTA")))
-    `(let ((,time (get-internal-real-time))
-           (,idle ,(* internal-time-units-per-second (/ 1 fps))))
-       (apply #'gl:clear-color ,color)
-       (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) buf*))
-       ,@body
-       (sdl2:gl-swap-window ,var-win)
-       (let ((,delta (- ,idle (- (get-internal-real-time) ,time))))
-         (if (plusp ,delta)
-             (sleep (* ,(/ 1 internal-time-units-per-second) ,delta))
-             (warn "Over FPS. ~S sec."
-                   (float
-                     (* (/ 1 internal-time-units-per-second) (- ,delta)))))))))
+  `(progn
+    (apply #'gl:clear-color ,color)
+    (gl:clear ,@(mapcar (lambda (buf) (type-assert buf 'buffer-bit)) buf*))
+    ,@body
+    (sdl2:gl-swap-window ,var-win)))
 
 (defun pprint-with-clear (stream exp)
   (funcall

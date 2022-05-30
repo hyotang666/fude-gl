@@ -70,6 +70,10 @@
            ;;;; UTILITIES
            #:with-clear
            #:tex-image-2d
+           ;;;; DELTA-TIME
+           #:with-delta-time
+           #:make-delta-time
+           #:*delta*
            ;;;; MATRIX
            #:radians
            #:ortho
