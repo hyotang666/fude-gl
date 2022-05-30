@@ -67,6 +67,11 @@
            ;; helpers
            #:view
            #:move
+           ;;;; FIRST-PERSON Eular angles supported cameras.
+           ;; constructor
+           #:make-first-person
+           ;; helpers
+           #:lookat
            ;;;; UTILITIES
            #:with-clear
            #:tex-image-2d

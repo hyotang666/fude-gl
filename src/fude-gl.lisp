@@ -1753,6 +1753,64 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (3d-vectors::%vsetf (camera-position camera) x y z)
   camera)
 
+;;;; FIRST-PERSON
+
+(defstruct (first-person (:include camera)
+                         (:constructor make-first-person
+                          (&key (position (3d-vectors:vec3 0 0 3))
+                           (target (3d-vectors:vec3 0 0 0))
+                           (front (3d-vectors:vec3 0 0 -1)) (sensitivity 0.1)
+                           (last-position (3d-vectors:vec3 0 0 0)) &aux
+                           (direction
+                            (3d-vectors:nvunit
+                              (3d-vectors:v- position target)))
+                           (right
+                            (3d-vectors:nvunit
+                              (3d-vectors:vc (3d-vectors:vec3 0 1 0)
+                                             direction)))
+                           (up (3d-vectors:vc direction right)))))
+  (sensitivity 0.1 :type single-float)
+  (sight (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
+  (last-position (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3))
+
+(defun pitch (first-person) (3d-vectors:vx (first-person-sight first-person)))
+
+(defun yaw (first-person) (3d-vectors:vy (first-person-sight first-person)))
+
+(defun roll (first-person) (3d-vectors:vz (first-person-sight first-person)))
+
+(declaim
+ (ftype (function
+         (first-person (unsigned-byte 32) (unsigned-byte 32) (unsigned-byte 8))
+         (values first-person &optional))
+        lookat))
+
+(defun lookat (first-person x y mask)
+  (declare (ignore mask))
+  (let* ((sensitivity (first-person-sensitivity first-person))
+         (offset-x
+          (* sensitivity
+             (- x
+                (shiftf
+                 (3d-vectors:vx (first-person-last-position first-person))
+                 x))))
+         ;; reversed. Y ranges bottom to top.
+         (offset-y
+          (* sensitivity
+             (-
+               (shiftf
+                (3d-vectors:vy (first-person-last-position first-person)) y)
+               y)))
+         (pitch (max -89.0 (min 89.0 (+ (pitch first-person) offset-y))))
+         (yaw (+ (yaw first-person) offset-x)))
+    (3d-vectors:vsetf (first-person-sight first-person) pitch yaw)
+    (3d-vectors:vsetf (first-person-front first-person)
+                      (* (cos (radians yaw)) (cos (radians pitch)))
+                      (sin (radians pitch))
+                      (* (sin (radians yaw)) (cos (radians pitch))))
+    (3d-vectors:nvunit (first-person-front first-person)))
+  first-person)
+
 ;; MATRIX
 
 (defun radians (degrees)
