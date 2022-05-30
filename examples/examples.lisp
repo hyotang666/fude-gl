@@ -958,8 +958,9 @@
         (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
         (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
 
-(defun move-camera (keysym camera)
-  (let ((camera-speed 0.05))
+(defun move-camera
+       (keysym camera &optional (delta internal-time-units-per-second))
+  (let ((camera-speed (* 2.5 (/ delta internal-time-units-per-second))))
     (case (sdl2:scancode keysym)
       ;; To modify CAMERA-POSITION,
       ;; you should use 3D-VECTORS's N prefixed functions.
@@ -1002,14 +1003,20 @@
            (3d-matrices:mperspective 45
                                      (multiple-value-call #'/
                                        (sdl2:get-window-size win))
-                                     0.1 100)))
+                                     0.1 100))
+          ;; In order to manage delta time.
+          (time (fude-gl:make-delta-time)))
       (gl:enable :depth-test))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
       (:keydown (:keysym keysym)
-        (move-camera keysym camera)))
+        (move-camera keysym camera
+                     ;; delta time.
+                     fude-gl:*delta*)))
     (:idle nil)
+    ;; Automatically update fude-gl:*delta* time.
+    (fude-gl::with-delta-time (time))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
       (fude-gl:with-uniforms (tex1 tex2 model view projection)
           'cubes
