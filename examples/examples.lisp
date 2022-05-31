@@ -1092,18 +1092,67 @@
                         view camera-view
                         projection p)
                   (fude-gl:draw 'cubes))))))
+
+;;;; ZOOM
+
+(defun zoom-perspective (win direction field-of-view)
+  (values (3d-matrices:mperspective
+            (case direction
+              (1 (setq field-of-view (min 45 (1+ field-of-view))))
+              (-1 (setq field-of-view (max 1 (1- field-of-view))))
+              (otherwise field-of-view))
+            (multiple-value-call #'/ (sdl2:get-window-size win)) 0.1 100)
+          field-of-view))
+
+(defun zoom ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Zoom by mouse wheel scrolling."
+                           :w 800
+                           :h 600)
+      (multiple-value-bind (w h)
+          (sdl2:get-window-size win)
+        (sdl2:warp-mouse-in-window win (floor w 2) (floor h 2))))
+    (sdl2:with-gl-context (context win)
+      (sdl2:hide-cursor))
+    (fude-gl:with-shader ())
+    (let* ((camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+           (matrix (3d-matrices:meye 4))
+           (p
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (time (fude-gl:make-delta-time)))
+      (gl:enable :depth-test))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        ;; update perspective.
+        (setf (values p (fude-gl:camera-field-of-view camera))
+                (zoom-perspective win y
+                                  (fude-gl:camera-field-of-view camera))))
       (:keydown (:keysym keysym)
-        (move-camera keysym camera)))
+        (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
+    (fude-gl:with-delta-time (time))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
-      (multiple-value-call #'update-camera-front
-        camera
-        (sdl2:get-global-mouse-state))
       (fude-gl:with-uniforms (tex1 tex2 model view projection)
           'cubes
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
-        (loop :for pos :in *cube-positions*
+        (loop :with camera-view
+                    := (fude-gl:view
+                         (multiple-value-call #'fude-gl:lookat
+                           camera
+                           (sdl2:get-global-mouse-state)))
+              :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf model
                           (3d-matrices:nmrotate
@@ -1111,7 +1160,7 @@
                               (fude-gl:reload matrix fude-gl:+meye4+) pos)
                             #.(3d-vectors:vec 1 0.3 0.5)
                             (fude-gl:radians (* 20 i)))
-                        view (fude-gl:view camera)
+                        view camera-view
                         projection p)
                   (fude-gl:draw 'cubes))))))
 
