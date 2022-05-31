@@ -203,9 +203,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
            (setf (variable-information-ref? info) t)))
        (write-string (variable-information-name info) stream))
       ((and errorp
-            (cerror "Anyway print it." 'unknown-variable
-                    :name exp
-                    :known-vars (list-all-known-vars))))
+            (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
+              (cerror "Anyway print it." 'unknown-variable
+                      :name exp
+                      :known-vars (list-all-known-vars)))))
       ((find-if #'lower-case-p (symbol-name exp))
        (write-string (symbol-name exp) stream))
       (t (write-string (symbol-camel-case exp) stream)))))
@@ -257,7 +258,9 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (glsl-swizzling stream exp)
       (progn
        (unless (function-information (car exp) *environment*)
-         (cerror "Anyway, print it." 'unknown-glsl-function :name (car exp)))
+         (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
+           (cerror "Anyway, print it." 'unknown-glsl-function
+                   :name (car exp))))
        (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
                 (car exp) (cdr exp)))))
 
@@ -451,11 +454,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     *print-pprint-dispatch*))
 
 (defun print-glsl (exp &optional stream)
-  (handler-case
-      (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
-        (pprint exp stream))
-    (error (e)
-      (error e))))
+  (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
+    (pprint exp stream)))
 
 (defun pprint-glsl (stream exp &rest noise)
   (declare (ignore noise))
