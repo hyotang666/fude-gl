@@ -997,15 +997,15 @@
                            :h 600))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
-    (let ((camera (fude-gl:make-camera))
-          (matrix (3d-matrices:meye 4))
-          (p
-           (3d-matrices:mperspective 45
-                                     (multiple-value-call #'/
-                                       (sdl2:get-window-size win))
-                                     0.1 100))
-          ;; In order to manage delta time.
-          (time (fude-gl:make-delta-time)))
+    (let* ((camera (fude-gl:make-camera))
+           (matrix (3d-matrices:meye 4))
+           (p
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           ;; In order to manage delta time.
+           (time (fude-gl:make-delta-time)))
       (gl:enable :depth-test))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
@@ -1055,11 +1055,10 @@
              (multiple-value-bind (x y mask)
                  (sdl2:get-global-mouse-state)
                (declare (ignore mask))
-               (fude-gl:make-first-person :last-position (3d-vectors:vec3 x y
-                                                                          0)))))
+               (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0)))))
            (matrix (3d-matrices:meye 4))
            (p
-            (3d-matrices:mperspective 45
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
