@@ -1186,24 +1186,26 @@
     (declaim (ftype (function nil (values)) main))
     (defun main () (setf frag-color (vec4 1.0)))))
 
-(let* ((source
-        (alexandria:flatten
-          '(((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 -0.5)
-             (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5))
-            ((-0.5 -0.5 0.5) (0.5 -0.5 0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
-             (-0.5 0.5 0.5) (-0.5 -0.5 0.5))
-            ((-0.5 0.5 0.5) (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5) (-0.5 -0.5 -0.5)
-             (-0.5 -0.5 0.5) (-0.5 0.5 0.5))
-            ((0.5 0.5 0.5) (0.5 0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 -0.5)
-             (0.5 -0.5 0.5) (0.5 0.5 0.5))
-            ((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 0.5) (0.5 -0.5 0.5)
-             (-0.5 -0.5 0.5) (-0.5 -0.5 -0.5))
-            ((-0.5 0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
-             (-0.5 0.5 0.5) (-0.5 0.5 -0.5)))))
-       (vertices
-        (make-array (length source)
-                    :element-type 'single-float
-                    :initial-contents source)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defvar *cube-source*
+    (alexandria:flatten
+      '(((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 -0.5)
+         (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5))
+        ((-0.5 -0.5 0.5) (0.5 -0.5 0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
+         (-0.5 0.5 0.5) (-0.5 -0.5 0.5))
+        ((-0.5 0.5 0.5) (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5) (-0.5 -0.5 -0.5)
+         (-0.5 -0.5 0.5) (-0.5 0.5 0.5))
+        ((0.5 0.5 0.5) (0.5 0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 -0.5)
+         (0.5 -0.5 0.5) (0.5 0.5 0.5))
+        ((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 0.5) (0.5 -0.5 0.5)
+         (-0.5 -0.5 0.5) (-0.5 -0.5 -0.5))
+        ((-0.5 0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
+         (-0.5 0.5 0.5) (-0.5 0.5 -0.5))))))
+
+(let ((vertices
+       (make-array (length *cube-source*)
+                   :element-type 'single-float
+                   :initial-contents *cube-source*)))
   (fude-gl:defvertices lighting vertices)
   (fude-gl:defvertices light-cube vertices))
 
@@ -1267,6 +1269,90 @@
               v view
               p projection))
       (fude-gl:draw 'lighting)
+      (fude-gl:draw 'light-cube))))
+
+;;;; AMBIENT-LIGHTING
+
+(fude-gl:defshader ambient-lighting 330 (fude-gl:xyz)
+  (:vertex (&uniform (model :mat4) (view :mat4) (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (* projection view model (vec4 xyz 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (object-color :vec3)
+              (light-color :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((ambient
+             :vec3
+             (* 0.1 ; ambient-strength
+                light-color)))
+        (setf frag-color (vec4 (* ambient object-color) 1.0))))))
+
+(fude-gl:defvertices ambient-lighting
+    (make-array (length *cube-source*)
+                :element-type 'single-float
+                :initial-contents *cube-source*))
+
+(defun ambient-lighting ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Lighting."
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
+           (camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+           (model (3d-matrices:meye 4))
+           (projection
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (object-color (3d-vectors:vec3 1.0 0.5 0.31))
+           (time (fude-gl:make-delta-time))
+           (light-color (3d-vectors:vec3 1.0 1.0 1.0)))
+      (gl:enable :depth-test))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf (values projection (fude-gl:camera-field-of-view camera))
+                (zoom-perspective win y
+                                  (fude-gl:camera-field-of-view camera))))
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view
+           (fude-gl:view
+             (multiple-value-call #'fude-gl:lookat
+               camera
+               (sdl2:get-global-mouse-state))))))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection)
+                              (oc object-color) (lc light-color))
+          'ambient-lighting
+        (setf m (fude-gl:reload model fude-gl:+meye4+)
+              v (fude-gl:view camera)
+              p projection
+              oc object-color
+              lc light-color))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection))
+          'light-cube
+        (setf m (3d-matrices:nmscale
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload model fude-gl:+meye4+) light-pos)
+                  #.(3d-vectors:vec3 0.2 0.2 0.2))
+              v view
+              p projection))
+      (fude-gl:draw 'ambient-lighting)
       (fude-gl:draw 'light-cube))))
 
 ;;;; FONT
