@@ -1187,27 +1187,28 @@
     (defun main () (setf frag-color (vec4 1.0)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *cube-source*
-    (alexandria:flatten
-      '(((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 -0.5)
-         (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5))
-        ((-0.5 -0.5 0.5) (0.5 -0.5 0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
-         (-0.5 0.5 0.5) (-0.5 -0.5 0.5))
-        ((-0.5 0.5 0.5) (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5) (-0.5 -0.5 -0.5)
-         (-0.5 -0.5 0.5) (-0.5 0.5 0.5))
-        ((0.5 0.5 0.5) (0.5 0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 -0.5)
-         (0.5 -0.5 0.5) (0.5 0.5 0.5))
-        ((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 0.5) (0.5 -0.5 0.5)
-         (-0.5 -0.5 0.5) (-0.5 -0.5 -0.5))
-        ((-0.5 0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
-         (-0.5 0.5 0.5) (-0.5 0.5 -0.5))))))
+  (defvar *cube-vertices*
+    (let ((source
+           (alexandria:flatten
+             '(((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 -0.5)
+                (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5))
+               ((-0.5 -0.5 0.5) (0.5 -0.5 0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
+                (-0.5 0.5 0.5) (-0.5 -0.5 0.5))
+               ((-0.5 0.5 0.5) (-0.5 0.5 -0.5) (-0.5 -0.5 -0.5)
+                (-0.5 -0.5 -0.5) (-0.5 -0.5 0.5) (-0.5 0.5 0.5))
+               ((0.5 0.5 0.5) (0.5 0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 -0.5)
+                (0.5 -0.5 0.5) (0.5 0.5 0.5))
+               ((-0.5 -0.5 -0.5) (0.5 -0.5 -0.5) (0.5 -0.5 0.5) (0.5 -0.5 0.5)
+                (-0.5 -0.5 0.5) (-0.5 -0.5 -0.5))
+               ((-0.5 0.5 -0.5) (0.5 0.5 -0.5) (0.5 0.5 0.5) (0.5 0.5 0.5)
+                (-0.5 0.5 0.5) (-0.5 0.5 -0.5))))))
+      (make-array (length source)
+                  :element-type 'single-float
+                  :initial-contents source))))
 
-(let ((vertices
-       (make-array (length *cube-source*)
-                   :element-type 'single-float
-                   :initial-contents *cube-source*)))
-  (fude-gl:defvertices lighting vertices)
-  (fude-gl:defvertices light-cube vertices))
+(fude-gl:defvertices lighting *cube-vertices*)
+
+(fude-gl:defvertices light-cube *cube-vertices*)
 
 (defun lighting ()
   (uiop:nest
@@ -1288,10 +1289,7 @@
                 light-color)))
         (setf frag-color (vec4 (* ambient object-color) 1.0))))))
 
-(fude-gl:defvertices ambient-lighting
-    (make-array (length *cube-source*)
-                :element-type 'single-float
-                :initial-contents *cube-source*))
+(fude-gl:defvertices ambient-lighting *cube-vertices*)
 
 (defun ambient-lighting ()
   (uiop:nest
