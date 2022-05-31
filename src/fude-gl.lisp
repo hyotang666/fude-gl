@@ -757,6 +757,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   whole)
 
 (defun uniform (shader name)
+  "Return the uniform location of NAME in the SHADER."
   (let ((location
          (gl:get-uniform-location (program-id (find-shader shader)) name)))
     (declare ((signed-byte 32) location))
