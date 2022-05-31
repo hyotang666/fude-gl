@@ -1414,15 +1414,17 @@
               (object-color :vec3) (light-color :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (let ((ambient
-             :vec3
-             (* 0.1 ; ambient-strength
-                light-color))
-            (normal :vec3 (normalize norm))
-            (light-dir :vec3 (normalize (- light-pos frag-pos)))
-            (diff :float (max 0.0 (dot normal light-dir)))
-            (diffuse :vec3 (* diff light-color)))
-        (setf frag-color (vec4 (* (+ ambient diffuse) object-color) 1.0))))))
+      (setf frag-color
+              (vec4
+               (* object-color
+                  (+
+                    (* 0.1 ; ambient-strength
+                       light-color)
+                    (* light-color
+                       (max 0.0
+                            (dot (normalize norm)
+                             (normalize (- light-pos frag-pos)))))))
+               1.0)))))
 
 (fude-gl:defvertices defuse-lighting *defuse-source*)
 
