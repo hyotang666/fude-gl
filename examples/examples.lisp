@@ -1355,6 +1355,140 @@
       (fude-gl:draw 'ambient-lighting)
       (fude-gl:draw 'light-cube))))
 
+;;;; DIFUSE-LIGHTING.
+
+(defvar *defuse-source*
+  (let ((source
+         (alexandria:flatten ;; vec3 position, vec3 normals.
+                             '(((-0.5 -0.5 -0.5 0.0 0.0 -1.0)
+                                (0.5 -0.5 -0.5 0.0 0.0 -1.0)
+                                (0.5 0.5 -0.5 0.0 0.0 -1.0)
+                                (0.5 0.5 -0.5 0.0 0.0 -1.0)
+                                (-0.5 0.5 -0.5 0.0 0.0 -1.0)
+                                (-0.5 -0.5 -0.5 0.0 0.0 -1.0))
+                               ((-0.5 -0.5 0.5 0.0 0.0 1.0)
+                                (0.5 -0.5 0.5 0.0 0.0 1.0)
+                                (0.5 0.5 0.5 0.0 0.0 1.0)
+                                (0.5 0.5 0.5 0.0 0.0 1.0)
+                                (-0.5 0.5 0.5 0.0 0.0 1.0)
+                                (-0.5 -0.5 0.5 0.0 0.0 1.0))
+                               ((-0.5 0.5 0.5 -1.0 0.0 0.0)
+                                (-0.5 0.5 -0.5 -1.0 0.0 0.0)
+                                (-0.5 -0.5 -0.5 -1.0 0.0 0.0)
+                                (-0.5 -0.5 -0.5 -1.0 0.0 0.0)
+                                (-0.5 -0.5 0.5 -1.0 0.0 0.0)
+                                (-0.5 0.5 0.5 -1.0 0.0 0.0))
+                               ((0.5 0.5 0.5 1.0 0.0 0.0)
+                                (0.5 0.5 -0.5 1.0 0.0 0.0)
+                                (0.5 -0.5 -0.5 1.0 0.0 0.0)
+                                (0.5 -0.5 -0.5 1.0 0.0 0.0)
+                                (0.5 -0.5 0.5 1.0 0.0 0.0)
+                                (0.5 0.5 0.5 1.0 0.0 0.0))
+                               ((-0.5 -0.5 -0.5 0.0 -1.0 0.0)
+                                (0.5 -0.5 -0.5 0.0 -1.0 0.0)
+                                (0.5 -0.5 0.5 0.0 -1.0 0.0)
+                                (0.5 -0.5 0.5 0.0 -1.0 0.0)
+                                (-0.5 -0.5 0.5 0.0 -1.0 0.0)
+                                (-0.5 -0.5 -0.5 0.0 -1.0 0.0))
+                               ((-0.5 0.5 -0.5 0.0 1.0 0.0)
+                                (0.5 0.5 -0.5 0.0 1.0 0.0)
+                                (0.5 0.5 0.5 0.0 1.0 0.0)
+                                (0.5 0.5 0.5 0.0 1.0 0.0)
+                                (-0.5 0.5 0.5 0.0 1.0 0.0)
+                                (-0.5 0.5 -0.5 0.0 1.0 0.0))))))
+    (make-array (length source)
+                :element-type 'single-float
+                :initial-contents source)))
+
+(fude-gl:define-vertex-attribute normal (a b c))
+
+(fude-gl:defshader defuse-lighting 330 (fude-gl:xyz normal)
+  (:vertex ((norm :vec3) (frag-pos :vec3) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+            norm normal
+            gl-position (* projection view (vec4 frag-pos 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (light-pos :vec3)
+              (object-color :vec3) (light-color :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((ambient
+             :vec3
+             (* 0.1 ; ambient-strength
+                light-color))
+            (normal :vec3 (normalize norm))
+            (light-dir :vec3 (normalize (- light-pos frag-pos)))
+            (diff :float (max 0.0 (dot normal light-dir)))
+            (diffuse :vec3 (* diff light-color)))
+        (setf frag-color (vec4 (* (+ ambient diffuse) object-color) 1.0))))))
+
+(fude-gl:defvertices defuse-lighting *defuse-source*)
+
+(defun defuse-lighting ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Lighting."
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
+           (camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+           (model (3d-matrices:meye 4))
+           (projection
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (object-color (3d-vectors:vec3 1.0 0.5 0.31))
+           (time (fude-gl:make-delta-time))
+           (light-color (3d-vectors:vec3 1.0 1.0 1.0)))
+      (gl:enable :depth-test))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf (values projection (fude-gl:camera-field-of-view camera))
+                (zoom-perspective win y
+                                  (fude-gl:camera-field-of-view camera))))
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view
+           (fude-gl:view
+             (multiple-value-call #'fude-gl:lookat
+               camera
+               (sdl2:get-global-mouse-state))))))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection)
+                              (oc object-color) (lc light-color) (lp light-pos))
+          'defuse-lighting
+        (setf m (fude-gl:reload model fude-gl:+meye4+)
+              v (fude-gl:view camera)
+              p projection
+              oc object-color
+              lc light-color
+              lp light-pos))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection))
+          'light-cube
+        (setf m (3d-matrices:nmscale
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload model fude-gl:+meye4+) light-pos)
+                  #.(3d-vectors:vec3 0.2 0.2 0.2))
+              v view
+              p projection))
+      (fude-gl:draw 'defuse-lighting)
+      (fude-gl:draw 'light-cube))))
+
 ;;;; FONT
 ;;
 ;; In this example, we explain how to render text.
@@ -2060,8 +2194,6 @@
         (fude-gl:draw 'shadow-cube)))))
 
 ;;;; SHADOW
-
-(fude-gl:define-vertex-attribute normal (a b c))
 
 (fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
   ;; To specify user defined complex type (ARGSET in the example below),
