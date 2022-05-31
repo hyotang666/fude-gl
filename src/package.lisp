@@ -64,13 +64,10 @@
            #:camera-position
            #:camera-front
            #:camera-up
+           #:camera-field-of-view
            ;; helpers
            #:view
            #:move
-           ;;;; FIRST-PERSON Eular angles supported cameras.
-           ;; constructor
-           #:make-first-person
-           ;; helpers
            #:lookat
            ;;;; UTILITIES
            #:with-clear

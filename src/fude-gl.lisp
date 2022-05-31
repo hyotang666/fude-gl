@@ -1719,7 +1719,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defstruct (camera (:constructor make-camera
                     (&key (position (3d-vectors:vec3 0 0 3))
                      (target (3d-vectors:vec3 0 0 0))
-                     (front (3d-vectors:vec3 0 0 -1)) &aux
+                     (front (3d-vectors:vec3 0 0 -1)) (sensitivity 0.1)
+                     (last-position (3d-vectors:vec3 0 0 0)) (field-of-view 45)
+                     &aux
                      (direction
                       (3d-vectors:nvunit (3d-vectors:v- position target)))
                      (right
@@ -1739,7 +1741,11 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (right (alexandria:required-argument :right)
          :type 3d-vectors:vec3
          :read-only t)
-  (up (alexandria:required-argument :up) :type 3d-vectors:vec3 :read-only t))
+  (up (alexandria:required-argument :up) :type 3d-vectors:vec3 :read-only t)
+  (sensitivity 0.1 :type single-float)
+  (sight (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
+  (last-position (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
+  (field-of-view 45 :type (unsigned-byte 16)))
 
 (defun view (camera &key target)
   (3d-matrices:mlookat (camera-position camera)
@@ -1753,63 +1759,37 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (3d-vectors::%vsetf (camera-position camera) x y z)
   camera)
 
-;;;; FIRST-PERSON
+(defun pitch (camera) (3d-vectors:vx (camera-sight camera)))
 
-(defstruct (first-person (:include camera)
-                         (:constructor make-first-person
-                          (&key (position (3d-vectors:vec3 0 0 3))
-                           (target (3d-vectors:vec3 0 0 0))
-                           (front (3d-vectors:vec3 0 0 -1)) (sensitivity 0.1)
-                           (last-position (3d-vectors:vec3 0 0 0)) &aux
-                           (direction
-                            (3d-vectors:nvunit
-                              (3d-vectors:v- position target)))
-                           (right
-                            (3d-vectors:nvunit
-                              (3d-vectors:vc (3d-vectors:vec3 0 1 0)
-                                             direction)))
-                           (up (3d-vectors:vc direction right)))))
-  (sensitivity 0.1 :type single-float)
-  (sight (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
-  (last-position (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3))
+(defun yaw (camera) (3d-vectors:vy (camera-sight camera)))
 
-(defun pitch (first-person) (3d-vectors:vx (first-person-sight first-person)))
-
-(defun yaw (first-person) (3d-vectors:vy (first-person-sight first-person)))
-
-(defun roll (first-person) (3d-vectors:vz (first-person-sight first-person)))
+(defun roll (camera) (3d-vectors:vz (camera-sight camera)))
 
 (declaim
  (ftype (function
-         (first-person (unsigned-byte 32) (unsigned-byte 32) (unsigned-byte 8))
-         (values first-person &optional))
+         (camera (unsigned-byte 32) (unsigned-byte 32) (unsigned-byte 8))
+         (values camera &optional))
         lookat))
 
-(defun lookat (first-person x y mask)
+(defun lookat (camera x y mask)
   (declare (ignore mask))
-  (let* ((sensitivity (first-person-sensitivity first-person))
+  (let* ((sensitivity (camera-sensitivity camera))
          (offset-x
           (* sensitivity
-             (- x
-                (shiftf
-                 (3d-vectors:vx (first-person-last-position first-person))
-                 x))))
+             (- x (shiftf (3d-vectors:vx (camera-last-position camera)) x))))
          ;; reversed. Y ranges bottom to top.
          (offset-y
           (* sensitivity
-             (-
-               (shiftf
-                (3d-vectors:vy (first-person-last-position first-person)) y)
-               y)))
-         (pitch (max -89.0 (min 89.0 (+ (pitch first-person) offset-y))))
-         (yaw (+ (yaw first-person) offset-x)))
-    (3d-vectors:vsetf (first-person-sight first-person) pitch yaw)
-    (3d-vectors:vsetf (first-person-front first-person)
+             (- (shiftf (3d-vectors:vy (camera-last-position camera)) y) y)))
+         (pitch (max -89.0 (min 89.0 (+ (pitch camera) offset-y))))
+         (yaw (+ (yaw camera) offset-x)))
+    (3d-vectors:vsetf (camera-sight camera) pitch yaw)
+    (3d-vectors:vsetf (camera-front camera)
                       (* (cos (radians yaw)) (cos (radians pitch)))
                       (sin (radians pitch))
                       (* (sin (radians yaw)) (cos (radians pitch))))
-    (3d-vectors:nvunit (first-person-front first-person)))
-  first-person)
+    (3d-vectors:nvunit (camera-front camera)))
+  camera)
 
 ;; MATRIX
 
