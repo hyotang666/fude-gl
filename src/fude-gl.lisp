@@ -448,6 +448,13 @@
   (and uniform (check-uniform-args to uniform))
   whole)
 
+(defmethod send ((o glsl-structure-object) (to symbol) &key uniform)
+  (dolist (slot (c2mop:class-slots (class-of o)))
+    (send (slot-value o (c2mop:slot-definition-name slot)) to
+          :uniform (format nil "~A.~A" uniform
+                           (symbol-camel-case
+                             (c2mop:slot-definition-name slot))))))
+
 ;;;; DEFSHADER
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
@@ -456,7 +463,7 @@
 
 (deftype var () 'symbol)
 
-(deftype type-spec () 'keyword)
+(deftype type-spec () '(or keyword (satisfies glsl-structure-name-p)))
 
 (deftype complex-type-spec () 'list)
 
@@ -478,7 +485,8 @@
           nil
           ;; GLSL type string.
           (etypecase type
-            (symbol (symbol-camel-case type))
+            (keyword (symbol-camel-case type))
+            (symbol (change-case:pascal-case (symbol-name type)))
             (list
              (format nil "~:@(~A~) ~?" name
                      #.(concatenate 'string "~:<{~;~3I~:@_" ; pprint-logical-block.
@@ -532,12 +540,18 @@
                                 (list-length slots))
           :and :collect (symbol-camel-case (class-name c))))
 
+(defun struct-defs (specs)
+  (loop :for (name type) :in specs
+        :when (glsl-structure-name-p type)
+          :collect name))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
          (formatter
           #.(concatenate 'string "#version ~A core~%" ; version
                          "~{~@[~A~]in ~A ~A;~%~}~&" ; in
                          "~{out ~A ~A;~%~}~&" ; out
+                         "~@[~{~/fude-gl:glsl-struct-definition/~}~]" ; struct defs.
                          "~@[~{uniform ~A ~A;~%~}~]~&" ; uniforms
                          "~@[~{varying ~A ~A;~%~}~]~&" ; varying.
                          "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
@@ -560,7 +574,8 @@
                                                 :variable (var-info :io out)))
                          (local-vars
                           (append (var-info :uniform uniform)
-                                  (var-info :varying varying%))))
+                                  (var-info :varying varying%)))
+                         (struct-defs (struct-defs uniform)))
                      (setq out (mapcan #'parse-shader-lambda-list-spec out)
                            uniform
                              (mapcan #'parse-shader-lambda-list-spec uniform)
@@ -573,7 +588,9 @@
                                            :fude-gl))
                                   (*environment*
                                    (argument-environment *environment*
-                                                         :variable local-vars)))
+                                                         :variable local-vars
+                                                         :function (struct-readers
+                                                                     struct-defs))))
                               `(defmethod ,method ((type (eql ',name)))
                                  ,(if (typep main
                                              '(cons
@@ -582,7 +599,7 @@
                                                 null))
                                       `(,method ',(cadar main))
                                       (format nil format version in
-                                              (remove nil out)
+                                              (remove nil out) struct-defs
                                               (delete nil (the list uniform))
                                               (remove nil
                                                       (append varying

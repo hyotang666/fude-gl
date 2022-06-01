@@ -1,5 +1,75 @@
 (in-package :fude-gl)
 
+;;;; GLSL-STRUCTURE
+
+(defclass glsl-structure-class (standard-class) ()
+  (:documentation "Meta class for glsl structure."))
+
+(defmethod c2mop:validate-superclass
+           ((s glsl-structure-class) (c standard-class))
+  t)
+
+(defclass glsl-slot-mixin ()
+  ((glsl-type :type keyword :initarg :glsl-type :reader glsl-type))
+  (:documentation "Meta informations for the slot of the glsl structures."))
+
+(defclass glsl-direct-slot-definition (c2mop:standard-direct-slot-definition glsl-slot-mixin)
+  ())
+
+(defmethod c2mop:direct-slot-definition-class
+           ((s glsl-structure-class) &rest initargs)
+  (declare (ignore initargs))
+  (find-class 'glsl-direct-slot-definition))
+
+(defclass glsl-effective-slot (c2mop:standard-effective-slot-definition glsl-slot-mixin)
+  ())
+
+(defmethod c2mop:effective-slot-definition-class
+           ((s glsl-structure-class) &rest initargs)
+  (declare (ignore initargs))
+  (find-class 'glsl-effective-slot))
+
+(defmethod c2mop:compute-effective-slot-definition
+           ((o glsl-structure-class) slot-name direct-slot-definitions)
+  (let ((effective-slot (call-next-method)))
+    (setf (slot-value effective-slot 'glsl-type)
+            (glsl-type
+              (or (find (the symbol slot-name)
+                        (the list direct-slot-definitions)
+                        :key #'c2mop:slot-definition-name)
+                  (error "Missing slot named ~S in ~S." slot-name
+                         direct-slot-definitions))))
+    effective-slot))
+
+(defclass glsl-structure-object () ())
+
+(defmacro define-glsl-structure (name () (&rest slot-spec*) &body option*)
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (defclass ,name (glsl-structure-object) ,slot-spec*
+       (:metaclass glsl-structure-class)
+       ,@option*)))
+
+(defun pprint-define-glsl-structure (output form &rest noise)
+  (declare (ignore noise))
+  (funcall
+    (formatter
+     #.(concatenate 'string "~:<" ; pprint-logical-block.
+                    "~W~^ ~1I~@_" ; operator.
+                    "~W~^ ~@_" ; name.
+                    "~:<~@{~W~^ ~:_~}~:>~^ ~_" ; super-clausses.
+                    "~:<~@{~W~^ ~_~}~:>~^ ~_" ; slots
+                    "~@{~W~^ ~_~}" ; options
+                    "~:>"))
+    output form))
+
+(set-pprint-dispatch '(cons (member define-glsl-structure))
+                     'pprint-define-glsl-structure)
+
+(defun glsl-structure-name-p (thing)
+  (and (symbolp thing) (typep (find-class thing nil) 'glsl-structure-class)))
+
+;;;; ENVIRONMENT
+
 (defstruct environment
   (variable nil :type list :read-only t)
   (function nil :type list)
@@ -159,6 +229,20 @@
                        acc)))))
     (rec *environment* nil)))
 
+(defun struct-readers (struct-names)
+  (uiop:while-collecting (acc)
+    (dolist (name struct-names)
+      (dolist
+          (slot
+           (c2mop:class-direct-slots
+             (c2mop:ensure-finalized (find-class name))))
+        (dolist (reader (c2mop:slot-definition-readers slot))
+          (acc
+           (list :lisp-name (symbol-name reader)
+                 :name (symbol-camel-case (c2mop:slot-definition-name slot))
+                 :return (glsl-type slot)
+                 :attribute :reader)))))))
+
 (defun argument-environment (env &key variable function)
   (make-environment :next env :variable variable :function function))
 
@@ -252,17 +336,29 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           (append (swizzling '(x y z w)) (swizzling '(r g b a))
                   (swizzling '(s t u v))))))))
 
+(defun glsl-slot-reader (stream exp info)
+  (setf stream (or stream *standard-output*))
+  (pprint-logical-block (stream nil)
+    (write (cadr exp) :stream stream)
+    (write-char #\. stream)
+    (write-string (getf info :name) stream)))
+
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
   (if (gethash (symbol-name (car exp)) +swizzling+)
       (glsl-swizzling stream exp)
-      (progn
-       (unless (function-information (car exp) *environment*)
-         (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
-           (cerror "Anyway, print it." 'unknown-glsl-function
-                   :name (car exp))))
-       (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>") stream
-                (car exp) (cdr exp)))))
+      (let ((info (function-information (car exp) *environment*)))
+        (unless info
+          (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
+            (cerror "Anyway, print it." 'unknown-glsl-function
+                    :name (car exp))))
+        (let ((info
+               (find-if (lambda (info) (eq :reader (getf info :attribute)))
+                        info)))
+          (if info
+              (glsl-slot-reader stream exp info)
+              (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
+                       stream (car exp) (cdr exp)))))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
@@ -434,6 +530,22 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
         (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))
     (when (every #'listp (cdddr exp))
       (check-ref (third exp)))))
+
+(defun glsl-struct-definition (stream structure-name &rest noise)
+  (declare (ignore noise))
+  (setf stream (or stream *standard-output*))
+  (pprint-logical-block (stream nil)
+    (format stream "struct ~A~%{~2I~:@_"
+            (change-case:pascal-case (symbol-name structure-name)))
+    (loop :for (slot . rest)
+               :on (c2mop:class-slots
+                     (c2mop:ensure-finalized (find-class structure-name)))
+          :do (format stream "~/fude-gl:glsl-symbol/ ~/fude-gl:glsl-symbol/;"
+                      (glsl-type slot) (c2mop:slot-definition-name slot))
+          :if rest
+            :do (pprint-newline :mandatory stream)
+          :else
+            :do (format stream "~I~:@_};~%"))))
 
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
