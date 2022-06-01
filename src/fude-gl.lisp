@@ -222,7 +222,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; NOTE: CHECK-BNF in DEFSHADER needs this eval-when.
   ;; Additionally define-vertex-attribute below needs this too.
-  (defparameter *vertex-attributes* (make-hash-table))
+  (defvar *vertex-attributes* (make-hash-table))
   (defun vertex-attribute-p (thing)
     (and (symbolp thing) (values (gethash thing *vertex-attributes*)))))
 
