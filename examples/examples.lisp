@@ -1620,17 +1620,17 @@
    (ambient :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :ambient
-            :initform (3d-vectors:vec3 0 0 0)
+            :initform (3d-vectors:vec3 1 1 1)
             :accessor ambient)
    (diffuse :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :diffuse
-            :initform (3d-vectors:vec3 0 0 0)
+            :initform (3d-vectors:vec3 1 1 1)
             :accessor diffuse)
    (specular :glsl-type :vec3
              :type 3d-vectors:vec3
              :initarg :specular
-             :initform (3d-vectors:vec3 0 0 0)
+             :initform (3d-vectors:vec3 1 1 1)
              :accessor specular)))
 
 (fude-gl:defshader materials 330 (fude-gl:xyz normal)
@@ -1691,7 +1691,8 @@
                            :ambient (3d-vectors:vec3 1.0 0.5 0.31)
                            :diffuse (3d-vectors:vec3 1.0 0.5 0.31)
                            :specular (3d-vectors:vec3 0.5 0.5 0.5)
-                           :shininess 32.0)))
+                           :shininess 32.0))
+           (color-update t))
       (gl:enable :depth-test))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
@@ -1701,6 +1702,8 @@
                 (zoom-perspective win y
                                   (fude-gl:camera-field-of-view camera))))
       (:keydown (:keysym keysym)
+        (when (eq :scancode-space (sdl2:scancode keysym))
+          (setq color-update (not color-update)))
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
@@ -1710,12 +1713,13 @@
                camera
                (sdl2:get-global-mouse-state)))))
       ;; Update light colors.
-      (locally
-       #+sbcl ; Out of our responsibility.
-       (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-       (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                         (sin (* 0.7 (get-internal-real-time)))
-                         (sin (* 1.3 (get-internal-real-time)))))
+      (when color-update
+        (locally
+         #+sbcl ; Out of our responsibility.
+         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
+                           (sin (* 0.7 (get-internal-real-time)))
+                           (sin (* 1.3 (get-internal-real-time))))))
       (setf (diffuse light) (3d-vectors:v* light-color 0.5)
             (ambient light) (3d-vectors:v* (diffuse light) 0.2)))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
