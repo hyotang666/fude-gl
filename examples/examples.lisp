@@ -1587,6 +1587,160 @@
       (fude-gl:draw 'specular-lighting)
       (fude-gl:draw 'light-cube))))
 
+;;;; MATERIALS.
+
+(fude-gl::define-glsl-structure material ()
+  ((ambient :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :ambient
+            :initform (3d-vectors:vec3 0 0 0)
+            :accessor ambient)
+   (diffuse :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :diffuse
+            :initform (3d-vectors:vec3 0 0 0)
+            :accessor diffuse)
+   (specular :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :specular
+             :initform (3d-vectors:vec3 0 0 0)
+             :accessor specular)
+   (shininess :glsl-type :float
+              :type 3d-vectors:vec3
+              :initarg :shininess
+              :initform 0.0
+              :accessor shininess)))
+
+(fude-gl::define-glsl-structure light ()
+  ((position :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :position
+             :initform (3d-vectors:vec3 0 0 0)
+             :accessor light-position)
+   (ambient :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :ambient
+            :initform (3d-vectors:vec3 0 0 0)
+            :accessor ambient)
+   (diffuse :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :diffuse
+            :initform (3d-vectors:vec3 0 0 0)
+            :accessor diffuse)
+   (specular :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :specular
+             :initform (3d-vectors:vec3 0 0 0)
+             :accessor specular)))
+
+(fude-gl:defshader materials 330 (fude-gl:xyz normal)
+  (:vertex ((norm :vec3) (frag-pos :vec3) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+            norm (* normal (mat3 (transpose (inverse model))))
+            gl-position (* projection view (vec4 frag-pos 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (material material) (light light)
+              (view-pos :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((ambient :vec3 (* (ambient light) (ambient material)))
+            (normal :vec3 (normalize norm))
+            (light-dir :vec3 (normalize (- (light-position light) frag-pos)))
+            (diff :float (max 0.0 (dot normal light-dir)))
+            (diffuse :vec3 (* (diffuse light) (* diff (diffuse material))))
+            (view-dir :vec3 (normalize (- view-pos frag-pos)))
+            (reflect-dir :vec3 (reflect (- light-dir) normal))
+            (spec
+             :float
+             (pow (max 0.0 (dot view-dir reflect-dir)) (shininess material)))
+            (specular :vec3 (* (specular light) spec (specular material))))
+        (setf frag-color (vec4 (+ ambient diffuse specular) 1.0))))))
+
+(fude-gl:defvertices materials *defuse-source*)
+
+(defun material ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Lighting."
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader ())
+    (let* ((light
+            (make-instance 'light
+                           :position (3d-vectors:vec3 1.2 1.0 2.0)
+                           :specular (3d-vectors:vec3 1 1 1)))
+           (camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+           (model (3d-matrices:meye 4))
+           (projection
+            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (time (fude-gl:make-delta-time))
+           (light-color (3d-vectors:vec3 1.0 1.0 1.0))
+           (material
+            (make-instance 'material
+                           :ambient (3d-vectors:vec3 1.0 0.5 0.31)
+                           :diffuse (3d-vectors:vec3 1.0 0.5 0.31)
+                           :specular (3d-vectors:vec3 0.5 0.5 0.5)
+                           :shininess 32.0)))
+      (gl:enable :depth-test))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf (values projection (fude-gl:camera-field-of-view camera))
+                (zoom-perspective win y
+                                  (fude-gl:camera-field-of-view camera))))
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view
+           (fude-gl:view
+             (multiple-value-call #'fude-gl:lookat
+               camera
+               (sdl2:get-global-mouse-state)))))
+      ;; Update light colors.
+      (locally
+       #+sbcl ; Out of our responsibility.
+       (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+       (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
+                         (sin (* 0.7 (get-internal-real-time)))
+                         (sin (* 1.3 (get-internal-real-time)))))
+      (setf (diffuse light) (3d-vectors:v* light-color 0.5)
+            (ambient light) (3d-vectors:v* (diffuse light) 0.2)))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
+                              (l light) view-pos)
+          'materials
+        (setf m (fude-gl:reload model fude-gl:+meye4+)
+              v (fude-gl:view camera)
+              p projection
+              view-pos (fude-gl:camera-position camera)
+              mat material
+              l light)
+        (fude-gl:draw 'materials))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection))
+          'light-cube
+        (setf m (3d-matrices:nmscale
+                  (3d-matrices:nmtranslate
+                    (fude-gl:reload model fude-gl:+meye4+)
+                    (light-position light))
+                  #.(3d-vectors:vec3 0.2 0.2 0.2))
+              v view
+              p projection)
+        (fude-gl:draw 'light-cube)))))
+
 ;;;; FONT
 ;;
 ;; In this example, we explain how to render text.
