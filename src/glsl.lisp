@@ -276,7 +276,8 @@
   ;; a disgusting conditional branching code.
   "Print a symbol EXP to STREAM as GLSL code.
 If EXP is unknown for compiler and ERRORP is true, condition UNKNOWN-VARIABLE is signaled
-otherwise do nothing. The default is NIL. You can specify this by colon in format control.
+otherwise the condition is not signaled. The default is NIL.
+You can specify this by colon in format control.
 If EXP is known for compiler and NOT-REF-P is ture, compiler memos it is refered
 otherwise compiler do nothing. The default it NIL. You can specify this by at-sign in format control."
   (let ((info (variable-information exp *environment*)))
