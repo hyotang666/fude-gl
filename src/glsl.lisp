@@ -68,6 +68,45 @@
 (defun glsl-structure-name-p (thing)
   (and (symbolp thing) (typep (find-class thing nil) 'glsl-structure-class)))
 
+(defun glsl-structure-initargs (glsl-structure-name)
+  (loop :for slot
+             :in (c2mop:class-slots
+                   (c2mop:ensure-finalized (find-class glsl-structure-name)))
+        :append (c2mop:slot-definition-initargs slot)))
+
+(define-condition fude-gl-error (error) ())
+
+(define-condition shader-error (fude-gl-error program-error) ())
+
+(define-condition unknown-initarg (fude-gl-error cell-error)
+  ((glsl-structure :initarg :glsl-structure :reader glsl-structure))
+  (:report
+   (lambda (this out)
+     (format out
+             "Unknown initarg ~S for glsl structure ~S.~:@_~? ~:@_To see all supported initargs, evaluate ~S."
+             (cell-error-name this) (glsl-structure this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S, or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (glsl-structure-initargs
+                                        (glsl-structure this)))
+             `(glsl-structure-initargs ',(glsl-structure this))))))
+
+(defun check-initarg-existence (glsl-structure-name arg-forms env)
+  (let ((initargs (class-initargs (find-class glsl-structure-name))))
+    (loop :for form :in arg-forms :by #'cddr
+          :when (and (constantp form env) (not (find (eval form) initargs)))
+            :do (error 'unknown-initarg
+                       :name (eval form)
+                       :glsl-structure glsl-structure-name))))
+
+(define-compiler-macro make-object
+                       (&whole whole name &rest arg-forms &environment env)
+  (when (constantp name env)
+    (check-initarg-existence (eval name) arg-forms env))
+  whole)
+
+(defun make-object (name &rest args) (apply #'make-instance name args))
+
 ;;;; ENVIRONMENT
 
 (defstruct environment
@@ -249,10 +288,6 @@
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
 (defvar *var-check-p* nil)
-
-(define-condition fude-gl-error (error) ())
-
-(define-condition shader-error (fude-gl-error program-error) ())
 
 (define-condition unknown-variable (shader-error cell-error)
   ((known-vars :initarg :known-vars :reader known-vars))
