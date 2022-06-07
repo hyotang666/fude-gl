@@ -360,8 +360,23 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                  "Or slot reader may missing. To see all supported slot readers, evaluate ~S."))
              (list `(class-readers ',(cadr (form this))))))))
 
+(define-condition glsl-argument-mismatch (fude-gl-error)
+  ((form :initarg :form :reader form))
+  (:report
+   (lambda (this out)
+     (format out "Arguments for ~S does not match its signature. ~S~@[~?~]"
+             (car (form this)) (form this)
+             (let ((infos
+                    (function-information (car (form this)) *environment*)))
+               (unless (find-if (lambda (info) (getf info :attribute)) infos)
+                 " ~:@_For detail, evaluate ~S."))
+             (list
+               `(function-information ',(car (form this)) *environment*))))))
+
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
+  (unless (= 1 (length (cdr exp)))
+    (error 'glsl-argument-mismatch :form exp))
   (let ((*var-check-p* t))
     (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
 
@@ -399,13 +414,22 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
             (cerror "Anyway, print it." 'unknown-glsl-function
                     :name (car exp)
                     :form exp)))
-        (let ((info
+        (let ((reader-info
                (find-if (lambda (info) (eq :reader (getf info :attribute)))
                         info)))
-          (if info
-              (glsl-slot-reader stream exp info)
-              (funcall (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
-                       stream (car exp) (cdr exp)))))))
+          (if reader-info
+              (if (= 1 (length (cdr exp)))
+                  (glsl-slot-reader stream exp reader-info)
+                  (error 'glsl-argument-mismatch :form exp))
+              (if (or (null info) ; continued.
+                      (and info
+                           (find (length (cdr exp)) info
+                                 :key (lambda (info)
+                                        (length (getf info :args))))))
+                  (funcall
+                    (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
+                    stream (car exp) (cdr exp))
+                  (error 'glsl-argument-mismatch :form exp)))))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
