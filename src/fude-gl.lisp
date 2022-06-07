@@ -511,16 +511,28 @@
   ;; Shader NAME becomes VECTOR-CLASS.
   ;; MAKE-INSTANCE for VECTOR-CLASS makes a VECTOR instead of an object instance.
   ;; So we should use eql-specializer instead of class.
-  `(defmethod uniforms ((type (eql ',name)))
-     (list
-       ,@(loop :for (nil lambda-list) :in shader*
-               :for uniforms
-                    = (mapcan #'parse-shader-lambda-list-spec
-                              (nth-value 1
-                                         (split-shader-lambda-list
-                                           lambda-list)))
-               :nconc (loop :for (nil type name) :on uniforms :by #'cdddr
-                            :collect (make-uniform :name name :type type))))))
+  (flet ((glsl-struct-uniforms (name spec)
+           (let ((structure (cadr spec)))
+             (loop :for slot
+                        :in (c2mop:class-slots
+                              (c2mop:ensure-finalized (find-class structure)))
+                   :collect (make-uniform :name (format nil "~A.~A" name
+                                                        (symbol-camel-case
+                                                          (c2mop:slot-definition-name
+                                                            slot)))
+                                          :type (symbol-camel-case
+                                                  structure))))))
+    `(defmethod uniforms ((type (eql ',name)))
+       (list
+         ,@(loop :for (nil lambda-list) :in shader*
+                 :for uniform-specs
+                      := (nth-value 1 (split-shader-lambda-list lambda-list))
+                 :nconc (loop :for spec :in uniform-specs
+                              :for (nil type name)
+                                   = (parse-shader-lambda-list-spec spec)
+                              :collect (make-uniform :name name :type type)
+                              :if (glsl-structure-name-p (cadr spec))
+                                :nconc (glsl-struct-uniforms name spec)))))))
 
 (defun class-shader-inputs (superclasses)
   (loop :for c :in (mapcar #'find-class superclasses)
