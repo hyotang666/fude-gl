@@ -2,25 +2,17 @@
 
 (declaim (optimize speed))
 
-;;;; UNWIND-PROTECTS
+;;;; PROTECT
 
-(defvar *cleaner* (constantly nil))
+(defvar *cleaners* nil)
 
-(defmacro unwind-protects (form &rest cleaners)
-  `(unwind-protect ,form
-     ,@(mapcar
-         (lambda (cleaner)
-           `(handler-case ,cleaner
-              (error (c)
-                (setq *cleaner* (lambda () ,cleaner))
-                (restart-case (error
-                                "~A ~:@_FYI: Current cleanup form is assigned to *cleaner* as nullary closure."
-                                c)
-                  (continue () :report "Go to next cleanup form.")))))
-         cleaners)))
-
-(set-pprint-dispatch '(cons (member unwind-protects))
-                     (pprint-dispatch '(unwind-protect)))
+(defmacro protect (<cleanup>)
+  `(handler-case ,<cleanup>
+     (error (c)
+       (push (lambda () ,<cleanup>) *cleaners*)
+       (cerror "Go to next cleanup form."
+               "~A ~:@_FYI: Current cleanup form is pushed to ~S as nullary closure."
+               c '*cleaners*))))
 
 ;;;; VERBOSE OPENGL
 
@@ -713,7 +705,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
         (fs (gl:create-shader :fragment-shader)))
-    (unwind-protects
+    (unwind-protect
         (labels ((compile-s (program-id id source)
                    (gl:shader-source id source)
                    (gl:compile-shader id)
@@ -726,8 +718,8 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
           (compile-s program-id fs fragment-shader)
           (gl:link-program program-id)
           (may-warn (gl:get-program-info-log program-id)))
-      (gl:delete-shader fs)
-      (gl:delete-shader vs))))
+      (protect (gl:delete-shader fs))
+      (protect (gl:delete-shader vs)))))
 
 (define-condition fail-to-create-program (fude-gl-error cell-error)
   ()
@@ -1316,20 +1308,24 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   "Ensure cleanup fude-gl environment."
   (let ((toplevelp (gensym "TOPLEVELP")))
     `(let ((,toplevelp *toplevel-p*) (*toplevel-p* nil))
-       (unwind-protects (progn ,@body)
+       (unwind-protect (progn ,@body)
          (when ,toplevelp
-           (loop :for shader :being :each :hash-value :of *vertices*
-                 :when (slot-boundp shader 'vertex-array)
-                   :do (destruct shader))
-           (loop :for framebuffer :being :each :hash-value :of *framebuffers*
-                 :do (destruct framebuffer))
-           (loop :for texture :being :each :hash-value :of *textures*
-                 :when (texture-id texture)
-                   :do (destruct texture))
-           (loop :for name :being :each :hash-key :of *shaders* :using
-                      (:hash-value shader)
-                 :when (program-id shader)
-                   :do (destruct shader)))))))
+           (protect
+            (loop :for shader :being :each :hash-value :of *vertices*
+                  :when (slot-boundp shader 'vertex-array)
+                    :do (destruct shader)))
+           (protect
+            (loop :for framebuffer :being :each :hash-value :of *framebuffers*
+                  :do (destruct framebuffer)))
+           (protect
+            (loop :for texture :being :each :hash-value :of *textures*
+                  :when (texture-id texture)
+                    :do (destruct texture)))
+           (protect
+            (loop :for name :being :each :hash-key :of *shaders* :using
+                       (:hash-value shader)
+                  :when (program-id shader)
+                    :do (destruct shader))))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
