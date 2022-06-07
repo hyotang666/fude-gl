@@ -533,9 +533,9 @@
           :and :collect (symbol-camel-case (class-name c))))
 
 (defun struct-defs (specs)
-  (loop :for (name type) :in specs
+  (loop :for (nil type) :in specs
         :when (glsl-structure-name-p type)
-          :collect name))
+          :collect type))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
