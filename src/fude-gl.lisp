@@ -701,6 +701,55 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (set-pprint-dispatch '(cons (member defshader)) 'pprint-defshader)
 
+(defun parse-log (log)
+  "Return two values.
+  2. Boolean: Has index?
+  3. List of integers (start end next) if second value is true.
+     List of string if second value is nil."
+  (let* ((tokens (ppcre:split ": ?" log))
+         (position (position "error" tokens :test #'equal))
+         (pre-error (and position (subseq tokens 0 position))))
+    (declare (list tokens))
+    (ecase (length pre-error)
+      (0 (values nil nil))
+      (2
+       (destructuring-bind
+           (start? end?)
+           pre-error
+         (let ((positions
+                (delete "" (the list (uiop:split-string end? :separator "()"))
+                        :test #'equal)))
+           (declare (list tokens))
+           (if (and (every #'digit-char-p start?)
+                    (= 2 (length positions))
+                    (every #'digit-char-p (car positions))
+                    (every #'digit-char-p (cadr positions)))
+               (values t
+                       (list (parse-integer start?)
+                             (parse-integer (car positions))
+                             (parse-integer (cadr positions))))
+               (values nil (list start? end?)))))))))
+
+(define-condition glsl-compile-error (fude-gl-error cell-error)
+  ((origin :initarg :origin :reader origin)
+   (source :initarg :source :reader source))
+  (:report
+   (lambda (this out)
+     (format out "~@[Fail to compile ~S~:@_~]~A~:@_" (cell-error-name this)
+             (origin this))
+     (multiple-value-bind (has-index? args)
+         (parse-log (origin this))
+       (let ((source (source this)))
+         (if (not has-index?)
+             (format out "Source ~S" source)
+             (destructuring-bind
+                 (start end next)
+                 args
+               (declare (ignore start end))
+               (write-string source out :end next)
+               (cl-ansi-text:with-color (:red :stream out)
+                 (write-string source out :start next)))))))))
+
 (defun compile-shader (program-id vertex-shader fragment-shader)
   "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
@@ -709,15 +758,20 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
         (labels ((compile-s (program-id id source)
                    (gl:shader-source id source)
                    (gl:compile-shader id)
-                   (may-warn (gl:get-shader-info-log id))
+                   (may-warn (gl:get-shader-info-log id) source)
                    (gl:attach-shader program-id id))
-                 (may-warn (log)
+                 (may-warn (log source)
+                   (declare (string log)
+                            #+sbcl ; due to not simple-string.
+                            (sb-ext:muffle-conditions sb-ext:compiler-note))
                    (unless (equal "" log)
-                     (warn log))))
+                     (if (search "error:" log)
+                         (error 'glsl-compile-error :origin log :source source)
+                         (warn log)))))
           (compile-s program-id vs vertex-shader)
           (compile-s program-id fs fragment-shader)
           (gl:link-program program-id)
-          (may-warn (gl:get-program-info-log program-id)))
+          (may-warn (gl:get-program-info-log program-id) program-id))
       (protect (gl:delete-shader fs))
       (protect (gl:delete-shader vs)))))
 
@@ -734,7 +788,9 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   (let ((program (the (unsigned-byte 32) (gl:create-program))))
     (when (zerop program)
       (error 'fail-to-create-program :name shader))
-    (compile-shader program (vertex-shader shader) (fragment-shader shader))
+    (handler-bind ((glsl-compile-error
+                    (lambda (c) (reinitialize-instance c :name shader))))
+      (compile-shader program (vertex-shader shader) (fragment-shader shader)))
     program))
 
 (defun find-program (name &key (if-does-not-exist :error))

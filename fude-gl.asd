@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "4.19.0"
+  "4.20.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -20,6 +20,8 @@
    "3d-matrices"        ; Matrix operations.
    "check-bnf"          ; BNF like macro syntax checker.
    "fuzzy-match"        ; For better error message.
+   "cl-ppcre"           ; Perl Compatible Regular Expression. Implicitly depends on via (sdl2 cl-changa-case fuzzy-match).
+   "cl-ansi-text"       ; Text colorizing for better error message.
    "vecto"              ; TTF rasterization.
    "zpb-ttf"            ; TTF font loader.
    "opticl"             ; Image file loader.
