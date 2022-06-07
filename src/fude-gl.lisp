@@ -754,10 +754,22 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
   (gl:delete-program (program-id o))
   (setf (program-id o) nil))
 
+(define-condition glsl-program-error (fude-gl-error cell-error)
+  ((origin :initarg :origin :reader origin))
+  (:report
+   (lambda (this out)
+     (format out "~A~:@_~S: ~S" (origin this) 'in-program
+             (cell-error-name this)))))
+
 (defmacro in-program (name)
   (when (constantp name)
     (find-shader (eval name)))
-  `(gl:use-program (find-program ,name :if-does-not-exist :create)))
+  (let ((?name (gensym "NAME")))
+    `(let ((,?name ,name))
+       (handler-case
+           (gl:use-program (find-program ,?name :if-does-not-exist :create))
+         (cl-opengl-bindings:opengl-error (c)
+           (error 'glsl-program-error :origin c :name ,?name))))))
 
 ;;;; UNIFORM
 
