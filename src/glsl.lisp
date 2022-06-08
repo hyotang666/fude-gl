@@ -618,6 +618,48 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           :else
             :do (format stream "~I~:@_};~%"))))
 
+(defun slot-exist-p (structure slot-name)
+  (loop :for slot
+             :in (c2mop:class-slots
+                   (c2mop:ensure-finalized (find-class structure)))
+        :thereis (eq slot-name (c2mop:slot-definition-name slot))))
+
+(define-condition unknown-glsl-structure (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this out)
+     (format out "Unknown GLSL structure ~S." (cell-error-name this)))))
+
+(define-condition missing-slot (fude-gl-error cell-error)
+  ((structure :initarg :structure :reader glsl-structure))
+  (:report
+   (lambda (this out)
+     (format out
+             "Missing slot ~S in ~S. ~:@_~? ~:@_To see all supported slots for ~S, evaluate ~S."
+             (cell-error-name this) (glsl-structure this)
+             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S, or ~S~] ?"
+             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
+                                      (mapcar #'c2mop:slot-definition-name
+                                              (c2mop:class-slots
+                                                (c2mop:ensure-finalized
+                                                  (find-class
+                                                    (glsl-structure this))))))
+             (glsl-structure this)
+             `(c2mop:class-slots
+                (c2mop:ensure-finalized
+                  (find-class ',(glsl-structure this))))))))
+
+(defun glsl-slot-value (stream exp &rest noise)
+  (declare (ignore noise))
+  (unless (= 2 (length (cdr exp)))
+    (error 'glsl-argument-mismatch :form exp))
+  (unless (glsl-structure-name-p (cadr exp))
+    (error 'unknown-glsl-structure :name (cadr exp)))
+  (unless (apply #'slot-exist-p (cdr exp))
+    (error 'missing-slot :name (caddr exp) :structure (cadr exp)))
+  (format stream "~A.~A" (symbol-camel-case (cadr exp))
+          (symbol-camel-case (caddr exp))))
+
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
     (set-pprint-dispatch 'symbol 'glsl-symbol)
@@ -634,6 +676,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member declaim)) 'glsl-declaim)
     (set-pprint-dispatch '(cons (member defconstant)) 'glsl-defconstant)
     (set-pprint-dispatch '(cons (member defun)) 'glsl-defun)
+    (set-pprint-dispatch '(cons (member slot-value)) 'glsl-slot-value)
     *print-pprint-dispatch*))
 
 (defun print-glsl (exp &optional stream)
