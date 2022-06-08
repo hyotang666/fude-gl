@@ -503,11 +503,17 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                     (formatter
                      "~<~@{~W~^ ~:@/fude-gl:glsl-symbol/~^ = ~W;~:@_~}~:>~{~W~^ ~_~}")
                     stream
-                    (loop :for (name type init) :in (cadr exp)
-                          :do (check-type type glsl-type)
-                          :collect type
-                          :collect name
-                          :collect init)
+                    (loop :for bind :in (cadr exp)
+                          :do (unless (= 3 (length bind))
+                                (with-cl-io-syntax
+                                  (error
+                                    "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
+                                    bind)))
+                              (with-cl-io-syntax
+                                (check-type (cadr bind) glsl-type))
+                          :collect (cadr bind)
+                          :collect (car bind)
+                          :collect (caddr bind))
                     (cddr exp))
                   (when (every #'listp (cddr exp))
                     (check-ref (mapcar #'car (cadr exp)))))
