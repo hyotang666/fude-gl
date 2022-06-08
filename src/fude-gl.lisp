@@ -511,7 +511,7 @@
                                                           (c2mop:slot-definition-name
                                                             slot)))
                                           :type (symbol-camel-case
-                                                  structure))))))
+                                                  (glsl-type slot)))))))
     `(defmethod uniforms ((type (eql ',name)))
        (list
          ,@(loop :for (nil lambda-list) :in shader*
