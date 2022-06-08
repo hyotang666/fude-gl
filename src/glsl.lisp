@@ -78,17 +78,20 @@
 
 (define-condition shader-error (fude-gl-error program-error) ())
 
+(defun did-you-mean (out string selection)
+  (setq out (or out *standard-output*))
+  (apply #'format out "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S, or ~S~] ?"
+         (fuzzy-match:fuzzy-match string selection)))
+
 (define-condition unknown-initarg (fude-gl-error cell-error)
   ((glsl-structure :initarg :glsl-structure :reader glsl-structure))
   (:report
    (lambda (this out)
-     (format out
-             "Unknown initarg ~S for glsl structure ~S.~:@_~? ~:@_To see all supported initargs, evaluate ~S."
-             (cell-error-name this) (glsl-structure this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S, or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (glsl-structure-initargs
-                                        (glsl-structure this)))
+     (format out "Unknown initarg ~S for glsl structure ~S. ~:@_"
+             (cell-error-name this) (glsl-structure this))
+     (did-you-mean out (symbol-name (cell-error-name this))
+                   (glsl-structure-initargs (glsl-structure this)))
+     (format out " ~:@_To see all supported initargs, evaluate ~S."
              `(glsl-structure-initargs ',(glsl-structure this))))))
 
 (defun check-initarg-existence (glsl-structure-name arg-forms env)
@@ -294,12 +297,9 @@
   (:report
    (lambda (this output)
      (pprint-logical-block (output nil)
-       (apply #'format output
-              "Unknown variable. ~S ~:@_Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-              (cell-error-name this)
-              (fuzzy-match:fuzzy-match
-                (symbol-camel-case (cell-error-name this))
-                (known-vars this)))))))
+       (format output "Unknown variable. ~S ~:@_" (cell-error-name this))
+       (did-you-mean output (symbol-camel-case (cell-error-name this))
+                     (known-vars this))))))
 
 (defun glsl-symbol (stream exp &optional (errorp *var-check-p*) not-ref-p)
   ;; Ideally, we want to use REFERED-P rather than NOT-REF-P.
@@ -345,14 +345,13 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   ((form :initarg :form :reader form))
   (:report
    (lambda (this output)
-     (format output
-             "Unknown glsl function named ~S. ~:@_~? ~:@_To see all supported glsl functions, evaluate ~S.~@[ ~:@_~?~]"
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match
-               (symbol-camel-case (cell-error-name this))
-               (list-all-known-functions))
-             '(list-all-known-functions)
+     (format output "Unknown glsl function named ~S. ~:@_"
+             (cell-error-name this))
+     (did-you-mean output (symbol-camel-case (cell-error-name this))
+                   (list-all-known-functions))
+     (format output " ~:@_To see all supported glsl functions, evaluate ~S."
+             '(list-all-known-functions))
+     (format output "~@[ ~:@_~?~]"
              (let ((info
                     (when (typep (form this) '(cons symbol (cons symbol null)))
                       (variable-information (cadr (form this)) *environment*))))
@@ -495,11 +494,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
    (known-vars :initarg :known-vars :reader known-vars))
   (:report
    (lambda (this output)
-     (format output "Unknown slot named ~S for type ~S. ~:@_~?"
-             (cell-error-name this) (slot-type this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (known-vars this))))))
+     (format output "Unknown slot named ~S for type ~S. ~:@_"
+             (cell-error-name this) (slot-type this))
+     (did-you-mean output (symbol-name (cell-error-name this))
+                   (known-vars this)))))
 
 (defun glsl-with-slots (stream exp)
   (setf stream (or stream *standard-output*))
@@ -634,16 +632,14 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   ((structure :initarg :structure :reader glsl-structure))
   (:report
    (lambda (this out)
-     (format out
-             "Missing slot ~S in ~S. ~:@_~? ~:@_To see all supported slots for ~S, evaluate ~S."
-             (cell-error-name this) (glsl-structure this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S, or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (mapcar #'c2mop:slot-definition-name
-                                              (c2mop:class-slots
-                                                (c2mop:ensure-finalized
-                                                  (find-class
-                                                    (glsl-structure this))))))
+     (format out "Missing slot ~S in ~S. ~:@_" (cell-error-name this)
+             (glsl-structure this))
+     (did-you-mean out (symbol-name (cell-error-name this))
+                   (mapcar #'c2mop:slot-definition-name
+                           (c2mop:class-slots
+                             (c2mop:ensure-finalized
+                               (find-class (glsl-structure this))))))
+     (format out " ~:@_To see all supported slots for ~S, evaluate ~S."
              (glsl-structure this)
              `(c2mop:class-slots
                 (c2mop:ensure-finalized

@@ -145,12 +145,10 @@
   ()
   (:report
    (lambda (this output)
-     (format output
-             "Missing vertices named ~S. ~:@_~? ~:@_To see defined vertices, eval ~S"
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (princ-to-string (cell-error-name this))
-                                      (list-all-vertices))
+     (format output "Missing vertices named ~S. ~:@_" (cell-error-name this))
+     (did-you-mean output (princ-to-string (cell-error-name this))
+                   (list-all-vertices))
+     (format output " ~:@_To see defined vertices, eval ~S"
              '(list-all-vertices)))))
 
 (define-condition missing-definition (style-warning)
@@ -326,22 +324,17 @@
   ((interface :initarg :interface :reader interface))
   (:report
    (lambda (this output)
-     (format output
-             "Missing shader named ~S. ~:@_~? ~:@_To see all known shaders, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (princ-to-string (cell-error-name this))
-                                      (loop :for method
-                                                 :in (c2mop:generic-function-methods
-                                                       (interface this))
-                                            :for specializer
-                                                 := (car
-                                                      (c2mop:method-specializers
-                                                        method))
-                                            :when (typep specializer
-                                                         'c2mop:eql-specializer)
-                                              :collect (c2mop:eql-specializer-object
-                                                         specializer)))
+     (format output "Missing shader named ~S. ~:@_" (cell-error-name this))
+     (did-you-mean output (princ-to-string (cell-error-name this))
+                   (loop :for method
+                              :in (c2mop:generic-function-methods
+                                    (interface this))
+                         :for specializer
+                              := (car (c2mop:method-specializers method))
+                         :when (typep specializer 'c2mop:eql-specializer)
+                           :collect (c2mop:eql-specializer-object
+                                      specializer)))
+     (format output " ~:@_To see all known shaders, evaluate ~S."
              `(c2mop:generic-function-methods
                 #',(c2mop:generic-function-name (interface this)))))))
 
@@ -396,13 +389,10 @@
   ()
   (:report
    (lambda (this output)
-     (format output
-             "Missing uniform named ~S. ~:@_~? ~:@_To see all supported uniforms, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (cell-error-name this)
-                                      (mapcar #'uniform-name
-                                              (uniforms (shader this))))
+     (format output "Missing uniform named ~S. ~:@_" (cell-error-name this))
+     (did-you-mean output (cell-error-name this)
+                   (mapcar #'uniform-name (uniforms (shader this))))
+     (format output " ~:@_To see all supported uniforms, evaluate ~S."
              `(uniforms ',(shader this))))))
 
 (define-condition non-active-uniform (uniform-error)
@@ -1269,15 +1259,14 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   ((vertices :initarg :vertices :reader vertices))
   (:report
    (lambda (this output)
-     (format output
-             "Missing instanced vertices named ~S. ~:@_~? ~:@_To see all instanced vertices, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (mapcar #'car
-                                              (table
-                                                (find-vertices (vertices this)
-                                                               :if-does-not-exist nil))))
+     (format output "Missing instanced vertices named ~S. ~:@_"
+             (cell-error-name this))
+     (did-you-mean output (symbol-name (cell-error-name this))
+                   (mapcar #'car
+                           (table
+                             (find-vertices (vertices this)
+                                            :if-does-not-exist nil))))
+     (format output " ~:@_To see all instanced vertices, evaluate ~S."
              `(table
                 (find-vertices ',(vertices this) :if-does-not-exist nil))))))
 
@@ -1445,12 +1434,10 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   ()
   (:report
    (lambda (this output)
-     (format output
-             "Missing texture named ~S. ~:@_~? ~:@_To see all known textures, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (list-all-textures))
+     (format output "Missing texture named ~S. ~:@_" (cell-error-name this))
+     (did-you-mean output (symbol-name (cell-error-name this))
+                   (list-all-textures))
+     (format output " ~:@_To see all known textures, evaluate ~S."
              '(list-all-textures)))))
 
 (define-compiler-macro find-texture (&whole whole name &rest args)
@@ -1684,12 +1671,11 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   ()
   (:report
    (lambda (this output)
-     (format output
-             "Missing framebuffer named ~S. ~:@_~? ~:@_To see all known framebuffer, evaluate ~S."
-             (cell-error-name this)
-             "Did you mean ~#[~;~S~;~S or ~S~:;~S, ~S or ~S~] ?"
-             (fuzzy-match:fuzzy-match (symbol-name (cell-error-name this))
-                                      (list-all-framebuffers))
+     (format output "Missing framebuffer named ~S. ~:@_"
+             (cell-error-name this))
+     (did-you-mean output (symbol-name (cell-error-name this))
+                   (list-all-framebuffers))
+     (format output " ~:@_To see all known framebuffer, evaluate ~S."
              '(list-all-framebuffers)))))
 
 (defun find-framebuffer (name &key (if-does-not-exist :error))
