@@ -1828,7 +1828,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                 :initarg :sensitivity
                 :type single-float
                 :accessor sensitivity)
-   (sight :initform (3d-vectors:vec3 0 0 0)
+   (sight :initform (3d-vectors:vec3 0 -90 0)
           :initarg :sight
           :type 3d-vectors:vec3
           :accessor sight)
