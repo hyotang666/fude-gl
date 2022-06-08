@@ -470,13 +470,13 @@
             (keyword (symbol-camel-case type))
             (symbol (change-case:pascal-case (symbol-name type)))
             (list
-             (format nil "~:@(~A~) ~?" name
-                     #.(concatenate 'string "~:<{~;~3I~:@_" ; pprint-logical-block.
-                                    "~@{~A~^ ~@_~A;~^~:@_~}" "~%~;}~:> ")
-                     (list
-                       (loop :for (name type) :in type
-                             :collect (symbol-camel-case type)
-                             :collect (symbol-camel-case name))))))
+             (let ((*print-pretty* t))
+               (format nil
+                       "~<~:(~A~) {~2I~:@_~@{~A~^ ~@_~A;~^ ~:@_~} ~I~:@_} ~:>"
+                       (cons name
+                             (loop :for (name type) :in type
+                                   :collect (symbol-camel-case type)
+                                   :collect (symbol-camel-case name)))))))
           ;; Var name string.
           (if vector-size
               (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
