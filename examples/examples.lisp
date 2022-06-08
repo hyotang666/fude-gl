@@ -844,7 +844,8 @@
                            :title "Cubes"
                            :w 800
                            :h 600))
-    (sdl2:with-gl-context (context win))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test)) ; <--- When enable :depth-test...
     (fude-gl:with-shader ())
     (let ((cube-positions
            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
@@ -859,8 +860,7 @@
            (3d-matrices:mperspective 45
                                      (multiple-value-call #'/
                                        (sdl2:get-window-size win))
-                                     0.1 100)))
-      (gl:enable :depth-test)) ; <--- When enable :depth-test...
+                                     0.1 100))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -895,7 +895,8 @@
                            :title "Cameras"
                            :w 800
                            :h 600))
-    (sdl2:with-gl-context (context win))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let ((cube-positions
            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
@@ -912,8 +913,7 @@
            (3d-matrices:mperspective 45
                                      (multiple-value-call #'/
                                        (sdl2:get-window-size win))
-                                     0.1 100)))
-      (gl:enable :depth-test))
+                                     0.1 100))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t))
@@ -995,7 +995,8 @@
                            :title "Walk around"
                            :w 800
                            :h 600))
-    (sdl2:with-gl-context (context win))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let* ((camera (fude-gl:make-camera))
            (matrix (3d-matrices:meye 4))
@@ -1005,8 +1006,7 @@
                                         (sdl2:get-window-size win))
                                       0.1 100))
            ;; In order to manage delta time.
-           (time (fude-gl:make-delta-time)))
-      (gl:enable :depth-test))
+           (time (fude-gl:make-delta-time))))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -1042,20 +1042,19 @@
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :title "Look around"
                            :w 800
-                           :h 600))
-    (sdl2:with-gl-context (context win)
-      (sdl2:hide-cursor))
+                           :h 600)
+      (sdl2:hide-cursor)
+      (multiple-value-bind (w h)
+          (sdl2:get-window-size win)
+        (sdl2:warp-mouse-in-window win (floor w 2) (floor h 2))))
+    (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
     (let* ((camera
             ;; Eular angles supported camera.
-            (progn
-             (multiple-value-bind (w h)
-                 (sdl2:get-window-size win)
-               (sdl2:warp-mouse-in-window win (floor w 2) (floor h 2)))
-             (multiple-value-bind (x y mask)
-                 (sdl2:get-global-mouse-state)
-               (declare (ignore mask))
-               (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0)))))
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
            (matrix (3d-matrices:meye 4))
            (p
             (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
@@ -1111,11 +1110,11 @@
                            :title "Zoom by mouse wheel scrolling."
                            :w 800
                            :h 600)
+      (sdl2:hide-cursor)
       (multiple-value-bind (w h)
           (sdl2:get-window-size win)
         (sdl2:warp-mouse-in-window win (floor w 2) (floor h 2))))
-    (sdl2:with-gl-context (context win)
-      (sdl2:hide-cursor))
+    (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
     (let* ((camera
             (multiple-value-bind (x y mask)
@@ -1667,7 +1666,8 @@
                            :title "Lighting."
                            :w 800
                            :h 600))
-    (sdl2:with-gl-context (context win))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let* ((light
             (make-instance 'light
@@ -1693,7 +1693,7 @@
                            :specular (3d-vectors:vec3 0.5 0.5 0.5)
                            :shininess 32.0))
            (color-update t))
-      (gl:enable :depth-test))
+           (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
