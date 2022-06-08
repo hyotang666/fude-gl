@@ -501,25 +501,33 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (setf stream (or stream *standard-output*))
   (labels ((rec (binds)
              (if (endp binds)
-                 (progn
-                  (funcall
-                    (formatter
-                     "~<~@{~W~^ ~:@/fude-gl:glsl-symbol/~^ = ~W;~:@_~}~:>~{~W~^ ~_~}")
-                    stream
-                    (loop :for bind :in (cadr exp)
-                          :do (unless (= 3 (length bind))
-                                (with-cl-io-syntax
-                                  (error
-                                    "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
-                                    bind)))
-                              (with-cl-io-syntax
-                                (check-type (cadr bind) glsl-type))
-                          :collect (cadr bind)
-                          :collect (car bind)
-                          :collect (caddr bind))
-                    (cddr exp))
-                  (when (every #'listp (cddr exp))
-                    (check-ref (mapcar #'car (cadr exp)))))
+                 (let ((*var-check-p* t))
+                   (funcall
+                     (formatter
+                      #.(concatenate 'string
+                                     ;; type name, without var checking.
+                                     "~<~@{~/fude-gl:glsl-symbol/"
+                                     ;; Setfable place, with var checking.
+                                     "~^ ~:@/fude-gl:glsl-symbol/"
+                                     ;; Initform, with var checking.
+                                     "~^ = ~W;~:@_~}~:>"
+                                     ;; The body, with var checking.
+                                     "~{~W~^ ~_~}"))
+                     stream
+                     (loop :for bind :in (cadr exp)
+                           :do (unless (= 3 (length bind))
+                                 (with-cl-io-syntax
+                                   (error
+                                     "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
+                                     bind)))
+                               (with-cl-io-syntax
+                                 (check-type (cadr bind) glsl-type))
+                           :collect (cadr bind)
+                           :collect (car bind)
+                           :collect (caddr bind))
+                     (cddr exp))
+                   (when (every #'listp (cddr exp))
+                     (check-ref (mapcar #'car (cadr exp)))))
                  (let ((*environment*
                         (argument-environment *environment*
                                               :variable (var-info :local (list
