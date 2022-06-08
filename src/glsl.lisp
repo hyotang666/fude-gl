@@ -538,7 +538,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
-  (format stream "~{~W~^ ~};" exp))
+  (unless (= 2 (length exp))
+    (with-cl-io-syntax
+      (error 'glsl-argument-mismatch :form exp)))
+  (apply (formatter "~/fude-gl:glsl-symbol/ ~W;") stream exp))
 
 (defun parse-slot-spec (spec)
   (etypecase spec
