@@ -383,13 +383,13 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                    (list-all-known-functions))
      (format output " ~:@_To see all supported glsl functions, evaluate ~S."
              '(list-all-known-functions))
-     (format output "~@[ ~:@_~?~]"
-             (let ((info
-                    (when (typep (form this) '(cons symbol (cons symbol null)))
-                      (variable-information (cadr (form this)) *environment*))))
-               (when (and info (glsl-structure-name-p (getf info :type)))
-                 "Or slot reader may missing. To see all supported slot readers, evaluate ~S."))
-             (list `(class-readers ',(cadr (form this))))))))
+     (let ((info
+            (when (typep (form this) '(cons symbol (cons symbol null)))
+              (variable-information (cadr (form this)) *environment*))))
+       (when (and info (glsl-structure-name-p (getf info :type)))
+         (format output
+                 " ~:@_Or slot reader may missing. To see all supported slot readers, evaluate ~S."
+                 `(class-readers ',(getf info :type))))))))
 
 (define-condition glsl-argument-mismatch (fude-gl-error)
   ((form :initarg :form :reader form))
