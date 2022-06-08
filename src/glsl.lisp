@@ -288,12 +288,33 @@
 (defun argument-environment (env &key variable function)
   (make-environment :next env :variable variable :function function))
 
+(defun print-signatures (infos &optional (stream *standard-output*))
+  (format stream "~<~@{~:<FUNCTION ~W ~W~:>~^ ~:@_~}~:>"
+          (mapcar (lambda (info) (list (getf info :args) (getf info :return)))
+                  infos))
+  (force-output stream))
+
 ;;;; GLSL PRINTERS
 
 (defvar *cl-pp-dispatch* (copy-pprint-dispatch nil))
 
 (defmacro with-cl-io-syntax (&body body)
   `(let ((*print-pprint-dispatch* *cl-pp-dispatch*))
+     ,@body))
+
+(defmacro with-hint ((&rest bind*) &body body)
+  `(restart-bind ,(mapcar
+                    (lambda (bind)
+                      (destructuring-bind
+                          (report form)
+                          bind
+                        `(hint
+                          (lambda ()
+                            (let ((*print-length*))
+                              (print ,form *debug-io*)))
+                          :report-function
+                          (lambda (s) (write-string ,report s)))))
+                    bind*)
      ,@body))
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
@@ -419,9 +440,11 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (let ((info (function-information (car exp) *environment*)))
         (unless info
           (with-cl-io-syntax
-            (cerror "Anyway, print it." 'unknown-glsl-function
-                    :name (car exp)
-                    :form exp)))
+            (with-hint (("Print all known functions."
+                         (list-all-known-functions)))
+              (cerror "Anyway, print it." 'unknown-glsl-function
+                      :name (car exp)
+                      :form exp))))
         (let ((reader-info
                (find-if (lambda (info) (eq :reader (getf info :attribute)))
                         info)))
@@ -429,7 +452,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
               (if (= 1 (length (cdr exp)))
                   (glsl-slot-reader stream exp reader-info)
                   (with-cl-io-syntax
-                    (error 'glsl-argument-mismatch :form exp)))
+                    (with-hint (("Print function informations." info))
+                      (error 'glsl-argument-mismatch :form exp))))
               (if (or (null info) ; continued.
                       (and info
                            (find (length (cdr exp)) info
@@ -439,7 +463,9 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                     (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
                     stream (car exp) (cdr exp))
                   (with-cl-io-syntax
-                    (error 'glsl-argument-mismatch :form exp))))))))
+                    (with-hint (("Print function signatures."
+                                 (print-signatures info)))
+                      (error 'glsl-argument-mismatch :form exp)))))))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
@@ -668,7 +694,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (unless (glsl-structure-name-p (cadr exp))
       (error 'unknown-glsl-structure :name (cadr exp)))
     (unless (apply #'slot-exist-p (cdr exp))
-      (error 'missing-slot :name (caddr exp) :structure (cadr exp))))
+      (with-hint (("Print all supported slots."
+                   (c2mop:class-slots
+                     (c2mop:ensure-finalized (find-class (cadr exp))))))
+        (error 'missing-slot :name (caddr exp) :structure (cadr exp)))))
   (format stream "~A.~A" (symbol-camel-case (cadr exp))
           (symbol-camel-case (caddr exp))))
 
