@@ -1887,6 +1887,17 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
       (3d-vectors:nvunit (camera-front camera)))
     camera))
 
+(defgeneric zoom (camera direction w h)
+  (:method ((camera looker) direction w h)
+    (declare (type fixnum direction w h))
+    (3d-matrices:mperspective
+      (setf (field-of-view camera)
+              (case direction
+                (1 (min 45 (1+ (the fixnum (field-of-view camera)))))
+                (-1 (max 1 (1- (the fixnum (field-of-view camera)))))
+                (otherwise (field-of-view camera))))
+      (/ w h) 0.1 100)))
+
 ;; MATRIX
 
 (defun radians (degrees)

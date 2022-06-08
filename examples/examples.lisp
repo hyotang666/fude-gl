@@ -1092,15 +1092,6 @@
 
 ;;;; ZOOM
 
-(defun zoom-perspective (win direction field-of-view)
-  (values (3d-matrices:mperspective
-            (case direction
-              (1 (setq field-of-view (min 45 (1+ field-of-view))))
-              (-1 (setq field-of-view (max 1 (1- field-of-view))))
-              (otherwise field-of-view))
-            (multiple-value-call #'/ (sdl2:get-window-size win)) 0.1 100)
-          field-of-view))
-
 (defun zoom ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -1133,8 +1124,10 @@
         t)
       (:mousewheel (:y y)
         ;; update perspective.
-        (setf (values p (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf p (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1237,8 +1230,11 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1317,8 +1313,11 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1453,8 +1452,11 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1548,8 +1550,11 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1696,8 +1701,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:field-of-view camera))
-                (zoom-perspective win y (fude-gl:field-of-view camera))))
+        (setf projection
+                (multiple-value-call camera y (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (when (eq :scancode-space (sdl2:scancode keysym))
           (setq color-update (not color-update)))
