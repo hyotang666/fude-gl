@@ -675,6 +675,22 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member slot-value)) 'glsl-slot-value)
     *print-pprint-dispatch*))
 
+(defun glsl-special-operator-p (symbol)
+  #.(or #+sbcl
+        `(loop :for entry :being :each :hash-value :of
+                    (sb-pretty::pp-dispatch-cons-entries (glsl-dispatch))
+               :for type = (sb-pretty::pprint-dispatch-entry-type entry)
+               :when (and (typep type
+                                 '(cons (eql cons) (cons (cons (eql member)))))
+                          (find symbol (cdr (second type)))
+                          (symbolp
+                            (sb-pretty::pprint-dispatch-entry-fun entry))
+                          (eq (find-package :fude-gl)
+                              (symbol-package
+                                (sb-pretty::pprint-dispatch-entry-fun entry))))
+                 :return t)
+        (warn "Not implemented for ~S." (lisp-implementation-type))))
+
 (defun print-glsl (exp &optional stream)
   (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
     (pprint exp stream)))
