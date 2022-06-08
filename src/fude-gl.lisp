@@ -1796,80 +1796,92 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 ;;;; CAMERA
 
-(defstruct (camera (:constructor make-camera
-                    (&key (position (3d-vectors:vec3 0 0 3))
-                     (target (3d-vectors:vec3 0 0 0))
-                     (front (3d-vectors:vec3 0 0 -1)) (sensitivity 0.1)
-                     (last-position (3d-vectors:vec3 0 0 0)) (field-of-view 45)
-                     &aux
-                     (direction
-                      (3d-vectors:nvunit (3d-vectors:v- position target)))
-                     (right
-                      (3d-vectors:nvunit
-                        (3d-vectors:vc (3d-vectors:vec3 0 1 0) direction)))
-                     (up (3d-vectors:vc direction right)))))
-  (position (alexandria:required-argument :position)
-            :type 3d-vectors:vec3
-            :read-only t)
-  (target (alexandria:required-argument :target)
+(defclass camera ()
+  ((position :initform (3d-vectors:vec3 0 0 3)
+             :initarg :position
+             :type 3d-vectors:vec3
+             :reader camera-position)
+   (target :initform (3d-vectors:vec3 0 0 0)
+           :initarg :target
+           :type 3d-vectors:vec3
+           :reader camera-target)
+   (front :initform (3d-vectors:vec3 0 0 -1)
+          :initarg :front
           :type 3d-vectors:vec3
-          :read-only t)
-  (front (alexandria:required-argument :front)
-         :type 3d-vectors:vec3
-         :read-only t)
-  ;; NOTE: This slot may not needed.
-  (right (alexandria:required-argument :right)
-         :type 3d-vectors:vec3
-         :read-only t)
-  (up (alexandria:required-argument :up) :type 3d-vectors:vec3 :read-only t)
-  (sensitivity 0.1 :type single-float)
-  (sight (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
-  (last-position (3d-vectors:vec3 0 0 0) :type 3d-vectors:vec3)
-  (field-of-view 45 :type (unsigned-byte 16)))
+          :reader camera-front)
+   ;; NOTE: This slot may not needed.
+   ;; Used only in initialize?
+   (right :type 3d-vectors:vec3 :reader camera-right)
+   (up :type 3d-vectors:vec3 :reader camera-up)))
 
-(defun view (camera &key target)
-  (3d-matrices:mlookat (camera-position camera)
-                       (if target
-                           (camera-target camera)
-                           (3d-vectors:v+ (camera-position camera)
-                                          (camera-front camera)))
-                       (camera-up camera)))
+(defmethod initialize-instance :after ((o camera) &key)
+  (with-slots (position target right up)
+      o
+    (let ((direction (3d-vectors:nvunit (3d-vectors:v- position target))))
+      (setf right
+              (3d-vectors:nvunit
+                (3d-vectors:vc (3d-vectors:vec3 0 1 0) direction))
+            up (3d-vectors:vc direction right)))))
 
-(defun move (camera x y z)
-  (3d-vectors::%vsetf (camera-position camera) x y z)
-  camera)
+(defclass looker (camera)
+  ((sensitivity :initform 0.1
+                :initarg :sensitivity
+                :type single-float
+                :accessor sensitivity)
+   (sight :initform (3d-vectors:vec3 0 0 0)
+          :initarg :sight
+          :type 3d-vectors:vec3
+          :accessor sight)
+   (last-position :initform (3d-vectors:vec3 0 0 0)
+                  :initarg :last-position
+                  :type 3d-vectors:vec3
+                  :accessor last-position)
+   (field-of-view :initform 45
+                  :initarg :field-of-view
+                  :type (unsigned-byte 16)
+                  :accessor field-of-view)))
 
-(defun pitch (camera) (3d-vectors:vx (camera-sight camera)))
+(defgeneric view (camera &key)
+  (:method ((camera camera) &key look-at-target)
+    (3d-matrices:mlookat (camera-position camera)
+                         (if look-at-target
+                             (camera-target camera)
+                             (3d-vectors:v+ (camera-position camera)
+                                            (camera-front camera)))
+                         (camera-up camera))))
 
-(defun yaw (camera) (3d-vectors:vy (camera-sight camera)))
+(defgeneric move (camera x y z)
+  (:method ((camera camera) x y z)
+    (3d-vectors::%vsetf (camera-position camera) x y z)
+    camera))
 
-(defun roll (camera) (3d-vectors:vz (camera-sight camera)))
+(defun pitch (camera) (3d-vectors:vx (sight camera)))
 
-(declaim
- (ftype (function
-         (camera (unsigned-byte 32) (unsigned-byte 32) (unsigned-byte 8))
-         (values camera &optional))
-        lookat))
+(defun yaw (camera) (3d-vectors:vy (sight camera)))
 
-(defun lookat (camera x y mask)
-  (declare (ignore mask))
-  (let* ((sensitivity (camera-sensitivity camera))
-         (offset-x
-          (* sensitivity
-             (- x (shiftf (3d-vectors:vx (camera-last-position camera)) x))))
-         ;; reversed. Y ranges bottom to top.
-         (offset-y
-          (* sensitivity
-             (- (shiftf (3d-vectors:vy (camera-last-position camera)) y) y)))
-         (pitch (max -89.0 (min 89.0 (+ (pitch camera) offset-y))))
-         (yaw (+ (yaw camera) offset-x)))
-    (3d-vectors:vsetf (camera-sight camera) pitch yaw)
-    (3d-vectors:vsetf (camera-front camera)
-                      (* (cos (radians yaw)) (cos (radians pitch)))
-                      (sin (radians pitch))
-                      (* (sin (radians yaw)) (cos (radians pitch))))
-    (3d-vectors:nvunit (camera-front camera)))
-  camera)
+(defun roll (camera) (3d-vectors:vz (sight camera)))
+
+(defgeneric lookat (camera x y mask)
+  (:method ((camera looker) x y mask)
+    (declare (ignore mask)
+             (type (unsigned-byte 32) x y mask))
+    (let* ((sensitivity (the single-float (sensitivity camera)))
+           (offset-x
+            (* sensitivity
+               (- x (shiftf (3d-vectors:vx (last-position camera)) x))))
+           ;; reversed. Y ranges bottom to top.
+           (offset-y
+            (* sensitivity
+               (- (shiftf (3d-vectors:vy (last-position camera)) y) y)))
+           (pitch (max -89.0 (min 89.0 (+ (pitch camera) offset-y))))
+           (yaw (+ (yaw camera) offset-x)))
+      (3d-vectors:vsetf (sight camera) pitch yaw)
+      (3d-vectors:vsetf (camera-front camera)
+                        (* (cos (radians yaw)) (cos (radians pitch)))
+                        (sin (radians pitch))
+                        (* (sin (radians yaw)) (cos (radians pitch))))
+      (3d-vectors:nvunit (camera-front camera)))
+    camera))
 
 ;; MATRIX
 

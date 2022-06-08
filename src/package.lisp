@@ -58,13 +58,14 @@
            #:*font-size*
            #:font-loader
            ;;;; CAMERA
-           ;; constructor
-           #:make-camera
+           ;; Class name.
+           #:camera
+           #:looker
            ;; readers
            #:camera-position
            #:camera-front
            #:camera-up
-           #:camera-field-of-view
+           #:field-of-view
            ;; helpers
            #:view
            #:move
