@@ -319,7 +319,10 @@
 
 (defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
 
-(defvar *var-check-p* nil)
+(defvar *var-check-p*
+  nil
+  "Boolean to specify to check variable existence.
+This is useful especially for enabling with ~W format control.")
 
 (define-condition unknown-variable (shader-error cell-error)
   ((known-vars :initarg :known-vars :reader known-vars))
