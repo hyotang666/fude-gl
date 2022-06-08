@@ -1850,9 +1850,13 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                                             (camera-front camera)))
                          (camera-up camera))))
 
-(defgeneric move (camera x y z)
-  (:method ((camera camera) x y z)
-    (3d-vectors::%vsetf (camera-position camera) x y z)
+(defgeneric move (camera x &rest args)
+  (:method ((camera camera) x &rest yz)
+    (3d-vectors::%vsetf (camera-position camera) x (car yz) (cadr yz))
+    camera)
+  (:method ((camera camera) (to 3d-vectors:vec3) &rest noise)
+    (declare (ignore noise))
+    (3d-vectors:nv+ (camera-position camera) to)
     camera))
 
 (defun pitch (camera) (3d-vectors:vx (sight camera)))

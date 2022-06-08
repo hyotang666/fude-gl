@@ -960,31 +960,30 @@
        (keysym camera &optional (delta internal-time-units-per-second))
   (let ((camera-speed (* 2.5 (/ delta internal-time-units-per-second))))
     (case (sdl2:scancode keysym)
-      ;; To modify CAMERA-POSITION,
-      ;; you should use 3D-VECTORS's N prefixed functions.
-      ;; I.e. destructively modify it.
       (:scancode-up
-       (3d-vectors:nv+ (fude-gl:camera-position camera)
-                       (3d-vectors:v* camera-speed
-                                      (fude-gl:camera-front camera))))
+       (fude-gl:move camera
+                     (3d-vectors:v* camera-speed
+                                    (fude-gl:camera-front camera))))
       (:scancode-down
-       (3d-vectors:nv- (fude-gl:camera-position camera)
+       (fude-gl:move camera
+                     (3d-vectors:nv-
                        (3d-vectors:v* camera-speed
-                                      (fude-gl:camera-front camera))))
+                                      (fude-gl:camera-front camera)))))
       (:scancode-left
-       (3d-vectors:nv- (fude-gl:camera-position camera)
+       (fude-gl:move camera
+                     (3d-vectors:nv-
                        (3d-vectors:v*
                          (3d-vectors:vunit
                            (3d-vectors:vc (fude-gl:camera-front camera)
                                           (fude-gl:camera-up camera)))
-                         camera-speed)))
+                         camera-speed))))
       (:scancode-right
-       (3d-vectors:nv+ (fude-gl:camera-position camera)
-                       (3d-vectors:v*
-                         (3d-vectors:vunit
-                           (3d-vectors:vc (fude-gl:camera-front camera)
-                                          (fude-gl:camera-up camera)))
-                         camera-speed))))))
+       (fude-gl:move camera
+                     (3d-vectors:v*
+                       (3d-vectors:vunit
+                         (3d-vectors:vc (fude-gl:camera-front camera)
+                                        (fude-gl:camera-up camera)))
+                       camera-speed))))))
 
 (defun walk-around ()
   (uiop:nest
