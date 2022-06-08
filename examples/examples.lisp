@@ -905,9 +905,7 @@
                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
                  (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
-          ;; To make camera, you can use a function MAKE-CAMERA.
-          ;; For detail, evaluate (describe 'fude-gl:make-camera).
-          (camera (fude-gl:make-camera))
+          (camera (make-instance 'fude-gl:camera))
           (matrix (3d-matrices:meye 4))
           (p
            (3d-matrices:mperspective 45
@@ -924,16 +922,16 @@
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
         (let* ((radius 10)
-               ;; To move camera you can use a function MOVE.
+               ;; To move camera you can use a generic-function MOVE.
                ;; The first argument is a camera object.
                ;; The rest arguments are new X, Y and Z.
                (moved
                 (fude-gl:move camera (* (sin (get-internal-real-time)) radius)
                               0 (* (cos (get-internal-real-time)) radius)))
-               ;; To get a view matrix, you can use a function VIEW.
+               ;; To get a view matrix, you can use a generic-function VIEW.
                ;; The first argument is a camera object.
-               ;; The keyword parameter :TARGET specifies to look at CAMERA-TARGET.
-               (v (fude-gl:view moved :target t)))
+               ;; The keyword parameter :LOOK-AT-TARGET specifies to look at CAMERA-TARGET.
+               (v (fude-gl:view moved :look-at-target t)))
           (loop :for pos :in cube-positions
                 :for i :upfrom 0
                 :do (setf model
@@ -998,10 +996,10 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
-    (let* ((camera (fude-gl:make-camera))
+    (let* ((camera (make-instance 'fude-gl:camera))
            (matrix (3d-matrices:meye 4))
            (p
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective 45
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1054,10 +1052,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (matrix (3d-matrices:meye 4))
            (p
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1120,10 +1119,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (matrix (3d-matrices:meye 4))
            (p
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1134,9 +1134,8 @@
         t)
       (:mousewheel (:y y)
         ;; update perspective.
-        (setf (values p (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values p (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1223,10 +1222,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1238,9 +1238,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values projection (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1304,10 +1303,10 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'looker :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1319,9 +1318,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values projection (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1440,10 +1438,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1455,9 +1454,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values projection (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1535,10 +1533,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1550,9 +1549,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values projection (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
@@ -1677,10 +1675,11 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (fude-gl:make-camera :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
-            (3d-matrices:mperspective (fude-gl:camera-field-of-view camera)
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
@@ -1698,9 +1697,8 @@
       (:quit ()
         t)
       (:mousewheel (:y y)
-        (setf (values projection (fude-gl:camera-field-of-view camera))
-                (zoom-perspective win y
-                                  (fude-gl:camera-field-of-view camera))))
+        (setf (values projection (fude-gl:field-of-view camera))
+                (zoom-perspective win y (fude-gl:field-of-view camera))))
       (:keydown (:keysym keysym)
         (when (eq :scancode-space (sdl2:scancode keysym))
           (setq color-update (not color-update)))
@@ -2090,7 +2088,7 @@
       (gl:enable :depth-test)
       (gl:depth-func :less)) ; <---
     (fude-gl:with-shader ())
-    (let* ((camera (fude-gl:make-camera))
+    (let* ((camera (make-instance 'fude-gl:camera))
            (matrix (3d-matrices:meye 4))
            (v (fude-gl:view camera))
            (p
@@ -2180,7 +2178,7 @@
                            :title "Frame buffer Step1"))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader () (gl:enable :depth-test))
-    (let* ((camera (fude-gl:make-camera))
+    (let* ((camera (make-instance 'fude-gl:camera))
            (matrix (3d-matrices:meye 4))
            (view (fude-gl:view camera))
            (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
@@ -2518,7 +2516,7 @@
                            :title "Framebuffer shadow base"))
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader () (gl:enable :depth-test))
-    (let* ((camera (fude-gl:make-camera))
+    (let* ((camera (make-instance 'fude-gl:camera))
            (light-position (3d-vectors:vec3 -2 4 -1))
            (near-plane 1.0) ; When projection is perspective,
            (far-plane 7.5) ; these vars will be refered.
