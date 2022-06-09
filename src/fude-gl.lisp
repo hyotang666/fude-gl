@@ -371,7 +371,8 @@
 
 (defstruct uniform
   (name (error "NAME is required.") :type string :read-only t)
-  (type (error "TYPE is required.") :type string :read-only t))
+  (type (error "TYPE is required.") :type string :read-only t)
+  (lisp-type (error "LISP-TYPE is required.") :type t :read-only t))
 
 (defmethod make-load-form ((this uniform) &optional environment)
   (make-load-form-saving-slots this :environment environment))
@@ -497,6 +498,18 @@
           :else
             :do (funcall collector elt))))
 
+(defun lisp-type<-glsl-type (glsl-type)
+  (if (glsl-structure-name-p glsl-type)
+      glsl-type
+      (ecase glsl-type ; YAGNI style.
+        (:vec2 '(or 3d-vectors:vec2 (vector * 2)))
+        (:vec3 '(or 3d-vectors:vec3 (vector * 3)))
+        (:mat4 '3d-matrices:mat4)
+        (:float 'single-float)
+        (:|sampler2D| 'texture))))
+
+(defparameter *converter* 'lisp-type<-glsl-type)
+
 (defun <uniforms> (name shader*)
   ;; Shader NAME becomes VECTOR-CLASS.
   ;; MAKE-INSTANCE for VECTOR-CLASS makes a VECTOR instead of an object instance.
@@ -511,7 +524,9 @@
                                                           (c2mop:slot-definition-name
                                                             slot)))
                                           :type (symbol-camel-case
-                                                  (glsl-type slot)))))))
+                                                  (glsl-type slot))
+                                          :lisp-type (c2mop:slot-definition-type
+                                                       slot))))))
     `(defmethod uniforms ((type (eql ',name)))
        (list
          ,@(loop :for (nil lambda-list) :in shader*
@@ -520,7 +535,13 @@
                  :nconc (loop :for spec :in uniform-specs
                               :for (nil type name)
                                    = (parse-shader-lambda-list-spec spec)
-                              :collect (make-uniform :name name :type type)
+                              :collect (make-uniform :name name
+                                                     :type type
+                                                     :lisp-type (funcall
+                                                                  (coerce
+                                                                    *converter*
+                                                                    'function)
+                                                                  (cadr spec)))
                               :if (glsl-structure-name-p (cadr spec))
                                 :nconc (glsl-struct-uniforms name spec)))))))
 
@@ -856,7 +877,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
             (list new)
             `(progn (send ,new ,shader :uniform ,name ,@args) ,new))))
 
-(defmacro with-uniforms ((&rest var*) shader &body body)
+(defmacro with-uniforms ((&rest var*) shader &body body &environment env)
   (flet ((parse-var-spec (spec)
            (etypecase spec
              (symbol (values spec (symbol-camel-case spec) nil))
@@ -869,18 +890,27 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                       (symbol-camel-case (cadr spec))
                       (cddr spec))))))
     ;; Trivial-syntax-check
-    (when (constantp shader)
+    (when (constantp shader env)
       (dolist (var var*)
         (check-uniform-args shader (nth-value 1 (parse-var-spec var)))))
-    (let ((s (gensym "SHADER")))
-      `(let ((,s ,shader))
-         (symbol-macrolet ,(loop :for spec :in var*
-                                 :collect (multiple-value-bind
-                                              (symbol name option)
-                                              (parse-var-spec spec)
-                                            `(,symbol
-                                              (uniform ,s ,name ,@option))))
-           ,@body)))))
+    (let ((s (gensym "SHADER"))
+          (uniforms
+           (when (constantp shader env)
+             (uniforms (eval shader)))))
+      (declare (list uniforms))
+      (flet ((<macrolet-bind> (spec)
+               (multiple-value-bind (symbol name option)
+                   (parse-var-spec spec)
+                 (let ((uniform
+                        (find name uniforms :test #'equal :key #'uniform-name)))
+                   (if uniform
+                       `(,symbol
+                         (the ,(uniform-lisp-type uniform)
+                              (uniform ,s ,name ,@option)))
+                       `(,symbol (uniform ,s ,name ,@option)))))))
+        `(let ((,s ,shader))
+           (symbol-macrolet ,(mapcar #'<macrolet-bind> var*)
+             ,@body))))))
 
 (defmethod documentation ((o (eql 'with-uniforms)) (type (eql 'function)))
   "Evaluate the BODY in the context that each VAR is bound by the uniform of the SHADER.
