@@ -1973,4 +1973,6 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 ;; DEFIMAGE
 
 (defmacro defimage (name pathname)
-  `(progn (setf (gethash ',name *images*) (load-image ,pathname)) ',name))
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     ;; The compiler macro for IMAGE needs this eval-when.
+     (progn (setf (gethash ',name *images*) (load-image ,pathname)) ',name)))
