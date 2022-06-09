@@ -633,7 +633,13 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (loop :for (key . param) :in (cdr exp)
         :when (find key '(type ftype))
           :do (dolist (name (cdr param))
-                (setf (gethash name *declaims*) (car param)))
+                (setf (gethash name *declaims*) (car param))
+                (push
+                 (list :lisp-name (symbol-name name)
+                       :name (symbol-camel-case name)
+                       :return (third (car param))
+                       :args (second (car param)))
+                 (environment-function *environment*)))
         :else
           :do (warn "Ignore decalim of ~S" (cons key param))))
 
