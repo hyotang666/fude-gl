@@ -598,6 +598,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-if (stream exp)
   (setf stream (or stream *standard-output*))
+  (when (find-if (lambda (exp) (and (listp exp) (find (car exp) '(let))))
+                 (cddr exp))
+    (with-cl-io-syntax
+      (error "In valid expression for IF. Use COND instead. ~S" exp)))
   (destructuring-bind
       (pred then &optional else)
       (cdr exp)
@@ -732,6 +736,24 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (format stream "~A.~A" (symbol-camel-case (cadr exp))
           (symbol-camel-case (caddr exp))))
 
+(defun glsl-cond (out exp &rest noise)
+  (declare (ignore noise))
+  (pprint-logical-block (out nil)
+    (write-string "if" out)
+    (loop :with body = (formatter " ~:@_{~4I~:@_~@{~W~^ ~:@_~} ~I~:@_} ~:@_")
+          :for (clause . rest) :on (cdr exp)
+          :do (funcall (formatter "(~W)") out (car clause))
+              (apply body out (cdr clause))
+          :if rest
+            :if (eq t (caar rest))
+              :do (funcall (formatter "else") out)
+                  (apply body out (cdar rest))
+                  (loop-finish)
+            :else
+              :do (funcall (formatter "else if") out)
+          :else
+            :do (loop-finish))))
+
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
     (set-pprint-dispatch 'symbol 'glsl-symbol)
@@ -749,6 +771,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member defconstant)) 'glsl-defconstant)
     (set-pprint-dispatch '(cons (member defun)) 'glsl-defun)
     (set-pprint-dispatch '(cons (member slot-value)) 'glsl-slot-value)
+    (set-pprint-dispatch '(cons (member cond)) 'glsl-cond)
     *print-pprint-dispatch*))
 
 (defun glsl-special-operator-p (symbol)
