@@ -690,7 +690,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                       (list "~(~A~)~^ ~@_" ; return type
                             "~A~^ ~@_" ; function name.
                             (list "~:<" ; logical block for args.
-                                  "~@{~(~A~)~^ ~A~^, ~}" ; argbody.
+                                  "~@{~A~^ ~A~^, ~}" ; argbody.
                                   "~:>~^ ~%")
                             "~:<{~;~3I~:@_" ; function body.
                             "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
@@ -698,7 +698,14 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           (if (equal '(values) return)
               :void
               return)
-          (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))
+          (second exp)
+          (loop :for type :in arg-types
+                :for name :in (third exp)
+                :collect (if (glsl-structure-name-p type)
+                             (change-case:pascal-case (symbol-name type))
+                             (symbol-camel-case type))
+                :collect (symbol-camel-case name))
+          (cdddr exp)))
       (when (every #'listp (cdddr exp))
         (check-ref (third exp))))))
 
