@@ -9,8 +9,11 @@
            ((s glsl-structure-class) (c standard-class))
   t)
 
+(deftype glsl-type ()
+  '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
+
 (defclass glsl-slot-mixin ()
-  ((glsl-type :type keyword :initarg :glsl-type :reader glsl-type))
+  ((glsl-type :type glsl-type :initarg :glsl-type :reader glsl-type))
   (:documentation "Meta informations for the slot of the glsl structures."))
 
 (defclass glsl-direct-slot-definition (c2mop:standard-direct-slot-definition glsl-slot-mixin)
@@ -43,7 +46,18 @@
 
 (defclass glsl-structure-object () ())
 
+(defun validate-slot-specs (slot-specs)
+  (loop :for slot-spec :in slot-specs
+        :with sentinel := '#:sentinel
+        :for glsl-type := (getf (cdr slot-spec) :glsl-type sentinel)
+        :when (eq sentinel glsl-type)
+          :do (error ":GLSL-TYPE is required. ~S" slot-spec)
+        :unless (typep glsl-type 'glsl-type)
+          :do (cerror "Anyway use it." "Unknown GLSL-TYPE. ~S" glsl-type)))
+
 (defmacro define-glsl-structure (name () (&rest slot-spec*) &body option*)
+  ;; Trivial-error-check.
+  (validate-slot-specs slot-spec*)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (defclass ,name (glsl-structure-object) ,slot-spec*
        (:metaclass glsl-structure-class)
@@ -127,9 +141,6 @@
                                       glsl-spec:*operators*
                                       glsl-spec:*vector-constructors*
                                       glsl-spec:*matrix-constructors*)))
-
-(deftype glsl-type ()
-  '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
 
 (defun variable-information-var (info) (getf info :lisp-name))
 
