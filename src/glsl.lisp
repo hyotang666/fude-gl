@@ -668,6 +668,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                           (third exp) (second ftype)))
             (environment-function *environment*))
            (argument-environment *environment*
+                                 :function (struct-readers
+                                             (remove-if-not
+                                               #'glsl-structure-name-p
+                                               (second ftype)))
                                  :variable (var-info :local (mapcar #'list
                                                                     (third exp)
                                                                     (cadr
