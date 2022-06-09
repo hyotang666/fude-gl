@@ -240,10 +240,14 @@
     (rec *environment* nil)))
 
 (define-condition unused-variable (style-warning)
-  ((name :initarg :name :reader unused-var))
+  ((name :initarg :name :reader unused-var)
+   (context :initarg :context :reader context))
   (:report
    (lambda (this output)
-     (format output "Variable ~S is not used." (unused-var this)))))
+     (format output "Variable ~S is not used. ~:@_The context is ~S."
+             (unused-var this) (context this)))))
+
+(defvar *context* nil)
 
 (defun check-ref (vars)
   (dolist (var vars)
@@ -257,7 +261,9 @@
                      (if info
                          (when (not (variable-information-ref? info))
                            (with-standard-io-syntax
-                            (warn 'unused-variable :name var)))
+                            (warn 'unused-variable
+                                  :name var
+                                  :context (reverse *context*))))
                          (rec (environment-next env)))))))
         (rec *environment*)))))
 
@@ -545,7 +551,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                                                            (car
                                                                              binds))))))
                    (rec (cdr binds))))))
-    (rec (cadr exp))))
+    (let ((*context* (cons 'let *context*)))
+      (rec (cadr exp)))))
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
@@ -654,27 +661,28 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (unless ftype
       (with-cl-io-syntax
         (error "DEFUN ~S needs ftype DECLAIMed." (second exp))))
-    (destructuring-bind
-        (arg-types return)
-        (cdr ftype)
-      (funcall
-        (formatter
-         #.(apply #'concatenate 'string
-                  (alexandria:flatten
-                    (list "~(~A~)~^ ~@_" ; return type
-                          "~A~^ ~@_" ; function name.
-                          (list "~:<" ; logical block for args.
-                                "~@{~(~A~)~^ ~A~^, ~}" ; argbody.
-                                "~:>~^ ~%")
-                          "~:<{~;~3I~:@_" ; function body.
-                          "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
-        stream
-        (if (equal '(values) return)
-            :void
-            return)
-        (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))
-    (when (every #'listp (cdddr exp))
-      (check-ref (third exp)))))
+    (let ((*context* (cons (cadr exp) *context*)))
+      (destructuring-bind
+          (arg-types return)
+          (cdr ftype)
+        (funcall
+          (formatter
+           #.(apply #'concatenate 'string
+                    (alexandria:flatten
+                      (list "~(~A~)~^ ~@_" ; return type
+                            "~A~^ ~@_" ; function name.
+                            (list "~:<" ; logical block for args.
+                                  "~@{~(~A~)~^ ~A~^, ~}" ; argbody.
+                                  "~:>~^ ~%")
+                            "~:<{~;~3I~:@_" ; function body.
+                            "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
+          stream
+          (if (equal '(values) return)
+              :void
+              return)
+          (second exp) (mapcan #'list arg-types (third exp)) (cdddr exp)))
+      (when (every #'listp (cdddr exp))
+        (check-ref (third exp))))))
 
 (defun glsl-struct-definition (stream structure-name &rest noise)
   (declare (ignore noise))
