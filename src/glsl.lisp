@@ -754,6 +754,28 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           :else
             :do (loop-finish))))
 
+(defun glsl-dotimes (out exp &rest noise)
+  (declare (ignore noise))
+  (destructuring-bind
+      ((var times) &body body)
+      (cdr exp)
+    (let ((*environment*
+           (argument-environment *environment*
+                                 :variable (var-info :local `((,var :int))))))
+      (pprint-logical-block (out nil)
+        ;; Var def.
+        (funcall (formatter "for (int ~/fude-gl:glsl-symbol/") out var)
+        ;; Terminal test.
+        (funcall
+          (formatter
+           " = 0; ~/fude-gl:glsl-symbol/ < ~:@/fude-gl:glsl-symbol/;")
+          out var times)
+        ;; Update.
+        (funcall (formatter " ~/fude-gl:glsl-symbol/++){ ~4I~:@_") out var)
+        ;; The body.
+        (funcall (formatter "~{~W;~^ ~:@_~}") out body)
+        (funcall (formatter "~I~:@_}") out)))))
+
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
     (set-pprint-dispatch 'symbol 'glsl-symbol)
@@ -772,6 +794,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member defun)) 'glsl-defun)
     (set-pprint-dispatch '(cons (member slot-value)) 'glsl-slot-value)
     (set-pprint-dispatch '(cons (member cond)) 'glsl-cond)
+    (set-pprint-dispatch '(cons (member dotimes)) 'glsl-dotimes)
     *print-pprint-dispatch*))
 
 (defun glsl-special-operator-p (symbol)
