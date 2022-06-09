@@ -452,11 +452,14 @@
 
 (deftype index () '(mod #.array-total-size-limit))
 
+(deftype constant-def ()
+  '(cons (eql defconstant) (cons symbol (cons index null))))
+
 (declaim
  (ftype (function
          ((cons var
                 (cons (or type-spec complex-type-spec)
-                      (or null (cons index null)))))
+                      (or null (cons (or index constant-def) null)))))
          (values (cons null (cons string (cons string null))) &optional))
         parse-shader-lambda-list-spec))
 
@@ -480,7 +483,12 @@
                                    :collect (symbol-camel-case name)))))))
           ;; Var name string.
           (if vector-size
-              (format nil "~A[~A]" (symbol-camel-case name) (car vector-size))
+              (format nil "~A[~A]" (symbol-camel-case name)
+                      (etypecase (car vector-size)
+                        (index (car vector-size))
+                        (constant-def
+                         (change-case:constant-case
+                           (symbol-name (second (car vector-size)))))))
               (symbol-camel-case name)))))
 
 (declaim
@@ -560,10 +568,16 @@
         :when (glsl-structure-name-p type)
           :collect type))
 
+(defun constant-defs (specs)
+  (loop :for (nil nil . vector-size) :in specs
+        :when (and vector-size (typep (car vector-size) 'constant-def))
+          :collect (car vector-size)))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let ((format
          (formatter
           #.(concatenate 'string "#version ~A core~%" ; version
+                         "~@[~{~/fude-gl:glsl-constant-definition/~%~}~]" ; define
                          "~{~@[~A~]in ~A ~A;~%~}~&" ; in
                          "~{out ~A ~A;~%~}~&" ; out
                          "~@[~{~/fude-gl:glsl-struct-definition/~}~]" ; struct defs.
@@ -584,13 +598,15 @@
                    shader
                  (multiple-value-bind (out uniform varying%)
                      (split-shader-lambda-list shader-lambda-list)
-                   (let ((*environment*
-                          (argument-environment *environment*
-                                                :variable (var-info :io out)))
-                         (local-vars
-                          (append (var-info :uniform uniform)
-                                  (var-info :varying varying%)))
-                         (struct-defs (struct-defs uniform)))
+                   (let* ((constant-defs (constant-defs uniform))
+                          (*environment*
+                           (argument-environment *environment*
+                                                 :variable (var-info :io out)))
+                          (local-vars
+                           (append (var-info :uniform uniform)
+                                   (var-info :varying varying%)
+                                   (var-info :constant constant-defs)))
+                          (struct-defs (struct-defs uniform)))
                      (setq out (mapcan #'parse-shader-lambda-list-spec out)
                            uniform
                              (mapcan #'parse-shader-lambda-list-spec uniform)
@@ -613,8 +629,8 @@
                                                       (cons symbol null))
                                                 null))
                                       `(,method ',(cadar main))
-                                      (format nil format version in
-                                              (remove nil out) struct-defs
+                                      (format nil format version constant-defs
+                                              in (remove nil out) struct-defs
                                               (delete nil (the list uniform))
                                               (remove nil
                                                       (append varying
@@ -656,7 +672,9 @@
      (out-spec (var (or type-spec complex-type)))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-spec vector-size?))
-     (vector-size (mod #.array-total-size-limit))
+     (vector-size (or (mod #.array-total-size-limit) constant-definition))
+     (constant-definition
+      ((eql defconstant) symbol (mod #.array-total-size-limit)))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;

@@ -202,6 +202,14 @@
                                    :type type
                                    :glsl-type (cadr spec)))
       source))
+  (:method ((type (eql :constant)) (source list) &key)
+    (mapcar
+      (lambda (form)
+        (make-variable-information :var (second form)
+                                   :name (change-case:constant-case
+                                           (symbol-name (second form)))
+                                   :type (type-of (third form))))
+      source))
   (:method ((type (eql :slot)) (source list) &key structure)
     (mapcar
       (lambda (spec)
@@ -792,6 +800,11 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (if num
         (funcall (formatter "~W += ~W") out place num)
         (funcall (formatter "~W++") out place))))
+
+(defun glsl-constant-definition (out exp &rest noise)
+  (declare (ignore noise))
+  (funcall (formatter "#define ~A ~A") out
+           (change-case:constant-case (symbol-name (cadr exp))) (caddr exp)))
 
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
