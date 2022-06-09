@@ -1646,18 +1646,21 @@
               (view-pos :vec3))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (let ((ambient :vec3 (* (ambient light) (ambient material)))
-            (normal :vec3 (normalize norm))
-            (light-dir :vec3 (normalize (- (light-position light) frag-pos)))
-            (diff :float (max 0.0 (dot normal light-dir)))
-            (diffuse :vec3 (* (diffuse light) (* diff (diffuse material))))
-            (view-dir :vec3 (normalize (- view-pos frag-pos)))
-            (reflect-dir :vec3 (reflect (- light-dir) normal))
-            (spec
-             :float
-             (pow (max 0.0 (dot view-dir reflect-dir)) (shininess material)))
-            (specular :vec3 (* (specular light) spec (specular material))))
-        (setf frag-color (vec4 (+ ambient diffuse specular) 1.0))))))
+      (let ((normal :vec3 (normalize norm))
+            (light-dir :vec3 (normalize (- (light-position light) frag-pos))))
+        (setf frag-color
+                (vec4
+                 (+ (* (ambient light) (ambient material))
+                    (* (diffuse light)
+                       (* (max 0.0 (dot normal light-dir)) (diffuse material)))
+                    (* (specular light)
+                       (pow
+                        (max 0.0
+                             (dot (normalize (- view-pos frag-pos))
+                              (reflect (- light-dir) normal)))
+                        (shininess material))
+                       (specular material)))
+                 1.0))))))
 
 (fude-gl:defvertices materials *defuse-source*)
 
