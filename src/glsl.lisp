@@ -278,7 +278,7 @@
                  (rec (environment-next env)
                       (progn
                        (loop :for spec :in (environment-function env)
-                             :do (push (getf spec :name) acc))
+                             :do (push (getf spec :lisp-name) acc))
                        acc)))))
     (rec *environment* nil)))
 
