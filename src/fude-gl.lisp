@@ -1933,7 +1933,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 ;;;; IMAGE-LOADER
 ;; *IMAGES*
 
-(defparameter *images* (make-hash-table :test #'equal))
+(defvar *images* (make-hash-table :test #'equal))
 
 (defun list-all-images () (alexandria:hash-table-keys *images*))
 
