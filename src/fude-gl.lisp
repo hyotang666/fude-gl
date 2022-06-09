@@ -1937,6 +1937,12 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 (defun list-all-images () (alexandria:hash-table-keys *images*))
 
+(define-compiler-macro image (&whole whole name &environment env)
+  (when (constantp name env)
+    (assert (gethash (eval name) *images*) ()
+      "Unknown image ~S. Eval (list-all-iamges)." (eval name)))
+  whole)
+
 (defun image (name)
   (or (gethash name *images*)
       (error "Unknown image ~S. Eval (fude-gl:list-all-images)." name)))
