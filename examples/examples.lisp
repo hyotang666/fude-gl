@@ -1695,7 +1695,6 @@
                            :diffuse (3d-vectors:vec3 1.0 0.5 0.31)
                            :specular (3d-vectors:vec3 0.5 0.5 0.5)
                            :shininess 32.0))
-           (color-update t))
            (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
