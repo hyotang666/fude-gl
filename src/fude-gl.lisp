@@ -441,18 +441,16 @@
 
 (deftype type-spec () '(or keyword (satisfies glsl-structure-name-p)))
 
-(deftype complex-type-spec () 'list)
-
 (deftype index () '(mod #.array-total-size-limit))
 
-(deftype constant-def ()
+(deftype constant-definition ()
   '(cons (eql defconstant) (cons symbol (cons index null))))
 
 (declaim
  (ftype (function
          ((cons var
-                (cons (or type-spec complex-type-spec)
-                      (or null (cons (or index constant-def) null))))
+                (cons type-spec
+                      (or null (cons (or index constant-definition) null))))
           symbol)
          (values list &optional))
         parse-shader-lambda-list-spec))
@@ -644,16 +642,13 @@
      (shader-lambda-list
       (out-spec* uniform-keyword? uniform-spec* varying-keyword?
        varying-spec*))
-     (out-spec (var (or type-spec complex-type)))
+     (out-spec (var type-spec))
      (uniform-keyword (satisfies uniform-keywordp))
      (uniform-spec (var type-spec vector-size?))
-     (vector-size (or (mod #.array-total-size-limit) constant-definition))
-     (constant-definition
-      ((eql defconstant) symbol (mod #.array-total-size-limit)))
+     (vector-size (or index constant-definition))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
-     (complex-type out-spec*)
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
