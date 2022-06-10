@@ -16,8 +16,7 @@
                                        text instancing instanced-arrays-demo
                                        instance-id-demo some-instance-demo
                                        some-instance-dynamics depth-testing
-                                       framebuffer-step1 framebuffer-shadow
-                                       framebuffer-shadow-base))
+                                       framebuffer-step1 framebuffer-shadow))
     (quit ())))
 
 ;;;; HELLO-TRIANGLE
@@ -2453,6 +2452,7 @@
         (setf model m)
         (fude-gl:draw 'shadow-cube)))))
 
+#|
 ;;;; SHADOW
 
 (fude-gl:defshader shadow-mapping 330 (fude-gl:xyz normal fude-gl:st)
@@ -2577,3 +2577,5 @@
                 (fude-gl:find-framebuffer 'depth-map)))
         #++
         (fude-gl:draw 'shadow-quad)))))
+|#
+

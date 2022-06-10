@@ -155,6 +155,8 @@
 
 (defun variable-information-ref? (info) (getf info :ref?))
 
+(defun variable-information-x (info x) (getf info x))
+
 (defun (setf variable-information-ref?) (new info)
   (let ((sentinel '#:sentinel))
     (if (eq sentinel (getf info :ref? sentinel))
@@ -162,11 +164,10 @@
         (setf (getf info :ref?) new)))
   new)
 
-(defun make-variable-information (&key var name type glsl-type)
-  (list :lisp-name (symbol-name var)
-        :name name
-        :type glsl-type
-        :attribute type))
+(defun make-variable-information
+       (&rest args &key var name type glsl-type &allow-other-keys)
+  (list* :lisp-name (symbol-name var) :name name :type glsl-type :attribute
+         type (uiop:remove-plist-keys '(:var :name :type :glsl-type) args)))
 
 (defun variable-information (symbol &optional env)
   (let* ((global?
@@ -221,12 +222,27 @@
                                    :type type))
       source))
   (:method ((type (eql :attribute)) (source list) &key)
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :var spec
-                                   :name (symbol-camel-case spec)
-                                   :type type))
-      source))
+    (loop :for class-name :in source
+          :for slots = (c2mop:class-direct-slots (find-class class-name))
+          :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
+          :when slots
+            :collect (make-variable-information :var class-name
+                                                :name (symbol-camel-case
+                                                        class-name)
+                                                :type :attribute
+                                                :glsl-type (let ((length
+                                                                  (length
+                                                                    (the list
+                                                                         slots))))
+                                                             (ecase length
+                                                               (1 :float)
+                                                               ((2 3 4)
+                                                                (intern
+                                                                  (format nil
+                                                                          "VEC~D"
+                                                                          length)
+                                                                  :keyword))))
+                                                :location i)))
   (:method ((type (eql :global)) (source list) &key)
     (mapcar
       (lambda (spec)
