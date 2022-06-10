@@ -212,15 +212,26 @@
                                    :type (type-of (third form))))
       source))
   (:method ((type (eql :slot)) (source list) &key structure)
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :var (alexandria:ensure-car spec)
-                                   :name (format nil "~A.~A"
-                                                 (symbol-camel-case structure)
-                                                 (symbol-camel-case
-                                                   (slot-truename spec)))
-                                   :type type))
-      source))
+    (let ((slots (c2mop:class-direct-slots (find-class structure))))
+      (mapcar
+        (lambda (spec)
+          (let ((truename (slot-truename spec)))
+            (make-variable-information :var (alexandria:ensure-car spec)
+                                       :name (format nil "~A.~A"
+                                                     (symbol-camel-case
+                                                       structure)
+                                                     (symbol-camel-case
+                                                       truename))
+                                       :type type
+                                       :lisp-type (some
+                                                    (lambda (slot)
+                                                      (if (eq truename
+                                                              (c2mop:slot-definition-name
+                                                                slot))
+                                                          (c2mop:slot-definition-type
+                                                            slot)))
+                                                    slots))))
+        source)))
   (:method ((type (eql :attribute)) (source list) &key)
     (loop :for class-name :in source
           :for slots = (c2mop:class-direct-slots (find-class class-name))

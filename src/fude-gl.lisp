@@ -369,14 +369,6 @@
 
 (defgeneric send (object to &key))
 
-(defstruct uniform
-  (name (error "NAME is required.") :type string :read-only t)
-  (type (error "TYPE is required.") :type string :read-only t)
-  (lisp-type (error "LISP-TYPE is required.") :type t :read-only t))
-
-(defmethod make-load-form ((this uniform) &optional environment)
-  (make-load-form-saving-slots this :environment environment))
-
 (define-compiler-macro shader (&whole whole o)
   (declare (notinline shader))
   (if (constantp o)
@@ -392,7 +384,8 @@
    (lambda (this output)
      (format output "Missing uniform named ~S. ~:@_" (cell-error-name this))
      (did-you-mean output (cell-error-name this)
-                   (mapcar #'uniform-name (uniforms (shader this))))
+                   (mapcar #'variable-information-name
+                           (uniforms (shader this))))
      (format output " ~:@_To see all supported uniforms, evaluate ~S."
              `(uniforms ',(shader this))))))
 
@@ -419,7 +412,7 @@
             (assert (find (subseq name 0 (position #\[ name))
                           (the list (uniforms shader))
                           :test #'equal
-                          :key #'uniform-name)
+                          :key #'variable-information-name)
               ()
               'missing-uniform :name name
                                :shader shader)))))))
@@ -510,40 +503,24 @@
   ;; Shader NAME becomes VECTOR-CLASS.
   ;; MAKE-INSTANCE for VECTOR-CLASS makes a VECTOR instead of an object instance.
   ;; So we should use eql-specializer instead of class.
-  (flet ((glsl-struct-uniforms (name spec)
-           (let ((structure (cadr spec)))
-             (loop :for slot
-                        :in (c2mop:class-slots
-                              (c2mop:ensure-finalized (find-class structure)))
-                   :collect (make-uniform :name (format nil "~A.~A" name
-                                                        (symbol-camel-case
-                                                          (c2mop:slot-definition-name
-                                                            slot)))
-                                          :type (symbol-camel-case
-                                                  (glsl-type slot))
-                                          :lisp-type (c2mop:slot-definition-type
-                                                       slot))))))
-    `(defmethod uniforms ((type (eql ',name)))
-       (list
-         ,@(loop :for (nil lambda-list) :in shader*
-                 :for uniform-specs
-                      := (nth-value 1 (split-shader-lambda-list lambda-list))
-                 :nconc (loop :for spec :in uniform-specs
-                              :collect (make-uniform :name (variable-information-name
-                                                             spec)
-                                                     :type (symbol-camel-case
-                                                             (variable-information-glsl-type
-                                                               spec))
-                                                     :lisp-type (funcall
-                                                                  (coerce
-                                                                    *converter*
-                                                                    'function)
-                                                                  (variable-information-glsl-type
-                                                                    spec)))
-                              :if (glsl-structure-name-p (cadr spec))
-                                :nconc (glsl-struct-uniforms
-                                         (variable-information-name spec)
-                                         spec)))))))
+  `(defmethod uniforms ((type (eql ',name)))
+     ',(loop :for (nil lambda-list) :in shader*
+             :for uniform-specs
+                  := (nth-value 1 (split-shader-lambda-list lambda-list))
+             :nconc (loop :for spec :in uniform-specs
+                          :for glsl-type = (variable-information-glsl-type spec)
+                          :collect (append-information spec
+                                                       :lisp-type (funcall
+                                                                    (coerce
+                                                                      *converter*
+                                                                      'function)
+                                                                    glsl-type))
+                          :if (glsl-structure-name-p glsl-type)
+                            :nconc (var-info :slot (mapcar
+                                                     #'c2mop:slot-definition-name
+                                                     (c2mop:class-direct-slots
+                                                       (find-class glsl-type)))
+                                             :structure glsl-type)))))
 
 (defun struct-defs (infos)
   (loop :for info :in infos
@@ -880,7 +857,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
     (when (minusp location)
       (if (find name (the list (uniforms shader))
                 :test #'equal
-                :key #'uniform-name)
+                :key #'variable-information-name)
           (error 'non-active-uniform :name name :shader shader)
           (error 'missing-uniform :name name :shader shader)))
     location))
@@ -918,10 +895,12 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                (multiple-value-bind (symbol name option)
                    (parse-var-spec spec)
                  (let ((uniform
-                        (find name uniforms :test #'equal :key #'uniform-name)))
+                        (find name uniforms
+                              :test #'equal
+                              :key #'variable-information-name)))
                    (if uniform
                        `(,symbol
-                         (the ,(uniform-lisp-type uniform)
+                         (the ,(variable-information-x uniform :lisp-type)
                               (uniform ,s ,name ,@option)))
                        `(,symbol (uniform ,s ,name ,@option)))))))
         `(let ((,s ,shader))
@@ -1534,14 +1513,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defun unit (shader name)
   (or (loop :for uniform :in (uniforms shader)
             :with unit :of-type fixnum = 0
-            :if (equal name (uniform-name uniform))
+            :if (equal name (variable-information-name uniform))
               :return unit
-            :else :if (locally
-                       #+sbcl ; Due to second argument is not a (simple-array
-                              ; character (*)).
-                       (declare
-                        (sb-ext:muffle-conditions sb-ext:compiler-note))
-                       (equal "sampler2D" (uniform-type uniform)))
+            :else :if (eq :|sampler2D| (variable-information-glsl-type uniform))
               :do (incf unit))
       (error 'missing-uniform :name name :shader shader)))
 
