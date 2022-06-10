@@ -503,11 +503,12 @@
   ;; So we should use eql-specializer instead of class.
   `(defmethod uniforms ((type (eql ',name)))
      ',(loop :for (nil lambda-list) :in shader*
-             :for uniform-specs
-                  := (nth-value 1 (split-shader-lambda-list lambda-list))
-             :nconc (loop :for spec :in uniform-specs
-                          :for glsl-type = (variable-information-glsl-type spec)
-                          :collect (append-information spec
+             :nconc (loop :for info
+                               :in (nth-value 1
+                                              (split-shader-lambda-list
+                                                lambda-list))
+                          :for glsl-type = (variable-information-glsl-type info)
+                          :collect (append-information info
                                                        :lisp-type (funcall
                                                                     (coerce
                                                                       *converter*
