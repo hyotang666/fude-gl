@@ -618,19 +618,28 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (cdr exp)
     (let ((info (variable-information type *environment*)))
       ;; TYPE existence checking.
-      (assert info ()
-        'unknown-variable :name type
-                          :known-vars (list-all-known-vars))
+      (unless info
+        (with-cl-io-syntax
+          (error 'unknown-variable
+                 :name type
+                 :known-vars (list-all-known-vars))))
       ;; SLOTS existence checking.
-      (dolist (slot slots)
-        (assert (assoc (slot-truename slot)
-                       (variable-information-glsl-type info))
-          ()
-          'unknown-slot :name (slot-truename slot)
-                        :type type
-                        :known-vars (mapcar #'car
-                                            (variable-information-glsl-type
-                                              info))))
+      (with-cl-io-syntax
+        (dolist (slot slots)
+          (unless (find (slot-truename slot)
+                        (c2mop:class-slots
+                          (c2mop:ensure-finalized
+                            (find-class
+                              (variable-information-glsl-type info))))
+                        :key #'c2mop:slot-definition-name)
+            (error 'unknown-slot
+                   :name (slot-truename slot)
+                   :type type
+                   :known-vars (mapcar #'c2mop:slot-definition-name
+                                       (c2mop:class-slots
+                                         (find-class
+                                           (variable-information-glsl-type
+                                             info))))))))
       (let ((*environment*
              (argument-environment *environment*
                                    :variable (var-info :slot slots
