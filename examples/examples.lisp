@@ -1788,13 +1788,12 @@
                       (rgb (texture (diffuse material) tex-coords)))
                    (* (diffuse light) (max 0.0 (dot normal light-dir))
                       (rgb (texture (diffuse material) tex-coords)))
-                   (* (specular light)
+                   (* (specular light) (specular material)
                       (pow
                        (max 0.0
                             (dot (normalize (- view-pos frag-pos))
                              (reflect (- light-dir) normal)))
-                       (shininess material))
-                      (specular material)))
+                       (shininess material))))
                  1.0))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
