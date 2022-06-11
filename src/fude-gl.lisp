@@ -1992,3 +1992,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      ;; The compiler macro for IMAGE needs this eval-when.
      (progn (setf (gethash ',name *images*) (load-image ,pathname)) ',name)))
+
+(defun pprint-defimage (out exp &rest noise)
+  (declare (ignore noise))
+  (funcall (formatter "~:<~W~^ ~1I~:_~W~^ ~:_~W~:>") out exp))
+
+(set-pprint-dispatch '(cons (member defimage)) 'pprint-defimage)
