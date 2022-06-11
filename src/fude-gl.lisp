@@ -530,7 +530,7 @@
 (defun constant-defs (infos)
   (loop :for info :in infos
         :for vector-size := (variable-information-x info :vector-size)
-        :when (and vector-size (typep vector-size 'constant-def))
+        :when (and vector-size (typep vector-size 'constant-definition))
           :collect vector-size))
 
 (defun glsl-declaration (out info &optional colonp atp)
@@ -552,7 +552,7 @@
              (etypecase vector-size
                (null nil)
                (index vector-size)
-               (constant-def
+               (constant-definition
                 (change-case:constant-case
                   (symbol-name (second vector-size))))))))
 
