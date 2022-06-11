@@ -1758,12 +1758,12 @@
    (specular :glsl-type :vec3
              :type 3d-vectors:vec3
              :initarg :specular
-             :initform (3d-vectors:vec3 0 0 0)
+             :initform (3d-vectors:vec3 0.5 0.5 0.5)
              :accessor specular)
    (shininess :glsl-type :float
               :type 3d-vectors:vec3
               :initarg :shininess
-              :initform 0.0
+              :initform 32.0
               :accessor shininess)))
 
 (fude-gl:defshader diffuse-map 330 (fude-gl:xyz normal fude-gl:st)
@@ -1885,9 +1885,7 @@
            (material
             (fude-gl::make-object 'diffuse-map-material
                                   :diffuse (fude-gl:find-texture 'container2
-                                                                 :if-does-not-exist :create)
-                                  :specular (3d-vectors:vec3 0.5 0.5 0.5)
-                                  :shininess 32.0))
+                                                                 :if-does-not-exist :create)))
            (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
