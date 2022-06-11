@@ -1892,7 +1892,10 @@
         t)
       (:mousewheel (:y y)
         (setf projection
-                (multiple-value-call camera y (sdl2:get-window-size win))))
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
       (:keydown (:keysym keysym)
         (when (eq :scancode-space (sdl2:scancode keysym))
           (setq color-update (not color-update)))
