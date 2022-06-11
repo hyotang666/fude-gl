@@ -164,6 +164,8 @@
         (setf (getf info :ref?) new)))
   new)
 
+(defun append-information (info &rest k-v-pairs) (append info k-v-pairs))
+
 (defun make-variable-information
        (&rest args &key var name type glsl-type &allow-other-keys)
   (list* :lisp-name (symbol-name var) :name name :type glsl-type :attribute
