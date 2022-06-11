@@ -614,36 +614,35 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-with-slots (stream exp)
   (setf stream (or stream *standard-output*))
   (destructuring-bind
-      (slots type &body body)
+      (slots var &body body)
       (cdr exp)
-    (let ((info (variable-information type *environment*)))
-      ;; TYPE existence checking.
+    (let ((info (variable-information var *environment*)) class)
+      ;; Does variable exist?
       (unless info
         (with-cl-io-syntax
           (error 'unknown-variable
-                 :name type
+                 :name var
                  :known-vars (list-all-known-vars))))
-      ;; SLOTS existence checking.
-      (with-cl-io-syntax
+      ;; Does glsl-structure exist?
+      (unless (setq class (find-class (variable-information-type info) nil))
+        (with-cl-io-syntax
+          (error 'unknown-glsl-structure
+                 :name (variable-information-type info))))
+      ;; Does each slot exist?
+      (let ((slot-defs (c2mop:class-slots (c2mop:ensure-finalized class))))
         (dolist (slot slots)
-          (unless (find (slot-truename slot)
-                        (c2mop:class-slots
-                          (c2mop:ensure-finalized
-                            (find-class
-                              (variable-information-glsl-type info))))
+          (unless (find (slot-truename slot) slot-defs
                         :key #'c2mop:slot-definition-name)
-            (error 'unknown-slot
-                   :name (slot-truename slot)
-                   :type type
-                   :known-vars (mapcar #'c2mop:slot-definition-name
-                                       (c2mop:class-slots
-                                         (find-class
-                                           (variable-information-glsl-type
-                                             info))))))))
+            (with-cl-io-syntax
+              (error 'unknown-slot
+                     :name (slot-truename slot)
+                     :type var
+                     :known-vars (mapcar #'c2mop:slot-definition-name
+                                         slot-defs))))))
       (let ((*environment*
              (argument-environment *environment*
                                    :variable (var-info :slot slots
-                                                       :structure type
+                                                       :structure var
                                                        :var-name (variable-information-name
                                                                    info)))))
         ;; The body.
