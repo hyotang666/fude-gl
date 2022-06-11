@@ -2090,6 +2090,154 @@
               p projection)
         (fude-gl:draw 'light-cube)))))
 
+;;;; DIRECTIONAL-LIGHT
+
+(fude-gl::define-glsl-structure <directional-light> ()
+  ((direction :glsl-type :vec3
+              :type 3d-vectors:vec3
+              :initarg :direction
+              :initform (3d-vectors:vec3 -0.2 -1.0 -0.3)
+              :reader direction)
+   (ambient :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :ambient
+            :initform (3d-vectors:vec3 1 1 1)
+            :accessor ambient)
+   (diffuse :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :diffuse
+            :initform (3d-vectors:vec3 1 1 1)
+            :accessor diffuse)
+   (specular :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :specular
+             :initform (3d-vectors:vec3 1 1 1)
+             :reader specular)))
+
+(fude-gl:defshader directional-light 330 (fude-gl:xyz normal fude-gl:st)
+  (:vertex ((norm :vec3) (frag-pos :vec3) (tex-coords :vec2) &uniform
+            (model :mat4) (view :mat4) (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+            norm (* normal (mat3 (transpose (inverse model))))
+            tex-coords fude-gl:st
+            gl-position (* projection view (vec4 frag-pos 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (material specular-map-material)
+              (light <directional-light>) (view-pos :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((normal :vec3 (normalize norm))
+            (light-dir :vec3 (normalize (- (direction light)))))
+        (setf frag-color
+                (vec4
+                 (+
+                   (* (rgb (texture (diffuse material) tex-coords))
+                      (ambient light))
+                   (* (rgb (texture (diffuse material) tex-coords))
+                      (diffuse light) (max 0.0 (dot normal light-dir)))
+                   (* (rgb (texture (specular material) tex-coords))
+                      (specular light)
+                      (pow
+                       (max 0.0
+                            (dot (normalize (- view-pos frag-pos))
+                             (reflect (- light-dir) normal)))
+                       (shininess material))))
+                 1.0))))))
+
+(fude-gl:defvertices directional-light *diffuse-map-source*)
+
+(defun directional-light ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Directional light."
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
+    (fude-gl:with-shader ())
+    (let* ((light (fude-gl::make-object '<directional-light>))
+           (camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
+           (model (3d-matrices:meye 4))
+           (projection
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (time (fude-gl:make-delta-time))
+           (light-color (3d-vectors:vec3 1.0 1.0 1.0))
+           (material
+            (fude-gl::make-object 'specular-map-material
+                                  :diffuse (fude-gl:find-texture 'container2
+                                                                 :if-does-not-exist :create)
+                                  :specular (fude-gl:find-texture
+                                              'container2-specular
+                                              :if-does-not-exist :create)
+                                  :shininess 32.0))
+           (color-update t)
+           (cube-positions
+            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+                  (3d-vectors:vec -1.5 -2.2 -2.5)
+                  (3d-vectors:vec -3.8 -2.0 -12.3)
+                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
+                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
+                  (3d-vectors:vec 1.5 0.2 -1.5)
+                  (3d-vectors:vec -1.3 1 -1.5)))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
+      (:keydown (:keysym keysym)
+        (when (eq :scancode-space (sdl2:scancode keysym))
+          (setq color-update (not color-update)))
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view
+           (fude-gl:view
+             (multiple-value-call #'fude-gl:lookat
+               camera
+               (sdl2:get-global-mouse-state)))))
+      ;; Update light colors.
+      (when color-update
+        (locally
+         #+sbcl ; Out of our responsibility.
+         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
+                           (sin (* 0.7 (get-internal-real-time)))
+                           (sin (* 1.3 (get-internal-real-time)))))
+        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
+              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
+                              (l light) view-pos)
+          'directional-light
+        (setf v view
+              p projection
+              view-pos (fude-gl:camera-position camera)
+              mat material
+              l light)
+        (loop :for pos :in cube-positions
+              :for i :upfrom 0
+              :do (setf m (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload model fude-gl:+meye4+) pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i))))
+                  (fude-gl:draw 'directional-light))))))
+
 ;;;; FONT
 ;;
 ;; In this example, we explain how to render text.
