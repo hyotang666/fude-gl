@@ -213,15 +213,13 @@
                                            (symbol-name (second form)))
                                    :type (type-of (third form))))
       source))
-  (:method ((type (eql :slot)) (source list) &key structure)
+  (:method ((type (eql :slot)) (source list) &key structure var-name)
     (let ((slots (c2mop:class-direct-slots (find-class structure))))
       (mapcar
         (lambda (spec)
           (let ((truename (slot-truename spec)))
             (make-variable-information :var (alexandria:ensure-car spec)
-                                       :name (format nil "~A.~A"
-                                                     (symbol-camel-case
-                                                       structure)
+                                       :name (format nil "~A.~A" var-name
                                                      (symbol-camel-case
                                                        truename))
                                        :type type
@@ -636,7 +634,9 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (let ((*environment*
              (argument-environment *environment*
                                    :variable (var-info :slot slots
-                                                       :structure type))))
+                                                       :structure type
+                                                       :var-name (variable-information-name
+                                                                   info)))))
         ;; The body.
         (dolist (exp body) (write exp :stream stream))))))
 

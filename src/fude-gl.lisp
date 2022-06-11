@@ -519,7 +519,9 @@
                                                      #'c2mop:slot-definition-name
                                                      (c2mop:class-direct-slots
                                                        (find-class glsl-type)))
-                                             :structure glsl-type)))))
+                                             :structure glsl-type
+                                             :var-name (variable-information-name
+                                                         info))))))
 
 (defun struct-defs (infos)
   (loop :for info :in infos
