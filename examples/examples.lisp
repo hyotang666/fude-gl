@@ -2613,6 +2613,202 @@
                             (fude-gl:radians (* 20 i))))
                   (fude-gl:draw 'spot-light))))))
 
+;;;; SPOT-SOFT
+
+(fude-gl::define-glsl-structure <spot-soft> ()
+  ((position :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :position
+             :initform (3d-vectors:vec3 0 0 0)
+             :reader light-position)
+   (direction :glsl-type :vec3
+              :type 3d-vectors:vec3
+              :initarg :direction
+              :initform (3d-vectors:vec3 0 0 0)
+              :reader direction)
+   (cut-off :glsl-type :float
+            :type single-float
+            :initarg :cut-off
+            :initform (cos (fude-gl:radians 12.5))
+            :reader cut-off)
+   (outer-cut-off :glsl-type :float
+                  :type single-float
+                  :initarg :outer-cut-off
+                  :initform (cos (fude-gl:radians 17.5))
+                  :reader outer-cut-off)
+   (ambient :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :ambient
+            :initform (3d-vectors:vec3 0.1 0.1 0.1)
+            :accessor ambient)
+   (diffuse :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :diffuse
+            :initform (3d-vectors:vec3 0.8 0.8 0.8)
+            :accessor diffuse)
+   (specular :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :specular
+             :initform (3d-vectors:vec3 1 1 1)
+             :reader specular)
+   (constant :glsl-type :float
+             :type float
+             :initarg :constant
+             :initform 1.0
+             :reader constant)
+   (linear :glsl-type :float
+           :type float
+           :initarg :linear
+           :initform 0.09
+           :reader linear)
+   (quadratic :glsl-type :float
+              :type float
+              :initarg :quadratic
+              :initform 0.032
+              :reader quadratic)))
+
+(fude-gl:defshader spot-soft 330 (fude-gl:xyz normal fude-gl:st)
+  (:vertex ((norm :vec3) (frag-pos :vec3) (tex-coords :vec2) &uniform
+            (model :mat4) (view :mat4) (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+            norm (* normal (mat3 (transpose (inverse model))))
+            tex-coords fude-gl:st
+            gl-position (* projection view (vec4 frag-pos 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (material specular-map-material)
+              (light <spot-soft>) (view-pos :vec3))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((light-dir :vec3 (normalize (- (light-position light) frag-pos)))
+            (intensity
+             :float
+             (clamp
+              (/
+                (- (dot light-dir (normalize (- (direction light))))
+                   (outer-cut-off light))
+                (- (cut-off light) (outer-cut-off light)))
+              0.0 1.0))
+            (distance :float (length (- (light-position light) frag-pos)))
+            (attenuation
+             :float
+             (/ 1.0
+                (+ (constant light) (* (linear light) distance)
+                   (* (quadratic light) distance distance)))))
+        (setf frag-color
+                (vec4
+                 (+
+                   (* (rgb (texture (diffuse material) tex-coords))
+                      (ambient light) attenuation)
+                   (* (rgb (texture (diffuse material) tex-coords))
+                      (diffuse light)
+                      (max 0.0 (dot (normalize norm) light-dir)) intensity
+                      attenuation)
+                   (* (rgb (texture (specular material) tex-coords))
+                      (specular light)
+                      (pow
+                       (max 0.0
+                            (dot (normalize (- view-pos frag-pos))
+                             (reflect (- light-dir) norm)))
+                       (shininess material))
+                      intensity attenuation))
+                 1.0))))))
+
+(fude-gl:defvertices spot-soft *diffuse-map-source*)
+
+(defun spot-soft ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :title "Spot soft."
+                           :w 800
+                           :h 600))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
+    (fude-gl:with-shader ())
+    (let* ((camera
+            (multiple-value-bind (x y mask)
+                (sdl2:get-global-mouse-state)
+              (declare (ignore mask))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
+           (light
+            (fude-gl::make-object '<spot-soft>
+                                  :position (fude-gl:camera-position camera)
+                                  :direction (fude-gl:camera-front camera)))
+           (model (3d-matrices:meye 4))
+           (projection
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (time (fude-gl:make-delta-time))
+           (light-color (3d-vectors:vec3 1.0 1.0 1.0))
+           (material
+            (fude-gl::make-object 'specular-map-material
+                                  :diffuse (fude-gl:find-texture 'container2
+                                                                 :if-does-not-exist :create)
+                                  :specular (fude-gl:find-texture
+                                              'container2-specular
+                                              :if-does-not-exist :create)))
+           (color-update t)
+           (cube-positions
+            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+                  (3d-vectors:vec -1.5 -2.2 -2.5)
+                  (3d-vectors:vec -3.8 -2.0 -12.3)
+                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
+                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
+                  (3d-vectors:vec 1.5 0.2 -1.5)
+                  (3d-vectors:vec -1.3 1 -1.5)))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
+      (:keydown (:keysym keysym)
+        (when (eq :scancode-space (sdl2:scancode keysym))
+          (setq color-update (not color-update)))
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view
+           (fude-gl:view
+             (multiple-value-call #'fude-gl:lookat
+               camera
+               (sdl2:get-global-mouse-state)))))
+      ;; Update light colors.
+      (when color-update
+        (locally
+         #+sbcl ; Out of our responsibility.
+         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
+                           (sin (* 0.7 (get-internal-real-time)))
+                           (sin (* 1.3 (get-internal-real-time)))))
+        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
+              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
+                              (l light) view-pos)
+          'spot-soft
+        (setf v view
+              p projection
+              view-pos (fude-gl:camera-position camera)
+              mat material
+              l light)
+        (loop :for pos :in cube-positions
+              :for i :upfrom 0
+              :do (setf m (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload model fude-gl:+meye4+) pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i))))
+                  (fude-gl:draw 'spot-soft))))))
+
 ;;;; FONT
 ;;
 ;; In this example, we explain how to render text.
