@@ -1865,9 +1865,9 @@
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let* ((light
-            (make-instance 'light
-                           :position (3d-vectors:vec3 1.2 1.0 2.0)
-                           :specular (3d-vectors:vec3 1 1 1)))
+            (fude-gl::make-object 'light
+                                  :position (3d-vectors:vec3 1.2 1.0 2.0)
+                                  :specular (3d-vectors:vec3 1 1 1)))
            (camera
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
@@ -1883,11 +1883,11 @@
            (time (fude-gl:make-delta-time))
            (light-color (3d-vectors:vec3 1.0 1.0 1.0))
            (material
-            (make-instance 'diffuse-map-material
-                           :diffuse (fude-gl:find-texture 'container2
-                                                          :if-does-not-exist :create)
-                           :specular (3d-vectors:vec3 0.5 0.5 0.5)
-                           :shininess 32.0))
+            (fude-gl::make-object 'diffuse-map-material
+                                  :diffuse (fude-gl:find-texture 'container2
+                                                                 :if-does-not-exist :create)
+                                  :specular (3d-vectors:vec3 0.5 0.5 0.5)
+                                  :shininess 32.0))
            (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
