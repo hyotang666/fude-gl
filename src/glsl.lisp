@@ -650,47 +650,39 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (name lambda-list &body body)
       (cdr exp)
     (let ((info
-           (nth-value 2 (eprot:function-information name eprot:*environment*))))
-      (unless info
-        (with-cl-io-syntax
-          (error "DEFUN ~S needs ftype DECLAIMed." name)))
+           (or (nth-value 2
+                          (eprot:function-information name
+                                                      eprot:*environment*))
+               (with-cl-io-syntax
+                 (error "DEFUN ~S needs ftype DECLAIMed." name)))))
       (destructuring-bind
           (arg-types return)
           (cddr (assoc 'ftype info))
-        (let ((eprot:*environment*
-               (eprot:augment-environment eprot:*environment*
-                                          :name name
-                                          :function (cons name
-                                                          (struct-readers
-                                                            (remove-if-not
-                                                              #'glsl-structure-name-p
-                                                              arg-types)))
-                                          :variable lambda-list
-                                          :declare `((ftype (function
-                                                             ,(mapcar
-                                                                (lambda
-                                                                    (var type)
-                                                                  (list
-                                                                    (symbol-camel-case
-                                                                      var)
-                                                                    (symbol-camel-case
-                                                                      type)))
-                                                                lambda-list
-                                                                arg-types)
-                                                             ,return)
-                                                            ,name)
-                                                     (glsl-env:notation ,name
-                                                      ,(symbol-camel-case
-                                                         name))
-                                                     ,@(mapcan
-                                                         (lambda (var type)
-                                                           `((type ,type ,var)
-                                                             (glsl-env:notation
-                                                              ,var
-                                                              ,(symbol-camel-case
-                                                                 var))))
-                                                         lambda-list
-                                                         arg-types)))))
+        (let* ((functions
+                (cons name
+                      (struct-readers
+                        (remove-if-not #'glsl-structure-name-p arg-types))))
+               (decls
+                `((ftype (function
+                          ,(mapcar
+                             (lambda (var type)
+                               (list (symbol-camel-case var)
+                                     (symbol-camel-case type)))
+                             lambda-list arg-types)
+                          ,return)
+                         ,name)
+                  (glsl-env:notation ,name ,(symbol-camel-case name))
+                  ,@(mapcan
+                      (lambda (var type)
+                        `((type ,type ,var)
+                          (glsl-env:notation ,var ,(symbol-camel-case var))))
+                      lambda-list arg-types)))
+               (eprot:*environment*
+                (eprot:augment-environment eprot:*environment*
+                                           :name name
+                                           :function functions
+                                           :variable lambda-list
+                                           :declare decls)))
           (funcall
             (formatter
              #.(apply #'concatenate 'string
