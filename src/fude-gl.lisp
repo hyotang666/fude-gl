@@ -489,35 +489,33 @@
   ;; So we should use eql-specializer instead of class.
   `(defmethod uniforms ((type (eql ',name)))
      (list
-       ,@(loop :for (nil lambda-list) :in shader*
-               :nconc (loop :for (var type . vector-size)
-                                 :in (nth-value 1
-                                                (split-shader-lambda-list
-                                                  lambda-list))
-                            :collect (make-uniform :name (symbol-camel-case
-                                                           var)
-                                                   :lisp-type (funcall
-                                                                (coerce
-                                                                  *converter*
-                                                                  'function)
-                                                                type)
-                                                   :glsl-type type)
-                            :if (glsl-structure-name-p type)
-                              :nconc (loop :for slot
-                                                :in (c2mop:class-direct-slots
-                                                      (find-class type))
-                                           :collect (make-uniform :name (format
-                                                                          nil
-                                                                          "~A.~A"
-                                                                          (symbol-camel-case
-                                                                            var)
-                                                                          (symbol-camel-case
-                                                                            (c2mop:slot-definition-name
-                                                                              slot)))
-                                                                  :lisp-type (c2mop:slot-definition-type
-                                                                               slot)
-                                                                  :glsl-type (glsl-type
-                                                                               slot))))))))
+       ,@(labels ((slot-reader-uniform (var slot)
+                    (make-uniform :name (format nil "~A.~A"
+                                                (symbol-camel-case var)
+                                                (symbol-camel-case
+                                                  (c2mop:slot-definition-name
+                                                    slot)))
+                                  :lisp-type (c2mop:slot-definition-type slot)
+                                  :glsl-type (glsl-type slot)))
+                  (convert (type)
+                    (funcall (coerce *converter* 'function) type)))
+           (uiop:while-collecting (acc)
+             (loop :for (nil lambda-list) :in shader*
+                   :do (loop :for (var type . vector-size)
+                                  :in (nth-value 1
+                                                 (split-shader-lambda-list
+                                                   lambda-list))
+                             :do (acc
+                                   (make-uniform :name (symbol-camel-case var)
+                                                 :lisp-type (convert type)
+                                                 :glsl-type type))
+                             :if (glsl-structure-name-p type)
+                               :do (dolist
+                                       (slot
+                                        (c2mop:class-direct-slots
+                                          (find-class type)))
+                                     (acc
+                                       (slot-reader-uniform var slot))))))))))
 
 (defun struct-defs (specs)
   (loop :for (nil type) :in specs
