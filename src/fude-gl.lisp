@@ -378,14 +378,18 @@
 (define-condition uniform-error (fude-gl-error cell-error)
   ((shader :initarg :shader :reader shader)))
 
+(defstruct uniform
+  (name (error "NAME is required.") :type string :read-only t)
+  (lisp-type (error "LISP-TYPE is required.") :type t :read-only t)
+  (glsl-type (error "GLSL-TYPE is rqeuired.") :type symbol :read-only t))
+
 (define-condition missing-uniform (uniform-error)
   ()
   (:report
    (lambda (this output)
      (format output "Missing uniform named ~S. ~:@_" (cell-error-name this))
      (did-you-mean output (cell-error-name this)
-                   (mapcar #'variable-information-name
-                           (uniforms (shader this))))
+                   (mapcar #'uniform-name (uniforms (shader this))))
      (format output " ~:@_To see all supported uniforms, evaluate ~S."
              `(uniforms ',(shader this))))))
 
@@ -398,6 +402,9 @@
              (cell-error-name this) (shader this)
              (gl:get-program (program-id (find-shader (shader this)))
                              :active-uniforms)))))
+
+(defmethod make-load-form ((o uniform) &optional env)
+  (make-load-form-saving-slots o :environment env))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Compiler macro and setf expander below needs this eval-when.
@@ -412,7 +419,7 @@
             (assert (find (subseq name 0 (position #\[ name))
                           (the list (uniforms shader))
                           :test #'equal
-                          :key #'variable-information-name)
+                          :key #'uniform-name)
               ()
               'missing-uniform :name name
                                :shader shader)))))))
@@ -447,26 +454,6 @@
   '(cons (eql defconstant) (cons symbol (cons index null))))
 
 (declaim
- (ftype (function
-         ((cons var
-                (cons type-spec
-                      (or null (cons (or index constant-definition) null))))
-          symbol)
-         (values list &optional))
-        parse-shader-lambda-list-spec))
-
-(defun parse-shader-lambda-list-spec (spec attribute)
-  "Return variable information about SPEC."
-  (destructuring-bind
-      (name type . vector-size)
-      spec
-    (make-variable-information :var name
-                               :name (symbol-camel-case name)
-                               :type attribute
-                               :glsl-type type
-                               :vector-size (car vector-size))))
-
-(declaim
  (ftype (function (list) (values list list list &optional))
         split-shader-lambda-list))
 
@@ -482,15 +469,14 @@
             :do (setf collector #'varying
                       attribute :varying)
           :else
-            :do (funcall collector
-                         (parse-shader-lambda-list-spec elt attribute)))))
+            :do (funcall collector elt))))
 
 (defun lisp-type<-glsl-type (glsl-type)
   (if (glsl-structure-name-p glsl-type)
       glsl-type
       (ecase glsl-type ; YAGNI style.
-        (:vec2 '(or 3d-vectors:vec2 (vector * 2)))
-        (:vec3 '(or 3d-vectors:vec3 (vector * 3)))
+        (:vec2 '(or 3d-vectors:vec2 (vector single-float 2)))
+        (:vec3 '(or 3d-vectors:vec3 (vector single-float 3)))
         (:mat4 '3d-matrices:mat4)
         (:float 'single-float)
         (:|sampler2D| 'texture))))
@@ -502,38 +488,46 @@
   ;; MAKE-INSTANCE for VECTOR-CLASS makes a VECTOR instead of an object instance.
   ;; So we should use eql-specializer instead of class.
   `(defmethod uniforms ((type (eql ',name)))
-     ',(loop :for (nil lambda-list) :in shader*
-             :nconc (loop :for info
-                               :in (nth-value 1
-                                              (split-shader-lambda-list
-                                                lambda-list))
-                          :for glsl-type = (variable-information-glsl-type info)
-                          :collect (append-information info
-                                                       :lisp-type (funcall
-                                                                    (coerce
-                                                                      *converter*
-                                                                      'function)
-                                                                    glsl-type))
-                          :if (glsl-structure-name-p glsl-type)
-                            :nconc (var-info :slot (mapcar
-                                                     #'c2mop:slot-definition-name
-                                                     (c2mop:class-direct-slots
-                                                       (find-class glsl-type)))
-                                             :structure glsl-type
-                                             :var-name (variable-information-name
-                                                         info))))))
+     (list
+       ,@(loop :for (nil lambda-list) :in shader*
+               :nconc (loop :for (var type . vector-size)
+                                 :in (nth-value 1
+                                                (split-shader-lambda-list
+                                                  lambda-list))
+                            :collect (make-uniform :name (symbol-camel-case
+                                                           var)
+                                                   :lisp-type (funcall
+                                                                (coerce
+                                                                  *converter*
+                                                                  'function)
+                                                                type)
+                                                   :glsl-type type)
+                            :if (glsl-structure-name-p type)
+                              :nconc (loop :for slot
+                                                :in (c2mop:class-direct-slots
+                                                      (find-class type))
+                                           :collect (make-uniform :name (format
+                                                                          nil
+                                                                          "~A.~A"
+                                                                          (symbol-camel-case
+                                                                            var)
+                                                                          (symbol-camel-case
+                                                                            (c2mop:slot-definition-name
+                                                                              slot)))
+                                                                  :lisp-type (c2mop:slot-definition-type
+                                                                               slot)
+                                                                  :glsl-type (glsl-type
+                                                                               slot))))))))
 
-(defun struct-defs (infos)
-  (loop :for info :in infos
-        :for type = (variable-information-glsl-type info)
+(defun struct-defs (specs)
+  (loop :for (nil type) :in specs
         :when (glsl-structure-name-p type)
           :collect type))
 
-(defun constant-defs (infos)
-  (loop :for info :in infos
-        :for vector-size := (variable-information-x info :vector-size)
-        :when (and vector-size (typep vector-size 'constant-definition))
-          :collect vector-size))
+(defun constant-defs (specs)
+  (loop :for (nil nil . vector-size) :in specs
+        :when (and vector-size (typep (car vector-size) 'constant-definition))
+          :collect (car vector-size)))
 
 (defun glsl-declaration (out info &optional colonp atp)
   (if colonp
@@ -543,20 +537,75 @@
       (if atp
           (write-string "out " out)
           (funcall (formatter "~@[layout (location = ~D) ~]in ") out
-                   (variable-information-x info :location))))
+                   (first info))))
   (funcall (formatter "~A ~A~@[[~A]~];") out
-           (let ((type (variable-information-glsl-type info)))
+           (let ((type (third info)))
              (if (glsl-structure-name-p type)
                  (change-case:pascal-case (symbol-name type))
                  (symbol-camel-case type)))
-           (change-case:camel-case (variable-information-var info))
-           (let ((vector-size (variable-information-x info :vector-size)))
+           (symbol-camel-case (second info))
+           (let ((vector-size (fourth info)))
              (etypecase vector-size
                (null nil)
                (index vector-size)
                (constant-definition
                 (change-case:constant-case
                   (symbol-name (second vector-size))))))))
+
+(defun attribute-decls (attributes)
+  (loop :for class-name :in attributes
+        :for slots = (c2mop:class-direct-slots (find-class class-name))
+        :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
+        :when slots
+          :collect `(type
+                     ,(let ((length (length (the list slots))))
+                        (ecase length
+                          (1 :float)
+                          ((2 3 4)
+                           (intern (format nil "VEC~D" length) :keyword))))
+                     ,class-name)
+        :collect `(glsl-env:notation ,class-name
+                   ,(symbol-camel-case class-name))
+        :collect `(location ,class-name ,i)
+        :collect `(attribute ,class-name :attribute)))
+
+(defun attribute-ins (decls)
+  (let ((table (make-hash-table)))
+    (loop :for decl :in decls
+          :when (eq 'type (car decl))
+            :do (setf (gethash (third decl) table)
+                        (list (third decl) (second decl)))
+          :when (eq 'location (car decl))
+            :do (push (third decl) (gethash (second decl) table)))
+    (sort (the list (alexandria:hash-table-values table)) #'< :key #'car)))
+
+(defun io-decl (out-specs)
+  (uiop:while-collecting (acc)
+    (loop :for (nil var type . vector-size) :in out-specs
+          :do (acc
+               `(type
+                 ,(if vector-size
+                      `(vector ,type ,(car vector-size))
+                      type)
+                 ,var))
+              (acc `(glsl-env:notation ,var ,(symbol-camel-case var)))
+          :if (glsl-structure-name-p type)
+            :do (dolist (slot (c2mop:class-direct-slots (find-class type)))
+                  (dolist (reader (c2mop:slot-definition-readers slot))
+                    (acc
+                     `(ftype (function ((,(symbol-camel-case var) ,type))
+                              ,(glsl-type slot))
+                             ,reader))
+                    (acc
+                     `(glsl-env:notation ,reader
+                       ,(format nil "~A.~A" (symbol-camel-case var)
+                                (symbol-camel-case
+                                  (c2mop:slot-definition-name slot)))))
+                    (acc `(attribute ,reader :slot-reader)))))))
+
+(defun constant-decl (constant-defs)
+  (loop :for (nil name value) :in constant-defs
+        :collect `(constant ,value ,name)))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let* ((format
@@ -570,9 +619,11 @@
                           "~@[~{~:@/fude-gl:glsl-declaration/~%~}~]~&" ; varying.
                           "~@[~{~/fude-gl:pprint-glsl/~^~}~]" ; functions.
                           )))
-         (var-info (var-info :attribute superclasses))
-         (*environment*
-          (argument-environment *environment* :variable var-info)))
+         (attribute-decls (attribute-decls superclasses))
+         (eprot:*environment*
+          (eprot:augment-environment (eprot:find-environment :fude-gl)
+                                     :variable superclasses
+                                     :declare attribute-decls)))
     (labels ((rec (shaders in varying acc)
                (if (endp shaders)
                    (nreverse acc)
@@ -584,23 +635,34 @@
                  (multiple-value-bind (out uniform varying%)
                      (split-shader-lambda-list shader-lambda-list)
                    (let* ((constant-defs (constant-defs uniform))
-                          (*environment*
-                           (argument-environment *environment* :variable out))
-                          (struct-defs (struct-defs uniform)))
+                          (struct-defs (struct-defs uniform))
+                          (out (mapcar (lambda (out) (cons nil out)) out))
+                          (uniform
+                           (mapcar (lambda (out) (cons nil out)) uniform))
+                          (varying
+                           (mapcar (lambda (out) (cons nil out)) varying))
+                          (eprot:*environment*
+                           (eprot:augment-environment eprot:*environment*
+                                                      :variable (mapcar #'cadr
+                                                                        out)
+                                                      :declare (io-decl out))))
                      (rec rest out (append varying varying%)
                           (cons
                             (let ((method
                                    (intern (format nil "~A-SHADER" type)
                                            :fude-gl))
-                                  (*environment*
-                                   (argument-environment *environment*
-                                                         :variable (append
-                                                                     uniform
-                                                                     varying%
-                                                                     (var-info
-                                                                       :constant constant-defs))
-                                                         :function (struct-readers
-                                                                     struct-defs))))
+                                  (eprot:*environment*
+                                   (eprot:augment-environment
+                                     eprot:*environment*
+                                     :name type
+                                     :variable (mapcar #'cadr
+                                                       (append uniform varying%
+                                                               constant-defs))
+                                     :function (struct-readers struct-defs)
+                                     :declare (append (io-decl uniform)
+                                                      (io-decl varying%)
+                                                      (constant-decl
+                                                        constant-defs)))))
                               `(defmethod ,method ((type (eql ',name)))
                                  ,(if (typep main
                                              '(cons
@@ -613,7 +675,7 @@
                                               (append varying varying%)
                                               main))))
                             acc)))))))
-      (rec shader-clause* var-info nil nil))))
+      (rec shader-clause* (attribute-ins attribute-decls) nil nil))))
 
 (defvar *shaders*
   (make-hash-table :test #'eq)
@@ -855,7 +917,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
     (when (minusp location)
       (if (find name (the list (uniforms shader))
                 :test #'equal
-                :key #'variable-information-name)
+                :key #'uniform-name)
           (error 'non-active-uniform :name name :shader shader)
           (error 'missing-uniform :name name :shader shader)))
     location))
@@ -893,12 +955,10 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                (multiple-value-bind (symbol name option)
                    (parse-var-spec spec)
                  (let ((uniform
-                        (find name uniforms
-                              :test #'equal
-                              :key #'variable-information-name)))
+                        (find name uniforms :test #'equal :key #'uniform-name)))
                    (if uniform
                        `(,symbol
-                         (the ,(variable-information-x uniform :lisp-type)
+                         (the ,(uniform-lisp-type uniform)
                               (uniform ,s ,name ,@option)))
                        `(,symbol (uniform ,s ,name ,@option)))))))
         `(let ((,s ,shader))
@@ -1511,9 +1571,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defun unit (shader name)
   (or (loop :for uniform :in (uniforms shader)
             :with unit :of-type fixnum = 0
-            :if (equal name (variable-information-name uniform))
+            :if (equal name (uniform-name uniform))
               :return unit
-            :else :if (eq :|sampler2D| (variable-information-glsl-type uniform))
+            :else :if (eq :|sampler2D| (uniform-glsl-type uniform))
               :do (incf unit))
       (error 'missing-uniform :name name :shader shader)))
 

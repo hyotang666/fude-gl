@@ -1159,7 +1159,7 @@
   (:vertex (&uniform (model :mat4) (view :mat4) (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (setf gl-position (* projection view model (vec4 xyz 1.0)))))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0)))))
   (:fragment ((frag-color :vec4) &uniform (object-color :vec3)
               (light-color :vec3))
     (declaim (ftype (function nil (values)) main))
@@ -1169,7 +1169,7 @@
   (:vertex (&uniform (model :mat4) (view :mat4) (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (setf gl-position (* projection view model (vec4 xyz 1.0)))))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0)))))
   (:fragment ((frag-color :vec4) &uniform (object-color :vec3)
               (light-color :vec3))
     (declaim (ftype (function nil (values)) main))
@@ -1270,7 +1270,7 @@
   (:vertex (&uniform (model :mat4) (view :mat4) (projection :mat4))
     (declaim (ftype (function nil (values)) main))
     (defun main ()
-      (setf gl-position (* projection view model (vec4 xyz 1.0)))))
+      (setf gl-position (* projection view model (vec4 fude-gl:xyz 1.0)))))
   (:fragment ((frag-color :vec4) &uniform (object-color :vec3)
               (light-color :vec3))
     (declaim (ftype (function nil (values)) main))
@@ -1297,7 +1297,8 @@
             (multiple-value-bind (x y mask)
                 (sdl2:get-global-mouse-state)
               (declare (ignore mask))
-              (make-instance 'looker :last-position (3d-vectors:vec3 x y 0))))
+              (make-instance 'fude-gl:looker
+                             :last-position (3d-vectors:vec3 x y 0))))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -2874,7 +2875,7 @@
     (declaim (ftype (function nil (values)) main))
     ;; With S-Expression glsl, LET needs type-spec in the second element of the bind.
     (defun main ()
-      (let ((offset :vec2 (aref offsets |gl_InstanceID|)))
+      (let ((offset :vec2 (aref offsets gl-instance-id)))
         (setf gl-position (vec4 (+ fude-gl:xy offset) 0.0 1.0)
               f-color fude-gl:rgb))))
   (:fragment ((frag-color :vec4))
@@ -2973,10 +2974,9 @@
 (fude-gl:defshader instance-id-demo 330 (fude-gl:xy fude-gl:rgb fude-gl:offset)
   (:vertex ((f-color :vec3))
     (declaim (ftype (function nil (values)) main))
-    ;; |gl_InstanceID| or gl-instance-i-d, use which you like.
     (defun main ()
       (setf gl-position
-              (vec4 (+ (* fude-gl:xy (/ |gl_InstanceID| 100.0)) fude-gl:offset)
+              (vec4 (+ (* fude-gl:xy (/ gl-instance-id 100.0)) fude-gl:offset)
                0.0 1.0)
             f-color fude-gl:rgb)))
   (:fragment ((frag-color :vec4))

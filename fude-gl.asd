@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "5.14.0"
+  "5.15.0"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -11,7 +11,9 @@
   (
    "cl-opengl"          ; FFI for opengl.
    "sdl2"               ; Windowing support.
-   "glsl-spec"          ; GLSL spec objects.
+   "glsl-env"           ; GLSL spec environment.
+   "glsl-spec"          ; GLSL spec objects. Implicitly depends on via glsl-env.
+   "eprot"              ; CLtL2 compatible environment protocols, Implicitly depends on via glsl-env.
    "uiop"               ; Utilities.
    "alexandria"         ; Public domain utilities.
    "millet"             ; Wrapper for tiny utilities.

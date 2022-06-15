@@ -126,153 +126,76 @@
 
 ;;;; ENVIRONMENT
 
-(defstruct environment
-  (variable nil :type list :read-only t)
-  (function nil :type list)
-  (next nil :type (or null environment) :read-only t))
-
-(defmethod print-object ((o environment) output)
-  (print-unreadable-object (o output :type t :identity t)))
-
-(defvar *environment*
-  (make-environment :next nil
-                    :variable glsl-spec:*variables*
-                    :function (append glsl-spec:*functions*
-                                      glsl-spec:*operators*
-                                      glsl-spec:*vector-constructors*
-                                      glsl-spec:*matrix-constructors*)))
-
-(defun variable-information-var (info) (getf info :lisp-name))
-
-(defun variable-information-name (info) (getf info :name))
-
-(defun variable-information-type (info)
-  (if (getf info :versions)
-      :global
-      (getf info :attribute)))
-
-(defun variable-information-glsl-type (info) (getf info :type))
-
-(defun variable-information-ref? (info) (getf info :ref?))
-
-(defun variable-information-x (info x) (getf info x))
-
-(defun (setf variable-information-ref?) (new info)
-  (let ((sentinel '#:sentinel))
-    (if (eq sentinel (getf info :ref? sentinel))
-        (nconc info (list :ref? new))
-        (setf (getf info :ref?) new)))
-  new)
-
-(defun append-information (info &rest k-v-pairs) (append info k-v-pairs))
-
-(defun make-variable-information
-       (&rest args &key var name type glsl-type &allow-other-keys)
-  (list* :lisp-name (symbol-name var) :name name :type glsl-type :attribute
-         type (uiop:remove-plist-keys '(:var :name :type :glsl-type) args)))
+(eprot:defenv :fude-gl
+  :use :glsl
+  :handler
+  ((location (decl-form env) (declare (ignore env))
+    (unless (= 3 (length decl-form))
+      (error 'eprot:bad-declaration-specifier
+             :datum decl-form
+             :expected-type '(decl-name var location)))
+    (values :variable
+            (destructuring-bind
+                (decl-name var location)
+                decl-form
+              (list (list var decl-name location)))))
+   (attribute (decl-form env) (declare (ignore env))
+    (unless (= 3 (length decl-form))
+      (error 'eprot:bad-declaration-specifier
+             :datum decl-form
+             :expected-type '(decl-name var attribute)))
+    (values :bind
+            (destructuring-bind
+                (decl-name var attribute)
+                decl-form
+              (list (list var decl-name attribute)))))
+   (refered (decl-form env)
+    (unless (= 2 (length decl-form))
+      (error 'eprot:bad-declaration-specifier
+             :datum decl-form
+             :expected-type '(decl-name var-name)))
+    (destructuring-bind
+        (decl-name var-name)
+        decl-form
+      (flet ((declared-env (var-name env)
+               (eprot::do-env (e env)
+                 (when (find var-name (eprot::environment-variable e))
+                   (return e))))
+             (already-refered? (var-name env)
+               (find-if
+                 (lambda (decl-spec)
+                   (and (eq :variable (eprot:decl-spec-type decl-spec))
+                        (let ((info
+                               (assoc var-name
+                                      (eprot:decl-spec-info decl-spec))))
+                          (and info (eq decl-name (second info))))))
+                 (eprot::environment-declare env))))
+        (let ((declared-env (declared-env var-name env)))
+          (when (and (not
+                       (find-symbol (symbol-name var-name)
+                                    :glsl-symbols.variables))
+                     (not
+                       (already-refered? var-name
+                                         (declared-env var-name env))))
+            (push
+             (eprot::make-decl-spec :variable (list
+                                                (list var-name decl-name t)))
+             (eprot::environment-declare declared-env)))))
+      nil))))
 
 (defun variable-information (symbol &optional env)
-  (let* ((global?
-          (cond ((uiop:string-prefix-p "gl_" symbol) (symbol-name symbol))
-                ((uiop:string-prefix-p "GL-" symbol)
-                 (let ((name
-                        (format nil "gl_~A"
-                                (change-case:pascal-case
-                                  (subseq (symbol-name symbol) 3)))))
-                   name))))
-         (name (or global? (symbol-name symbol)))
-         (key
-          (if global?
-              #'variable-information-name
-              #'variable-information-var)))
-    (labels ((rec (env)
-               (unless (null env)
-                 (or (find name (environment-variable env)
-                           :test #'equal
-                           :key key)
-                     (rec (environment-next env))))))
-      (rec env))))
+  (let ((glsl-symbol
+         (find-symbol (symbol-name symbol) :glsl-symbols.variables)))
+    (eprot:variable-information (or glsl-symbol symbol) env)))
 
 (defun slot-truename (spec)
   (etypecase spec (symbol spec) ((cons symbol (cons symbol null)) (cadr spec))))
 
-(defgeneric var-info (type source &key)
-  (:method (type (source list) &key)
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :var (car spec)
-                                   :name (symbol-camel-case (car spec))
-                                   :type type
-                                   :glsl-type (cadr spec)))
-      source))
-  (:method ((type (eql :constant)) (source list) &key)
-    (mapcar
-      (lambda (form)
-        (make-variable-information :var (second form)
-                                   :name (change-case:constant-case
-                                           (symbol-name (second form)))
-                                   :type (type-of (third form))))
-      source))
-  (:method ((type (eql :slot)) (source list) &key structure var-name)
-    (let ((slots (c2mop:class-direct-slots (find-class structure))))
-      (mapcar
-        (lambda (spec)
-          (let ((truename (slot-truename spec)))
-            (make-variable-information :var (alexandria:ensure-car spec)
-                                       :name (format nil "~A.~A" var-name
-                                                     (symbol-camel-case
-                                                       truename))
-                                       :type type
-                                       :lisp-type (some
-                                                    (lambda (slot)
-                                                      (if (eq truename
-                                                              (c2mop:slot-definition-name
-                                                                slot))
-                                                          (c2mop:slot-definition-type
-                                                            slot)))
-                                                    slots))))
-        source)))
-  (:method ((type (eql :attribute)) (source list) &key)
-    (loop :for class-name :in source
-          :for slots = (c2mop:class-direct-slots (find-class class-name))
-          :for i :of-type (mod #.most-positive-fixnum) :upfrom 0
-          :when slots
-            :collect (make-variable-information :var class-name
-                                                :name (symbol-camel-case
-                                                        class-name)
-                                                :type :attribute
-                                                :glsl-type (let ((length
-                                                                  (length
-                                                                    (the list
-                                                                         slots))))
-                                                             (ecase length
-                                                               (1 :float)
-                                                               ((2 3 4)
-                                                                (intern
-                                                                  (format nil
-                                                                          "VEC~D"
-                                                                          length)
-                                                                  :keyword))))
-                                                :location i)))
-  (:method ((type (eql :global)) (source list) &key)
-    (mapcar
-      (lambda (spec)
-        (make-variable-information :var nil
-                                   :name (car spec)
-                                   :type type
-                                   :glsl-type (cadr spec)))
-      source)))
-
 (defun list-all-known-vars ()
-  (labels ((rec (env acc)
-             (if (null env)
-                 (delete-duplicates acc :test #'equal)
-                 (rec (environment-next env)
-                      (progn
-                       (loop :for info :in (environment-variable env)
-                             :do (push (variable-information-name info) acc))
-                       acc)))))
-    (rec *environment* nil)))
+  (apply #'append
+         (uiop:while-collecting (acc)
+           (eprot::do-env (e eprot:*environment*)
+             (acc (eprot::environment-variable e))))))
 
 (define-condition unused-variable (style-warning)
   ((name :initarg :name :reader unused-var)
@@ -282,63 +205,39 @@
      (format output "Variable ~S is not used. ~:@_The context is ~S."
              (unused-var this) (context this)))))
 
-(defvar *context* nil)
+(defun context<-environment (env)
+  (nreverse
+    (uiop:while-collecting (acc)
+      (eprot::do-env (e env)
+        (let ((name (eprot::environment-name e)))
+          (when name
+            (acc name)))))))
+
+(defmacro with-cl-io-syntax (&body body)
+  `(let ((*print-pprint-dispatch* *cl-pp-dispatch*))
+     ,@body))
 
 (defun check-ref (vars)
   (dolist (var vars)
-    (let ((name (symbol-name var)))
-      (labels ((rec (env)
-                 (unless (null env)
-                   (let ((info
-                          (find name (environment-variable env)
-                                :test #'equal
-                                :key #'variable-information-var)))
-                     (if info
-                         (when (not (variable-information-ref? info))
-                           (with-standard-io-syntax
-                            (warn 'unused-variable
-                                  :name var
-                                  :context (reverse *context*))))
-                         (rec (environment-next env)))))))
-        (rec *environment*)))))
+    (let ((info (nth-value 2 (variable-information var eprot:*environment*))))
+      (unless (assoc 'refered info)
+        (with-cl-io-syntax
+          (warn 'unused-variable
+                :name var
+                :context (context<-environment eprot:*environment*)))))))
 
 (defun function-information (symbol &optional env)
-  (let ((name (symbol-name symbol)))
-    (labels ((rec (env)
-               (unless (null env)
-                 (or (remove-if-not
-                       (lambda (spec) (equal name (getf spec :lisp-name)))
-                       (environment-function env))
-                     (rec (environment-next env))))))
-      (rec env))))
+  (let ((glsl-symbol
+         (or (find-symbol (symbol-name symbol) :glsl-symbols.functions)
+             (find-symbol (symbol-name symbol) :glsl-symbols.operators)
+             (find-symbol (symbol-name symbol) :glsl-symbols.types))))
+    (eprot:function-information (or glsl-symbol symbol) env)))
 
 (defun list-all-known-functions ()
-  (labels ((rec (env acc)
-             (if (null env)
-                 (delete-duplicates acc :test #'equal)
-                 (rec (environment-next env)
-                      (progn
-                       (loop :for spec :in (environment-function env)
-                             :do (push (getf spec :lisp-name) acc))
-                       acc)))))
-    (rec *environment* nil)))
-
-(defun struct-readers (struct-names)
-  (uiop:while-collecting (acc)
-    (dolist (name struct-names)
-      (dolist
-          (slot
-           (c2mop:class-direct-slots
-             (c2mop:ensure-finalized (find-class name))))
-        (dolist (reader (c2mop:slot-definition-readers slot))
-          (acc
-           (list :lisp-name (symbol-name reader)
-                 :name (symbol-camel-case (c2mop:slot-definition-name slot))
-                 :return (glsl-type slot)
-                 :attribute :reader)))))))
-
-(defun argument-environment (env &key variable function)
-  (make-environment :next env :variable variable :function function))
+  (apply #'append
+         (uiop:while-collecting (acc)
+           (eprot::do-env (e eprot:*environment*)
+             (acc (eprot::environment-function e))))))
 
 (defun print-signatures (infos &optional (stream *standard-output*))
   (format stream "~<~@{~:<FUNCTION ~W ~W~:>~^ ~:@_~}~:>"
@@ -349,10 +248,6 @@
 ;;;; GLSL PRINTERS
 
 (defvar *cl-pp-dispatch* (copy-pprint-dispatch nil))
-
-(defmacro with-cl-io-syntax (&body body)
-  `(let ((*print-pprint-dispatch* *cl-pp-dispatch*))
-     ,@body))
 
 (defmacro with-hint ((&rest bind*) &body body)
   `(restart-bind ,(mapcar
@@ -399,13 +294,16 @@ otherwise the condition is not signaled. The default is NIL.
 You can specify this by colon in format control.
 If EXP is known for compiler and NOT-REF-P is ture, compiler memos it is refered
 otherwise compiler do nothing. The default it NIL. You can specify this by at-sign in format control."
-  (let ((info (variable-information exp *environment*)))
+  (multiple-value-bind (var-type lexicalp infos)
+      (variable-information exp eprot:*environment*)
+    (declare (ignore var-type))
     (cond
-      (info
+      (lexicalp
        (unless not-ref-p ; means refered-p
-         (unless (eq :global (variable-information-type info))
-           (setf (variable-information-ref? info) t)))
-       (write-string (variable-information-name info) stream))
+         (eprot:proclaim `(refered ,exp)))
+       (write-string (cdr (assoc 'glsl-env:notation infos)) stream))
+      (infos ; global one.
+       (write-string (cdr (assoc 'glsl-env:notation infos)) stream))
       ((and errorp
             (with-cl-io-syntax
               (cerror "Anyway print it." 'unknown-variable
@@ -436,9 +334,12 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
      (format output " ~:@_To see all supported glsl functions, evaluate ~S."
              '(list-all-known-functions))
      (let ((info
-            (when (typep (form this) '(cons symbol (cons symbol null)))
-              (variable-information (cadr (form this)) *environment*))))
-       (when (and info (glsl-structure-name-p (getf info :type)))
+            (nth-value 2
+                       (when (typep (form this)
+                                    '(cons symbol (cons symbol null)))
+                         (variable-information (cadr (form this))
+                                               eprot:*environment*)))))
+       (when (and info (glsl-structure-name-p (cadr (assoc 'type info))))
          (format output
                  " ~:@_Or slot reader may missing. To see all supported slot readers, evaluate ~S."
                  `(class-readers ',(getf info :type))))))))
@@ -449,12 +350,14 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
    (lambda (this out)
      (format out "Arguments for ~S does not match its signature. ~S~@[~?~]"
              (car (form this)) (form this)
-             (let ((infos
-                    (function-information (car (form this)) *environment*)))
-               (unless (find-if (lambda (info) (getf info :attribute)) infos)
+             (multiple-value-bind (fun-type lexicalp infos)
+                 (function-information (car (form this)) eprot:*environment*)
+               (declare (ignore fun-type))
+               (when (and (null lexicalp) infos) ; global glsl function.
                  " ~:@_For detail, evaluate ~S."))
              (list
-               `(function-information ',(car (form this)) *environment*))))))
+               `(function-information ',(car (form this))
+                                      eprot:*environment*))))))
 
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
@@ -481,18 +384,55 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           (append (swizzling '(x y z w)) (swizzling '(r g b a))
                   (swizzling '(s t u v))))))))
 
-(defun glsl-slot-reader (stream exp info)
-  (setf stream (or stream *standard-output*))
-  (pprint-logical-block (stream nil)
-    (write (cadr exp) :stream stream)
-    (write-char #\. stream)
-    (write-string (getf info :name) stream)))
+(defun form-type-notation (exp)
+  (etypecase exp
+    (list ; function call
+     (let ((info
+            (nth-value 2 (function-information (car exp) eprot:*environment*))))
+       (if (null info)
+           (error "Could not detect form type of ~S." exp)
+           (let ((return-type (third (cdr (assoc 'ftype info)))))
+             (if (not return-type)
+                 (error "Missing function return type. ~S" info)
+                 (etypecase return-type
+                   (keyword ; type constructor.
+                    (or (cdr
+                          (assoc 'glsl-env:notation
+                                 (nth-value 2
+                                            (function-information return-type
+                                                                  eprot:*environment*))))
+                        (error "Missing type constructor infor. ~S"
+                               return-type)))
+                   (symbol ; glsl-structure which should have delcaration as type.
+                    (form-type-notation return-type))))))))
+    (symbol ; var reference
+     (let ((info (nth-value 2 (variable-information exp eprot:*environment*))))
+       (if (null info)
+           (error "Could not detect type of ~S. Unknown var?" exp)
+           (or (cdr (assoc 'glsl-env:notation info))
+               (error "Missing variable type. ~S" info)))))))
+
+(defun slot-notation (exp fun-info)
+  ;; FIXME: Should we use another better declaration?
+  (let ((structure-notation (form-type-notation (cadr exp))))
+    (some
+      (lambda (info)
+        (and (eq 'glsl-env:notation (car info))
+             (uiop:string-prefix-p structure-notation (cdr info))
+             (cdr info)))
+      fun-info)))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
   (if (gethash (symbol-name (car exp)) +swizzling+)
       (glsl-swizzling stream exp)
-      (let ((info (function-information (car exp) *environment*)))
+      (let ((info
+             (nth-value 2
+                        (function-information (car exp) eprot:*environment*))))
+        #++
+        (with-cl-io-syntax
+          (break))
+        ;; Is function known one?
         (unless info
           (with-cl-io-syntax
             (with-hint (("Print all known functions."
@@ -500,27 +440,33 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
               (cerror "Anyway, print it." 'unknown-glsl-function
                       :name (car exp)
                       :form exp))))
-        (let ((reader-info
-               (find-if (lambda (info) (eq :reader (getf info :attribute)))
-                        info)))
-          (if reader-info
-              (if (= 1 (length (cdr exp)))
-                  (glsl-slot-reader stream exp reader-info)
-                  (with-cl-io-syntax
-                    (with-hint (("Print function informations." info))
-                      (error 'glsl-argument-mismatch :form exp))))
-              (if (or (null info) ; continued.
-                      (and info
-                           (find (length (cdr exp)) info
-                                 :key (lambda (info)
-                                        (length (getf info :args))))))
-                  (funcall
-                    (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
-                    stream (car exp) (cdr exp))
-                  (with-cl-io-syntax
-                    (with-hint (("Print function signatures."
-                                 (print-signatures info)))
-                      (error 'glsl-argument-mismatch :form exp)))))))))
+        ;; Is it slot-reader?
+        (if (eq :slot-reader (cdr (assoc 'attribute info)))
+            ;; Does match arg length?
+            (if (= 1 (length (cdr exp)))
+                (write-string (slot-notation exp info) stream)
+                (with-cl-io-syntax
+                  (with-hint (("Print function informations." info))
+                    (error 'glsl-argument-mismatch :form exp))))
+            ;; Does match arg length?
+            (if (or (null info) ; continued.
+                    (and info
+                         (loop :with actual = (length (cdr exp))
+                               :for (decl-name . fun-specifier) :in info
+                               :thereis (and (eq 'ftype decl-name)
+                                             (= actual
+                                                (length
+                                                  (cadr fun-specifier)))))))
+                (funcall
+                  (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
+                  stream (car exp) (cdr exp))
+                (with-cl-io-syntax
+                  (with-hint (("Print function signatures."
+                               (print
+                                 (remove-if-not
+                                   (lambda (spec) (eq 'ftype (car spec)))
+                                   info))))
+                    (error 'glsl-argument-mismatch :form exp))))))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
@@ -559,7 +505,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                       #.(concatenate 'string
                                      ;; type name, without var checking.
                                      "~<~@{~/fude-gl:glsl-symbol/"
-                                     ;; Setfable place, with var checking.
+                                     ;; SETFable place, with var checking.
                                      "~^ ~:@/fude-gl:glsl-symbol/"
                                      ;; Initform, with var checking.
                                      "~^ = ~W;~:@_~}~:>"
@@ -580,14 +526,23 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                      (cddr exp))
                    (when (every #'listp (cddr exp))
                      (check-ref (mapcar #'car (cadr exp)))))
-                 (let ((*environment*
-                        (argument-environment *environment*
-                                              :variable (var-info :local (list
-                                                                           (car
-                                                                             binds))))))
+                 (let ((eprot:*environment*
+                        (eprot:augment-environment eprot:*environment*
+                                                   :name (cons 'let
+                                                               (caar binds))
+                                                   :variable (list
+                                                               (caar binds))
+                                                   :declare (list
+                                                              `(type
+                                                                 ,(cadar binds)
+                                                                 ,(caar binds))
+                                                              `(glsl-env:notation
+                                                                 ,(caar binds)
+                                                                 ,(symbol-camel-case
+                                                                    (caar
+                                                                      binds)))))))
                    (rec (cdr binds))))))
-    (let ((*context* (cons 'let *context*)))
-      (rec (cadr exp)))))
+    (rec (cadr exp))))
 
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
@@ -611,6 +566,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
      (did-you-mean output (symbol-name (cell-error-name this))
                    (known-vars this)))))
 
+#++
 (defun glsl-with-slots (stream exp)
   (setf stream (or stream *standard-output*))
   (destructuring-bind
@@ -640,11 +596,9 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                      :known-vars (mapcar #'c2mop:slot-definition-name
                                          slot-defs))))))
       (let ((*environment*
-             (argument-environment *environment*
-                                   :variable (var-info :slot slots
-                                                       :structure var
-                                                       :var-name (variable-information-name
-                                                                   info)))))
+             (argument-environment *environment* :variable
+              (var-info :slot slots :structure var :var-name
+               (variable-information-name info)))))
         ;; The body.
         (dolist (exp body) (write exp :stream stream))))))
 
@@ -667,18 +621,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-declaim (stream exp)
   (declare (ignore stream))
-  (loop :for (key . param) :in (cdr exp)
-        :when (find key '(type ftype))
-          :do (dolist (name (cdr param))
-                (setf (gethash name *declaims*) (car param))
-                (push
-                 (list :lisp-name (symbol-name name)
-                       :name (symbol-camel-case name)
-                       :return (third (car param))
-                       :args (second (car param)))
-                 (environment-function *environment*)))
-        :else
-          :do (warn "Ignore decalim of ~S" (cons key param))))
+  (loop :for decl-form :in (cdr exp)
+        :do (eprot:proclaim decl-form)))
 
 (defun glsl-defconstant (stream exp)
   (setf stream (or stream *standard-output*))
@@ -689,62 +633,89 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
            (symbol-camel-case (gethash (second exp) *declaims*))
            (symbol-camel-case (second exp)) (third exp)))
 
+(defun struct-readers (struct-names)
+  (delete-duplicates
+    (uiop:while-collecting (acc)
+      (dolist (name struct-names)
+        (dolist
+            (slot
+             (c2mop:class-direct-slots
+               (c2mop:ensure-finalized (find-class name))))
+          (dolist (reader (c2mop:slot-definition-readers slot))
+            (acc reader)))))))
+
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
-  (let* ((ftype (gethash (second exp) *declaims*))
-         (*environment*
-          (progn
-           (push
-            (list :lisp-name (symbol-name (second exp))
-                  :name (symbol-camel-case (second exp))
-                  :return (third ftype)
-                  :args (mapcar
-                          (lambda (var type)
-                            (list (symbol-camel-case var)
-                                  (symbol-camel-case type)))
-                          (third exp) (second ftype)))
-            (environment-function *environment*))
-           (argument-environment *environment*
-                                 :function (struct-readers
-                                             (remove-if-not
-                                               #'glsl-structure-name-p
-                                               (second ftype)))
-                                 :variable (var-info :local (mapcar #'list
-                                                                    (third exp)
-                                                                    (cadr
-                                                                      ftype)))))))
-    (unless ftype
-      (with-cl-io-syntax
-        (error "DEFUN ~S needs ftype DECLAIMed." (second exp))))
-    (let ((*context* (cons (cadr exp) *context*)))
+  (destructuring-bind
+      (name lambda-list &body body)
+      (cdr exp)
+    (let ((info
+           (nth-value 2 (eprot:function-information name eprot:*environment*))))
+      (unless info
+        (with-cl-io-syntax
+          (error "DEFUN ~S needs ftype DECLAIMed." name)))
       (destructuring-bind
           (arg-types return)
-          (cdr ftype)
-        (funcall
-          (formatter
-           #.(apply #'concatenate 'string
-                    (alexandria:flatten
-                      (list "~(~A~)~^ ~@_" ; return type
-                            "~A~^ ~@_" ; function name.
-                            (list "~:<" ; logical block for args.
-                                  "~@{~A~^ ~A~^, ~}" ; argbody.
-                                  "~:>~^ ~%")
-                            "~:<{~;~3I~:@_" ; function body.
-                            "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
-          stream
-          (if (equal '(values) return)
-              :void
-              return)
-          (second exp)
-          (loop :for type :in arg-types
-                :for name :in (third exp)
-                :collect (if (glsl-structure-name-p type)
-                             (change-case:pascal-case (symbol-name type))
-                             (symbol-camel-case type))
-                :collect (symbol-camel-case name))
-          (cdddr exp)))
-      (when (every #'listp (cdddr exp))
-        (check-ref (third exp))))))
+          (cddr (assoc 'ftype info))
+        (let ((eprot:*environment*
+               (eprot:augment-environment eprot:*environment*
+                                          :name name
+                                          :function (cons name
+                                                          (struct-readers
+                                                            (remove-if-not
+                                                              #'glsl-structure-name-p
+                                                              arg-types)))
+                                          :variable lambda-list
+                                          :declare `((ftype (function
+                                                             ,(mapcar
+                                                                (lambda
+                                                                    (var type)
+                                                                  (list
+                                                                    (symbol-camel-case
+                                                                      var)
+                                                                    (symbol-camel-case
+                                                                      type)))
+                                                                lambda-list
+                                                                arg-types)
+                                                             ,return)
+                                                            ,name)
+                                                     (glsl-env:notation ,name
+                                                      ,(symbol-camel-case
+                                                         name))
+                                                     ,@(mapcan
+                                                         (lambda (var type)
+                                                           `((type ,type ,var)
+                                                             (glsl-env:notation
+                                                              ,var
+                                                              ,(symbol-camel-case
+                                                                 var))))
+                                                         lambda-list
+                                                         arg-types)))))
+          (funcall
+            (formatter
+             #.(apply #'concatenate 'string
+                      (alexandria:flatten
+                        (list "~(~A~)~^ ~@_" ; return type
+                              "~A~^ ~@_" ; function name.
+                              (list "~:<" ; logical block for args.
+                                    "~@{~A~^ ~A~^, ~}" ; argbody.
+                                    "~:>~^ ~%")
+                              "~:<{~;~3I~:@_" ; function body.
+                              "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
+            stream
+            (if (equal '(values) return)
+                :void
+                return)
+            name
+            (loop :for type :in arg-types
+                  :for name :in lambda-list
+                  :collect (if (glsl-structure-name-p type)
+                               (change-case:pascal-case (symbol-name type))
+                               (symbol-camel-case type))
+                  :collect (symbol-camel-case name))
+            body)
+          (when (every #'listp body)
+            (check-ref lambda-list)))))))
 
 (defun glsl-struct-definition (stream structure-name &rest noise)
   (declare (ignore noise))
@@ -829,9 +800,12 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (destructuring-bind
       ((var times) &body body)
       (cdr exp)
-    (let ((*environment*
-           (argument-environment *environment*
-                                 :variable (var-info :local `((,var :int))))))
+    (let ((eprot:*environment*
+           (eprot:augment-environment eprot:*environment*
+                                      :variable (list var)
+                                      :declare `((type :int ,var)
+                                                 (glsl-env:notation ,var
+                                                  ,(symbol-camel-case var))))))
       (pprint-logical-block (out nil)
         ;; Var def.
         (funcall (formatter "for (int ~/fude-gl:glsl-symbol/") out var)
