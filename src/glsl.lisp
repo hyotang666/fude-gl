@@ -241,12 +241,6 @@
            (eprot::do-env (e eprot:*environment*)
              (acc (eprot::environment-function e))))))
 
-(defun print-signatures (infos &optional (stream *standard-output*))
-  (format stream "~<~@{~:<FUNCTION ~W ~W~:>~^ ~:@_~}~:>"
-          (mapcar (lambda (info) (list (getf info :args) (getf info :return)))
-                  infos))
-  (force-output stream))
-
 ;;;; GLSL PRINTERS
 
 (defvar *cl-pp-dispatch* (copy-pprint-dispatch nil))
