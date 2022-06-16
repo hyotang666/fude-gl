@@ -205,14 +205,6 @@
      (format output "Variable ~S is not used. ~:@_The context is ~S."
              (unused-var this) (context this)))))
 
-(defun context<-environment (env)
-  (nreverse
-    (uiop:while-collecting (acc)
-      (eprot::do-env (e env)
-        (let ((name (eprot::environment-name e)))
-          (when name
-            (acc name)))))))
-
 (defmacro with-cl-io-syntax (&body body)
   ;; WARN, CERROR, BREAK needs this macro.
   ;; Otherwise GLSL-DISPATCH table is used by debugger.
@@ -226,7 +218,7 @@
         (with-cl-io-syntax
           (warn 'unused-variable
                 :name var
-                :context (context<-environment eprot:*environment*)))))))
+                :context (eprot:context eprot:*environment*)))))))
 
 (defun function-information (symbol &optional env)
   (let ((glsl-symbol
