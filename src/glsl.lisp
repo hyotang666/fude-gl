@@ -214,6 +214,8 @@
             (acc name)))))))
 
 (defmacro with-cl-io-syntax (&body body)
+  ;; WARN, CERROR, BREAK needs this macro.
+  ;; Otherwise GLSL-DISPATCH table is used by debugger.
   `(let ((*print-pprint-dispatch* *cl-pp-dispatch*))
      ,@body))
 
@@ -362,8 +364,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-swizzling (stream exp)
   (setf stream (or stream *standard-output*))
   (unless (= 1 (length (cdr exp)))
-    (with-cl-io-syntax
-      (error 'glsl-argument-mismatch :form exp)))
+    (error 'glsl-argument-mismatch :form exp))
   (let ((*var-check-p* t))
     (format stream "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp))))
 
@@ -445,9 +446,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
             ;; Does match arg length?
             (if (= 1 (length (cdr exp)))
                 (write-string (slot-notation exp info) stream)
-                (with-cl-io-syntax
-                  (with-hint (("Print function informations." info))
-                    (error 'glsl-argument-mismatch :form exp))))
+                (with-hint (("Print function informations." info))
+                  (error 'glsl-argument-mismatch :form exp)))
             ;; Does match arg length?
             (if (or (null info) ; continued.
                     (and info
@@ -460,21 +460,17 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                 (funcall
                   (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
                   stream (car exp) (cdr exp))
-                (with-cl-io-syntax
-                  (with-hint (("Print function signatures."
-                               (print
-                                 (remove-if-not
-                                   (lambda (spec) (eq 'ftype (car spec)))
-                                   info))))
-                    (error 'glsl-argument-mismatch :form exp))))))))
+                (with-hint (("Print function signatures."
+                             (print
+                               (remove-if-not
+                                 (lambda (spec) (eq 'ftype (car spec))) info))))
+                  (error 'glsl-argument-mismatch :form exp)))))))
 
 (defun glsl-operator (stream exp)
   (setf stream (or stream *standard-output*))
   (let ((op (car exp)))
     (case (length (cdr exp))
-      (0
-       (with-cl-io-syntax
-         (error "No argument ~S" exp)))
+      (0 (error "No argument ~S" exp))
       (1 (format stream "~A~A" (symbol-name op) (cadr exp)))
       (2
        (let ((*var-check-p* t))
@@ -514,12 +510,11 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                      stream
                      (loop :for bind :in (cadr exp)
                            :do (unless (= 3 (length bind))
-                                 (with-cl-io-syntax
-                                   (error
-                                     "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
-                                     bind)))
-                               (with-cl-io-syntax
-                                 (check-type (cadr bind) glsl-type))
+                                 (error
+                                   "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
+                                   bind))
+                               (unless (typep (cadr bind) 'glsl-type)
+                                 (error "Unknown glsl type. ~S" (cadr bind)))
                            :collect (cadr bind)
                            :collect (car bind)
                            :collect (caddr bind))
@@ -547,8 +542,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-return (stream exp)
   (setf stream (or stream *standard-output*))
   (unless (= 2 (length exp))
-    (with-cl-io-syntax
-      (error 'glsl-argument-mismatch :form exp)))
+    (error 'glsl-argument-mismatch :form exp))
   (apply (formatter "~/fude-gl:glsl-symbol/ ~W;") stream exp))
 
 (defun parse-slot-spec (spec)
@@ -575,26 +569,20 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (let ((info (variable-information var *environment*)) class)
       ;; Does variable exist?
       (unless info
-        (with-cl-io-syntax
-          (error 'unknown-variable
-                 :name var
-                 :known-vars (list-all-known-vars))))
+        (error 'unknown-variable :name var :known-vars (list-all-known-vars)))
       ;; Does glsl-structure exist?
       (unless (setq class (find-class (variable-information-type info) nil))
-        (with-cl-io-syntax
-          (error 'unknown-glsl-structure
-                 :name (variable-information-type info))))
+        (error 'unknown-glsl-structure :name (variable-information-type info)))
       ;; Does each slot exist?
       (let ((slot-defs (c2mop:class-slots (c2mop:ensure-finalized class))))
         (dolist (slot slots)
           (unless (find (slot-truename slot) slot-defs
                         :key #'c2mop:slot-definition-name)
-            (with-cl-io-syntax
-              (error 'unknown-slot
-                     :name (slot-truename slot)
-                     :type var
-                     :known-vars (mapcar #'c2mop:slot-definition-name
-                                         slot-defs))))))
+            (error 'unknown-slot
+                   :name (slot-truename slot)
+                   :type var
+                   :known-vars (mapcar #'c2mop:slot-definition-name
+                                       slot-defs)))))
       (let ((*environment*
              (argument-environment *environment* :variable
               (var-info :slot slots :structure var :var-name
@@ -606,8 +594,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (setf stream (or stream *standard-output*))
   (when (find-if (lambda (exp) (and (listp exp) (find (car exp) '(let))))
                  (cddr exp))
-    (with-cl-io-syntax
-      (error "In valid expression for IF. Use COND instead. ~S" exp)))
+    (error "In valid expression for IF. Use COND instead. ~S" exp))
   (destructuring-bind
       (pred then &optional else)
       (cdr exp)
@@ -627,8 +614,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-defconstant (stream exp)
   (setf stream (or stream *standard-output*))
   (unless (gethash (second exp) *declaims*)
-    (with-cl-io-syntax
-      (error "CONSTANT ~S needs type DECLAIMed." (second exp))))
+    (error "CONSTANT ~S needs type DECLAIMed." (second exp)))
   (funcall (formatter "const ~A ~A = ~A;~%") stream
            (symbol-camel-case (gethash (second exp) *declaims*))
            (symbol-camel-case (second exp)) (third exp)))
@@ -653,8 +639,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
            (or (nth-value 2
                           (eprot:function-information name
                                                       eprot:*environment*))
-               (with-cl-io-syntax
-                 (error "DEFUN ~S needs ftype DECLAIMed." name)))))
+               (error "DEFUN ~S needs ftype DECLAIMed." name))))
       (destructuring-bind
           (arg-types return)
           (cddr (assoc 'ftype info))
@@ -756,16 +741,15 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-slot-value (stream exp &rest noise)
   (declare (ignore noise))
-  (with-cl-io-syntax
-    (unless (= 2 (length (cdr exp)))
-      (error 'glsl-argument-mismatch :form exp))
-    (unless (glsl-structure-name-p (cadr exp))
-      (error 'unknown-glsl-structure :name (cadr exp)))
-    (unless (apply #'slot-exist-p (cdr exp))
-      (with-hint (("Print all supported slots."
-                   (c2mop:class-slots
-                     (c2mop:ensure-finalized (find-class (cadr exp))))))
-        (error 'missing-slot :name (caddr exp) :structure (cadr exp)))))
+  (unless (= 2 (length (cdr exp)))
+    (error 'glsl-argument-mismatch :form exp))
+  (unless (glsl-structure-name-p (cadr exp))
+    (error 'unknown-glsl-structure :name (cadr exp)))
+  (unless (apply #'slot-exist-p (cdr exp))
+    (with-hint (("Print all supported slots."
+                 (c2mop:class-slots
+                   (c2mop:ensure-finalized (find-class (cadr exp))))))
+      (error 'missing-slot :name (caddr exp) :structure (cadr exp))))
   (format stream "~A.~A" (symbol-camel-case (cadr exp))
           (symbol-camel-case (caddr exp))))
 
@@ -866,7 +850,27 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun print-glsl (exp &optional stream)
   (let ((*print-pretty* t) (*print-pprint-dispatch* (glsl-dispatch)))
-    (pprint exp stream)))
+    (handler-bind ((error
+                     (lambda (condition)
+                       (if (find-restart 'continue condition)
+                           ;; Require *print-pprint-dispatch* equals *cl-pp-dispatch*.
+                           ;; Otherwise debugger can not print correctly.
+                           (unless (eq *print-pprint-dispatch*
+                                       *cl-pp-dispatch*)
+                             (setq *print-pprint-dispatch* *cl-pp-dispatch*)
+                             (warn
+                               "Reset *print-pprint-dispatch* for debugger, use ~S."
+                               'with-cl-io-syntax))
+                           ;; Give up. Reset *print-pprint-dispatch* for correct cl printing.
+                           (setq *print-pprint-dispatch* *cl-pp-dispatch*))))
+                   (warning
+                    (lambda (condition)
+                      (unless (eq *print-pprint-dispatch* *cl-pp-dispatch*)
+                        (setq *print-pprint-dispatch* *cl-pp-dispatch*)
+                        (error
+                          "Could not print warning correctly due to not cl-syntax. ~:@_Use ~S. ~S"
+                          'with-cl-io-syntax condition)))))
+      (pprint exp stream))))
 
 (defun pprint-glsl (stream exp &rest noise)
   (declare (ignore noise))
