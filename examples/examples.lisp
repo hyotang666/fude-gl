@@ -13,8 +13,13 @@
                                        transform-demo translate-x translate-y
                                        scaling rotating coord-demo depth-demo
                                        cubes cameras walk-around look-around
-                                       text instancing instanced-arrays-demo
-                                       instance-id-demo some-instance-demo
+                                       zoom lighting ambient-lighting
+                                       defuse-lighting specular-lighting
+                                       material diffuse-map specular-map
+                                       directional-light attenuation spot-light
+                                       spot-soft text instancing
+                                       instanced-arrays-demo instance-id-demo
+                                       some-instance-demo
                                        some-instance-dynamics depth-testing
                                        framebuffer-step1 framebuffer-shadow))
     (quit ())))
