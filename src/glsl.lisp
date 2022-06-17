@@ -193,6 +193,8 @@
      (format output "Variable ~S is not used. ~:@_The context is ~S."
              (unused-var this) (context this)))))
 
+(defvar *cl-pp-dispatch* (copy-pprint-dispatch nil))
+
 (defmacro with-cl-io-syntax (&body body)
   ;; WARN, CERROR, BREAK needs this macro.
   ;; Otherwise GLSL-DISPATCH table is used by debugger.
@@ -222,8 +224,6 @@
              (acc (eprot::environment-function e))))))
 
 ;;;; GLSL PRINTERS
-
-(defvar *cl-pp-dispatch* (copy-pprint-dispatch nil))
 
 (defmacro with-hint ((&rest bind*) &body body)
   `(restart-bind ,(mapcar
