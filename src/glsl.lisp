@@ -130,20 +130,19 @@
   :use :glsl
   :handler
   ((location (symbol fixnum) (decl-form env) (declare (ignore env))
+    "Specify location of the attribute SYMBOL."
     (values :variable
-            (destructuring-bind
-                (decl-name var location)
+            (eprot:decl-spec-bind (decl-name var location)
                 decl-form
               (list (list var decl-name location)))))
    (attribute (symbol keyword) (decl-form env) (declare (ignore env))
+    "Specify SYMBOL as fude-gl ATTIBUTE."
     (values :bind
-            (destructuring-bind
-                (decl-name var attribute)
+            (eprot:decl-spec-bind (decl-name var attribute)
                 decl-form
               (list (list var decl-name attribute)))))
-   (refered (symbol) (decl-form env)
-    (destructuring-bind
-        (decl-name var-name)
+   (refered (symbol) (decl-form env) "Mark the SYMBOL is refered."
+    (eprot:decl-spec-bind (decl-name var-name)
         decl-form
       (flet ((declared-env (var-name env)
                (eprot::do-env (e env)
