@@ -129,31 +129,19 @@
 (eprot:defenv :fude-gl
   :use :glsl
   :handler
-  ((location (decl-form env) (declare (ignore env))
-    (unless (= 3 (length decl-form))
-      (error 'eprot:bad-declaration-specifier
-             :datum decl-form
-             :expected-type '(decl-name var location)))
+  ((location (symbol fixnum) (decl-form env) (declare (ignore env))
     (values :variable
             (destructuring-bind
                 (decl-name var location)
                 decl-form
               (list (list var decl-name location)))))
-   (attribute (decl-form env) (declare (ignore env))
-    (unless (= 3 (length decl-form))
-      (error 'eprot:bad-declaration-specifier
-             :datum decl-form
-             :expected-type '(decl-name var attribute)))
+   (attribute (symbol keyword) (decl-form env) (declare (ignore env))
     (values :bind
             (destructuring-bind
                 (decl-name var attribute)
                 decl-form
               (list (list var decl-name attribute)))))
-   (refered (decl-form env)
-    (unless (= 2 (length decl-form))
-      (error 'eprot:bad-declaration-specifier
-             :datum decl-form
-             :expected-type '(decl-name var-name)))
+   (refered (symbol) (decl-form env)
     (destructuring-bind
         (decl-name var-name)
         decl-form
