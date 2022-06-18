@@ -144,31 +144,18 @@
    (refered (symbol) (decl-form env) "Mark the SYMBOL is refered."
     (eprot:decl-spec-bind (decl-name var-name)
         decl-form
-      (flet ((declared-env (var-name env)
-               (eprot::do-env (e env)
-                 (when (find var-name (eprot::environment-variable e))
-                   (return e))))
-             (already-refered? (var-name env)
-               (find-if
-                 (lambda (decl-spec)
-                   (and (eq :variable (eprot:decl-spec-type decl-spec))
-                        (let ((info
-                               (assoc var-name
-                                      (eprot:decl-spec-info decl-spec))))
-                          (and info (eq decl-name (second info))))))
-                 (eprot::environment-declare env))))
-        (let ((declared-env (declared-env var-name env)))
-          (when (and (not
-                       (find-symbol (symbol-name var-name)
-                                    :glsl-symbols.variables))
-                     (not
-                       (already-refered? var-name
-                                         (declared-env var-name env))))
-            (push
-             (eprot::make-decl-spec :variable (list
-                                                (list var-name decl-name t)))
-             (eprot::environment-declare declared-env)))))
-      nil))))
+      (declare (ignore decl-name))
+      (let ((info (nth-value 2 (eprot:variable-information var-name env))))
+        (cond
+          ((null info) (uiop:style-warn "Unknown var to refer. ~S" var-name))
+          ((assoc 'ignorable info) nil)
+          ((assoc 'ignore info)
+           (uiop:style-warn "Use ~S but it is declared as ignore." var-name))
+          ((find-symbol (symbol-name var-name) :glsl-symbols.variables) nil)
+          (t
+           (setf (eprot:variable-information var-name env)
+                   `(ignorable ,var-name))))))
+    nil)))
 
 (defun variable-information (symbol &optional env)
   (let ((glsl-symbol
@@ -203,7 +190,7 @@
 (defun check-ref (vars)
   (dolist (var vars)
     (let ((info (nth-value 2 (variable-information var eprot:*environment*))))
-      (unless (assoc 'refered info)
+      (unless (or (assoc 'ignore info) (assoc 'ignorable info))
         (with-cl-io-syntax
           (warn 'unused-variable
                 :name var
