@@ -1935,7 +1935,7 @@
              :initarg :specular
              :reader specular)
    (shininess :glsl-type :float
-              :type 3d-vectors:vec3
+              :type single-float
               :initarg :shininess
               :initform 32.0
               :reader shininess)))
