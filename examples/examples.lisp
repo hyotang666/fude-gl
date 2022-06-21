@@ -1040,6 +1040,10 @@
 
 ;;;; LOOK-AROUND
 
+(defun make-looker (x y mask)
+  (declare (ignore mask))
+  (make-instance 'fude-gl:looker :last-position (3d-vectors:vec3 x y 0)))
+
 (defun look-around ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -1055,11 +1059,7 @@
     (fude-gl:with-shader ())
     (let* ((camera
             ;; Eular angles supported camera.
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (matrix (3d-matrices:meye 4))
            (p
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1113,11 +1113,7 @@
     (sdl2:with-gl-context (context win))
     (fude-gl:with-shader ())
     (let* ((camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (matrix (3d-matrices:meye 4))
            (p
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1218,11 +1214,7 @@
     (fude-gl:with-shader ())
     (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1302,11 +1294,7 @@
     (fude-gl:with-shader ())
     (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1441,11 +1429,7 @@
     (fude-gl:with-shader ())
     (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1539,11 +1523,7 @@
     (fude-gl:with-shader ())
     (let* ((light-pos (3d-vectors:vec3 1.2 1.0 2.0))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1687,11 +1667,7 @@
                            :position (3d-vectors:vec3 1.2 1.0 2.0)
                            :specular (3d-vectors:vec3 1 1 1)))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -1877,11 +1853,7 @@
                                   :position (3d-vectors:vec3 1.2 1.0 2.0)
                                   :specular (3d-vectors:vec3 1 1 1)))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -2025,11 +1997,7 @@
                                   :position (3d-vectors:vec3 1.2 1.0 2.0)
                                   :specular (3d-vectors:vec3 1 1 1)))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -2168,11 +2136,7 @@
     (fude-gl:with-shader ())
     (let* ((light (fude-gl::make-object '<directional-light>))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -2339,11 +2303,7 @@
     (fude-gl:with-shader ())
     (let* ((light (fude-gl::make-object '<attenuation>))
            (camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
            (projection
             (3d-matrices:mperspective (fude-gl:field-of-view camera)
@@ -2540,11 +2500,7 @@
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let* ((camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (light
             (fude-gl::make-object '<spot-light>
                                   :position (fude-gl:camera-position camera)
@@ -2736,11 +2692,7 @@
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
     (let* ((camera
-            (multiple-value-bind (x y mask)
-                (sdl2:get-global-mouse-state)
-              (declare (ignore mask))
-              (make-instance 'fude-gl:looker
-                             :last-position (3d-vectors:vec3 x y 0))))
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (light
             (fude-gl::make-object '<spot-soft>
                                   :position (fude-gl:camera-position camera)
