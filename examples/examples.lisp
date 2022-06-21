@@ -1099,6 +1099,12 @@
 
 ;;;; ZOOM
 
+(defun lookat-view (camera)
+  (fude-gl:view
+    (multiple-value-call #'fude-gl:lookat
+      camera
+      (sdl2:get-global-mouse-state))))
+
 (defun zoom ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -1140,11 +1146,7 @@
           'cubes
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
-        (loop :with camera-view
-                    := (fude-gl:view
-                         (multiple-value-call #'fude-gl:lookat
-                           camera
-                           (sdl2:get-global-mouse-state)))
+        (loop :with camera-view := (lookat-view camera)
               :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf model
@@ -1238,11 +1240,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state))))))
+    (let ((view (lookat-view camera))))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection)
@@ -1318,11 +1316,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state))))))
+    (let ((view (lookat-view camera))))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection)
@@ -1453,11 +1447,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state))))))
+    (let ((view (lookat-view camera))))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection)
@@ -1547,11 +1537,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state))))))
+    (let ((view (lookat-view camera))))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection)
@@ -1698,11 +1684,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -1885,11 +1867,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -2032,11 +2010,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -2180,11 +2154,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -2346,11 +2316,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -2547,11 +2513,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
@@ -2739,11 +2701,7 @@
         (move-camera keysym camera fude-gl:*delta*)))
     (:idle nil)
     (fude-gl:with-delta-time (time))
-    (let ((view
-           (fude-gl:view
-             (multiple-value-call #'fude-gl:lookat
-               camera
-               (sdl2:get-global-mouse-state)))))
+    (let ((view (lookat-view camera)))
       ;; Update light colors.
       (when color-update
         (locally
