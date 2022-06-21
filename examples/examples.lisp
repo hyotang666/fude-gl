@@ -1568,29 +1568,29 @@
   ((ambient :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :ambient
-            :initform (3d-vectors:vec3 0 0 0)
+            :initform (3d-vectors:vec3 1.0 0.5 0.31)
             :accessor ambient)
    (diffuse :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :diffuse
-            :initform (3d-vectors:vec3 0 0 0)
+            :initform (3d-vectors:vec3 1.0 0.5 0.31)
             :accessor diffuse)
    (specular :glsl-type :vec3
              :type 3d-vectors:vec3
              :initarg :specular
-             :initform (3d-vectors:vec3 0 0 0)
+             :initform (3d-vectors:vec3 0.5 0.5 0.5)
              :accessor specular)
    (shininess :glsl-type :float
               :type 3d-vectors:vec3
               :initarg :shininess
-              :initform 0.0
+              :initform 32.0
               :accessor shininess)))
 
 (fude-gl::define-glsl-structure light ()
   ((position :glsl-type :vec3
              :type 3d-vectors:vec3
              :initarg :position
-             :initform (3d-vectors:vec3 0 0 0)
+             :initform (3d-vectors:vec3 1.2 1.0 2.0)
              :accessor light-position)
    (ambient :glsl-type :vec3
             :type 3d-vectors:vec3
@@ -1648,10 +1648,7 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
-    (let* ((light
-            (make-instance 'light
-                           :position (3d-vectors:vec3 1.2 1.0 2.0)
-                           :specular (3d-vectors:vec3 1 1 1)))
+    (let* ((light (make-instance 'light))
            (camera
             (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
@@ -1662,12 +1659,7 @@
                                       0.1 100))
            (time (fude-gl:make-delta-time))
            (light-color (3d-vectors:vec3 1.0 1.0 1.0))
-           (material
-            (make-instance 'material
-                           :ambient (3d-vectors:vec3 1.0 0.5 0.31)
-                           :diffuse (3d-vectors:vec3 1.0 0.5 0.31)
-                           :specular (3d-vectors:vec3 0.5 0.5 0.5)
-                           :shininess 32.0))
+           (material (make-instance 'material))
            (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
