@@ -504,10 +504,12 @@
     ;; But in such cases, you need to defmethod SEND for it.
     ;;
     ;; NOTE: In order to avoid inner loop allocation.
-    (let ((matrix (3d-matrices:meye 4))))
+    (let ((matrix (3d-matrices:meye 4)) (radians 90)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
-        t))
+        t)
+      (:keydown ()
+        (setq radians (rem (+ radians 45) 360))))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
       (setf (fude-gl:uniform 'transform-demo "tex1")
@@ -517,7 +519,8 @@
             (fude-gl:uniform 'transform-demo "transform")
               (3d-matrices:nmscale
                 (3d-matrices:nmrotate (fude-gl:reload matrix fude-gl:+meye4+)
-                                      3d-vectors:+vz+ #.(fude-gl:radians 90))
+                                      3d-vectors:+vz+
+                                      (fude-gl:radians radians))
                 #.(3d-vectors:vec 0.5 0.5 0.5)))
       (fude-gl:draw 'transform-demo))))
 
