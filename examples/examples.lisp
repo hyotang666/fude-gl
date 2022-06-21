@@ -1638,6 +1638,15 @@
 
 (fude-gl:defvertices materials *defuse-source*)
 
+(defun update-color (light light-color)
+  #+sbcl ; Out of our responsibility.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
+                    (sin (* 0.7 (get-internal-real-time)))
+                    (sin (* 1.3 (get-internal-real-time))))
+  (setf (diffuse light) (3d-vectors:v* light-color 0.5)
+        (ambient light) (3d-vectors:v* (diffuse light) 0.2)))
+
 (defun material ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -1678,15 +1687,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time))))))
-      (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-            (ambient light) (3d-vectors:v* (diffuse light) 0.2)))
+      (and color-update (update-color light light-color)))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -1861,15 +1862,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time))))))
-      (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-            (ambient light) (3d-vectors:v* (diffuse light) 0.2)))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -2004,15 +1997,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time)))))
-        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -2148,15 +2133,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time)))))
-        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -2310,15 +2287,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time)))))
-        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -2507,15 +2476,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time)))))
-        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
@@ -2695,15 +2656,7 @@
     (fude-gl:with-delta-time (time))
     (let ((view (lookat-view camera)))
       ;; Update light colors.
-      (when color-update
-        (locally
-         #+sbcl ; Out of our responsibility.
-         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-         (3d-vectors:vsetf light-color (sin (* 2.0 (get-internal-real-time)))
-                           (sin (* 0.7 (get-internal-real-time)))
-                           (sin (* 1.3 (get-internal-real-time)))))
-        (setf (diffuse light) (3d-vectors:v* light-color 0.5)
-              (ambient light) (3d-vectors:v* (diffuse light) 0.2))))
+      (update-color light light-color))
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
                              :color '(0.1 0.1 0.1 1.0))
       (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
