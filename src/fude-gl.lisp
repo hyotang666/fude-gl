@@ -588,18 +588,7 @@
                  ,var))
               (acc `(glsl-env:notation ,var ,(symbol-camel-case var)))
           :if (glsl-structure-name-p type)
-            :do (dolist (slot (c2mop:class-direct-slots (find-class type)))
-                  (dolist (reader (c2mop:slot-definition-readers slot))
-                    (acc
-                     `(ftype (function ((,(symbol-camel-case var) ,type))
-                              ,(glsl-type slot))
-                             ,reader))
-                    (acc
-                     `(glsl-env:notation ,reader
-                       ,(format nil "~A.~A" (symbol-camel-case var)
-                                (symbol-camel-case
-                                  (c2mop:slot-definition-name slot)))))
-                    (acc `(attribute ,reader :slot-reader)))))))
+            :do (mapc #'acc (slot-reader-decls type var)))))
 
 (defun constant-decl (constant-defs)
   (loop :for (nil name value) :in constant-defs

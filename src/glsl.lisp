@@ -382,12 +382,13 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun slot-notation (exp fun-info)
   ;; FIXME: Should we use another better declaration?
   (let ((structure-notation (form-type-notation (cadr exp))))
-    (some
-      (lambda (info)
-        (and (eq 'glsl-env:notation (car info))
-             (uiop:string-prefix-p structure-notation (cdr info))
-             (cdr info)))
-      fun-info)))
+    (or (some
+          (lambda (info)
+            (and (eq 'glsl-env:notation (car info))
+                 (uiop:string-prefix-p structure-notation (cdr info))
+                 (cdr info)))
+          fun-info)
+        (error "Could not detect slot notation. ~S ~S" exp fun-info))))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
@@ -596,6 +597,20 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           (dolist (reader (c2mop:slot-definition-readers slot))
             (acc reader)))))))
 
+(defun slot-reader-decls (struct-name var)
+  (uiop:while-collecting (acc)
+    (dolist (slot (c2mop:class-direct-slots (find-class struct-name)))
+      (dolist (reader (c2mop:slot-definition-readers slot))
+        (acc
+         `(ftype (function ((,(symbol-camel-case var) ,struct-name))
+                  ,(glsl-type slot))
+                 ,reader))
+        (acc
+         `(glsl-env:notation ,reader
+           ,(format nil "~A.~A" (symbol-camel-case var)
+                    (symbol-camel-case (c2mop:slot-definition-name slot)))))
+        (acc `(attribute ,reader :slot-reader))))))
+
 (defun glsl-defun (stream exp)
   (setf stream (or stream *standard-output*))
   (destructuring-bind
@@ -617,11 +632,15 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                 `((ftype (function
                           ,(mapcar
                              (lambda (var type)
-                               (list (symbol-camel-case var)
-                                     (symbol-camel-case type)))
+                               (list (symbol-camel-case var) type))
                              lambda-list arg-types)
                           ,return)
                          ,name)
+                  ,@(mapcan
+                      (lambda (type var)
+                        (when (glsl-structure-name-p type)
+                          (slot-reader-decls type var)))
+                      arg-types lambda-list)
                   (glsl-env:notation ,name ,(symbol-camel-case name))
                   ,@(mapcan
                       (lambda (var type)
