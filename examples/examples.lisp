@@ -1826,10 +1826,7 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
-    (let* ((light
-            (fude-gl::make-object 'light
-                                  :position (3d-vectors:vec3 1.2 1.0 2.0)
-                                  :specular (3d-vectors:vec3 1 1 1)))
+    (let* ((light (fude-gl::make-object 'light))
            (camera
             (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
@@ -1958,10 +1955,7 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
-    (let* ((light
-            (fude-gl::make-object 'light
-                                  :position (3d-vectors:vec3 1.2 1.0 2.0)
-                                  :specular (3d-vectors:vec3 1 1 1)))
+    (let* ((light (fude-gl::make-object 'light))
            (camera
             (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
            (model (3d-matrices:meye 4))
