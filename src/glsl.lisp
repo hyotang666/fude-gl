@@ -141,6 +141,12 @@
             (eprot:decl-spec-bind (decl-name var attribute)
                 decl-form
               (list (list var decl-name attribute)))))
+   (constant (t &rest symbol) (decl-form env) "Mark SYMBOL as a constant."
+    (declare (ignore env))
+    (eprot:decl-spec-bind (decl-name value &rest names)
+        decl-form
+      (values :variable
+              (mapcar (lambda (name) (list name decl-name value)) names))))
    (refered (symbol) (decl-form env) "Mark the SYMBOL is refered."
     (eprot:decl-spec-bind (decl-name var-name)
         decl-form
