@@ -2101,15 +2101,7 @@
                                               'container2-specular
                                               :if-does-not-exist :create)
                                   :shininess 32.0))
-           (color-update t)
-           (cube-positions
-            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                  (3d-vectors:vec -1.5 -2.2 -2.5)
-                  (3d-vectors:vec -3.8 -2.0 -12.3)
-                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                  (3d-vectors:vec 1.5 0.2 -1.5)
-                  (3d-vectors:vec -1.3 1 -1.5)))))
+           (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -2138,7 +2130,7 @@
               view-pos (fude-gl:camera-position camera)
               mat material
               l light)
-        (loop :for pos :in cube-positions
+        (loop :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf m (3d-matrices:nmrotate
                             (3d-matrices:nmtranslate
@@ -2255,15 +2247,7 @@
                                   :specular (fude-gl:find-texture
                                               'container2-specular
                                               :if-does-not-exist :create)))
-           (color-update t)
-           (cube-positions
-            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                  (3d-vectors:vec -1.5 -2.2 -2.5)
-                  (3d-vectors:vec -3.8 -2.0 -12.3)
-                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                  (3d-vectors:vec 1.5 0.2 -1.5)
-                  (3d-vectors:vec -1.3 1 -1.5)))))
+           (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -2292,7 +2276,7 @@
               view-pos (fude-gl:camera-position camera)
               mat material
               l light)
-        (loop :for pos :in cube-positions
+        (loop :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf m (3d-matrices:nmrotate
                             (3d-matrices:nmtranslate
@@ -2444,15 +2428,7 @@
                                   :specular (fude-gl:find-texture
                                               'container2-specular
                                               :if-does-not-exist :create)))
-           (color-update t)
-           (cube-positions
-            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                  (3d-vectors:vec -1.5 -2.2 -2.5)
-                  (3d-vectors:vec -3.8 -2.0 -12.3)
-                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                  (3d-vectors:vec 1.5 0.2 -1.5)
-                  (3d-vectors:vec -1.3 1 -1.5)))))
+           (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -2481,7 +2457,7 @@
               view-pos (fude-gl:camera-position camera)
               mat material
               l light)
-        (loop :for pos :in cube-positions
+        (loop :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf m (3d-matrices:nmrotate
                             (3d-matrices:nmtranslate
@@ -2624,15 +2600,7 @@
                                   :specular (fude-gl:find-texture
                                               'container2-specular
                                               :if-does-not-exist :create)))
-           (color-update t)
-           (cube-positions
-            (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                  (3d-vectors:vec -1.5 -2.2 -2.5)
-                  (3d-vectors:vec -3.8 -2.0 -12.3)
-                  (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                  (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                  (3d-vectors:vec 1.5 0.2 -1.5)
-                  (3d-vectors:vec -1.3 1 -1.5)))))
+           (color-update t)))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)
@@ -2661,7 +2629,7 @@
               view-pos (fude-gl:camera-position camera)
               mat material
               l light)
-        (loop :for pos :in cube-positions
+        (loop :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf m (3d-matrices:nmrotate
                             (3d-matrices:nmtranslate
