@@ -772,6 +772,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (cdr exp)
     (let ((eprot:*environment*
            (eprot:augment-environment eprot:*environment*
+                                      :name 'dotimes
                                       :variable (list var)
                                       :declare `((type :int ,var)
                                                  (glsl-env:notation ,var
