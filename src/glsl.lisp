@@ -269,9 +269,15 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (lexicalp
        (unless not-ref-p ; means refered-p
          (eprot:proclaim `(refered ,exp)))
-       (write-string (cdr (assoc 'glsl-env:notation infos)) stream))
+       (write-string
+         (or (cdr (assoc 'glsl-env:notation infos))
+             (error "Missing notation of ~S." exp))
+         stream))
       (infos ; global one.
-       (write-string (cdr (assoc 'glsl-env:notation infos)) stream))
+       (write-string
+         (or (cdr (assoc 'glsl-env:notation infos))
+             (error "Missing notation of ~S." exp))
+         stream))
       ((and errorp
             (with-cl-io-syntax
               (cerror "Anyway print it." 'unknown-variable
