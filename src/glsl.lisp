@@ -413,7 +413,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
             ;; Does match arg length?
             (if (= 1 (length (cdr exp)))
                 (progn
-                 (eprot:proclaim `(refered ,(cadr exp)))
+                 (with-cl-io-syntax
+                   (eprot:proclaim `(refered ,(cadr exp))))
                  (write-string (slot-notation exp info) stream))
                 (with-hint (("Print function informations." info))
                   (error 'glsl-argument-mismatch :form exp)))
