@@ -592,7 +592,9 @@
 
 (defun constant-decl (constant-defs)
   (loop :for (nil name value) :in constant-defs
-        :collect `(constant ,value ,name)))
+        :collect `(eprot::constant ,name ,value)
+        :collect `(glsl-env:notation ,name
+                   ,(change-case:constant-case (symbol-name name)))))
 
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let* ((format
