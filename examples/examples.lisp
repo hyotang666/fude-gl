@@ -2730,11 +2730,8 @@
                                   (vector (+ (/ x 10) offset)
                                           (+ (/ y 10) offset))))))))
       (fude-gl:in-vertices 'instancing)
-      (loop :for vec2 :in translations
-            :for i :upfrom 0
-            :do (setf (fude-gl:uniform 'instancing
-                                       (format nil "offsets[~A]" i))
-                        vec2)))
+      ;; When new value is a list, recursively setf uniform with its index.
+      (setf (fude-gl:uniform 'instancing "offsets") translations))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
         t)

@@ -1009,6 +1009,13 @@ NOTE: When ALIAS is a symbol, it will be filtered by symbol-camel-case to genera
   (in-program to)
   (gl:uniformfv (uniform to uniform) o))
 
+(defmethod send
+           ((o cons) (to symbol)
+            &key (uniform (alexandria:required-argument :uniform)))
+  (loop :for elt :in o
+        :for i :of-type fixnum :upfrom 0
+        :do (send elt to :uniform (format nil "~A[~D]" uniform i))))
+
 ;;;; BUFFER
 
 (defstruct buffer
