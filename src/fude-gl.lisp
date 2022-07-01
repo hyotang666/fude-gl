@@ -317,6 +317,25 @@
 (defgeneric fragment-shader (name)
   (:documentation "Return fragment shader code string."))
 
+(defgeneric (setf fragment-shader) (new name)
+  (:method ((new string) (name symbol))
+    (let* ((gf (c2mop:ensure-generic-function 'fragment-shader))
+           (method
+            (find-method gf nil (list (c2mop:intern-eql-specializer name)))))
+      (multiple-value-bind (lambda initargs)
+          (c2mop:make-method-lambda gf method
+                                    `(lambda ,(c2mop:method-lambda-list method)
+                                       ,new)
+                                    nil)
+        (add-method gf
+                    (apply #'make-instance
+                           (c2mop:generic-function-method-class gf)
+                           :lambda-list (c2mop:method-lambda-list method)
+                           :specializers (c2mop:method-specializers method)
+                           :function (compile nil lambda) initargs))))
+    new)
+  (:documentation "For debug use."))
+
 (defgeneric uniforms (name)
   (:documentation "Return associated uniform name strings."))
 
