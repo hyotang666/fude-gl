@@ -823,9 +823,9 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
 
 (defun parse-log (log)
   "Return two values.
-  2. Boolean: Has index?
-  3. List of integers (start end next) if second value is true.
-     List of string if second value is nil."
+  1. Boolean: Has index?
+  2. List of integers (start line-index token-index) if first value is true.
+     List of string if first value is nil."
   (let* ((tokens (ppcre:split ": ?" log))
          (position (position "error" tokens :test #'equal))
          (pre-error (and position (subseq tokens 0 position))))
@@ -834,10 +834,12 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
       (0 (values nil nil))
       (2
        (destructuring-bind
-           (start? end?)
+           (start? line-index?)
            pre-error
          (let ((positions
-                (delete "" (the list (uiop:split-string end? :separator "()"))
+                (delete ""
+                        (the list
+                             (uiop:split-string line-index? :separator "()"))
                         :test #'equal)))
            (declare (list tokens))
            (if (and (every #'digit-char-p start?)
@@ -848,7 +850,7 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                        (list (parse-integer start?)
                              (parse-integer (car positions))
                              (parse-integer (cadr positions))))
-               (values nil (list start? end?)))))))))
+               (values nil (list start? line-index?)))))))))
 
 (define-condition glsl-compile-error (fude-gl-error cell-error)
   ((origin :initarg :origin :reader origin)
@@ -863,12 +865,19 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
          (if (not has-index?)
              (format out "Source ~S" source)
              (destructuring-bind
-                 (start end next)
+                 (start line-index token-index)
                  args
-               (declare (ignore start end))
-               (write-string source out :end next)
-               (cl-ansi-text:with-color (:red :stream out)
-                 (write-string source out :start next)))))))))
+               (declare (ignore start token-index)
+                        (fixnum line-index))
+               (with-input-from-string (in source)
+                 (loop :for line = (read-line in nil nil)
+                       :for index :of-type fixnum :upfrom 1
+                       :while line
+                       :if (< index line-index)
+                         :do (write-line line out)
+                       :else
+                         :do (cl-ansi-text:with-color (:red :stream out)
+                               (write-line line out)))))))))))
 
 (defun compile-shader (program-id vertex-shader fragment-shader)
   "Request openGL to compile and link shader programs. Return nil."
