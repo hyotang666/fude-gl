@@ -615,6 +615,42 @@
         :collect `(glsl-env:notation ,name
                    ,(change-case:constant-case (symbol-name name)))))
 
+(defun parse-main (main)
+  "Canonicalize ftype (function (type) type) to (function ((var type)) type)."
+  (let ((table (make-hash-table :test #'eq)))
+    (loop :for sexp :in main
+          :if (eq 'defun (car sexp))
+            :do (push sexp (gethash (cadr sexp) table))
+          :else :if (eq 'declaim (car sexp))
+            :do (loop :for (declaration type . names) :in (cdr sexp)
+                      :if (eq 'ftype declaration)
+                        :do (dolist (name names)
+                              (push type (gethash name table)))
+                      :else
+                        :do (error "NIY ~S." (list* declaration type names)))
+          :else
+            :do (error "NIY ~S." sexp))
+    (multiple-value-call #'append
+      (uiop:while-collecting (ftypes defuns)
+        (maphash
+          (lambda (name forms)
+            (let ((defun (assoc 'defun forms)) (ftype (assoc 'function forms)))
+              (if (null defun)
+                  (if ftype
+                      (error "Missing definition. ~S" ftype)
+                      (error "NIY ~S" name))
+                  (if (null ftype)
+                      (error "FTYPE declaration is required. ~S" defun)
+                      (progn
+                       (ftypes
+                        `(declaim
+                          (ftype (function
+                                  ,(mapcar #'list (third defun) (second ftype))
+                                  ,(third ftype))
+                                 ,name)))
+                       (defuns defun))))))
+          table)))))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let* ((format
           (formatter
@@ -681,7 +717,7 @@
                                       (format nil format version constant-defs
                                               in out struct-defs uniform
                                               (append varying varying%)
-                                              main))))
+                                              (parse-main main)))))
                             acc)))))))
       (rec shader-clause* (attribute-ins attribute-decls) nil nil))))
 

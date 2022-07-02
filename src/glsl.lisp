@@ -577,9 +577,22 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defvar *declaims* (make-hash-table :test #'eq))
 
 (defun glsl-declaim (stream exp)
-  (declare (ignore stream))
   (loop :for decl-form :in (cdr exp)
-        :do (eprot:proclaim decl-form)))
+        :do (eprot:proclaim decl-form)
+            (destructuring-bind
+                ((op args return) . names)
+                (cdr decl-form)
+              (declare (ignore op))
+              (dolist (name names)
+                (unless (string= 'main name)
+                  (funcall (formatter "~W~^ ~@_~W~:<~@{~A~^ ~@_~W~^, ~}~:>;")
+                           stream return name
+                           (loop :for (name type) :in args
+                                 :collect (if (glsl-structure-name-p type)
+                                              (change-case:pascal-case
+                                                (symbol-name type))
+                                              (symbol-camel-case type))
+                                 :collect name)))))))
 
 (defun glsl-defconstant (stream exp)
   (setf stream (or stream *standard-output*))
@@ -615,41 +628,36 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
         (acc `(attribute ,reader :slot-reader))))))
 
 (defun glsl-defun (stream exp)
+  ;; NOTE: PARSE-MAIN gualantees already declaimed.
   (setf stream (or stream *standard-output*))
   (destructuring-bind
       (name lambda-list &body body)
       (cdr exp)
-    (let ((info
-           (or (nth-value 2
-                          (eprot:function-information name
-                                                      eprot:*environment*))
-               (error "DEFUN ~S needs ftype DECLAIMed." name))))
+    (let* ((info
+            (or (nth-value 2
+                           (eprot:function-information name
+                                                       eprot:*environment*))
+                (error "DEFUN ~S needs ftype DECLAIMed." name)))
+           (ftype (assoc 'ftype info)))
       (destructuring-bind
           (arg-types return)
-          (cddr (assoc 'ftype info))
+          (cddr ftype)
         (let* ((functions
                 (cons name
                       (struct-readers
-                        (remove-if-not #'glsl-structure-name-p arg-types))))
+                        (loop :for (nil type) :in arg-types
+                              :when (glsl-structure-name-p type)
+                                :collect type))))
                (decls
-                `((ftype (function
-                          ,(mapcar
-                             (lambda (var type)
-                               (list (symbol-camel-case var) type))
-                             lambda-list arg-types)
-                          ,return)
-                         ,name)
-                  ,@(mapcan
-                      (lambda (type var)
-                        (when (glsl-structure-name-p type)
-                          (slot-reader-decls type var)))
-                      arg-types lambda-list)
+                `((ftype ,(cdr ftype) ,name)
+                  ,@(loop :for (var type) :in arg-types
+                          :when (glsl-structure-name-p type)
+                            :nconc (slot-reader-decls type var))
                   (glsl-env:notation ,name ,(symbol-camel-case name))
-                  ,@(mapcan
-                      (lambda (var type)
-                        `((type ,type ,var)
-                          (glsl-env:notation ,var ,(symbol-camel-case var))))
-                      lambda-list arg-types)))
+                  ,@(loop :for (var type) :in arg-types
+                          :collect `(type ,type ,var)
+                          :collect `(glsl-env:notation ,var
+                                     ,(symbol-camel-case var)))))
                (eprot:*environment*
                 (eprot:augment-environment eprot:*environment*
                                            :name name
@@ -672,8 +680,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                 :void
                 return)
             name
-            (loop :for type :in arg-types
-                  :for name :in lambda-list
+            (loop :for (name type) :in arg-types
                   :collect (if (glsl-structure-name-p type)
                                (change-case:pascal-case (symbol-name type))
                                (symbol-camel-case type))
@@ -782,7 +789,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
         ;; Update.
         (funcall (formatter " ~/fude-gl:glsl-symbol/++){ ~4I~:@_") out var)
         ;; The body.
-        (funcall (formatter "~{~W;~^ ~:@_~}") out body)
+        (funcall (formatter "~{~W~^ ~:@_~}") out body)
         (funcall (formatter "~I~:@_}") out)))))
 
 (defun glsl-incf (out exp &rest noise)
@@ -791,8 +798,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (place &optional num)
       (cdr exp)
     (if num
-        (funcall (formatter "~W += ~W") out place num)
-        (funcall (formatter "~W++") out place))))
+        (funcall (formatter "~W += ~W;") out place num)
+        (funcall (formatter "~W++;") out place))))
 
 (defun glsl-constant-definition (out exp &rest noise)
   (declare (ignore noise))
