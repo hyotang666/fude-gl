@@ -2026,12 +2026,12 @@
    (ambient :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :ambient
-            :initform (3d-vectors:vec3 1 1 1)
+            :initform (3d-vectors:vec3 0.05 0.05 0.05)
             :accessor ambient)
    (diffuse :glsl-type :vec3
             :type 3d-vectors:vec3
             :initarg :diffuse
-            :initform (3d-vectors:vec3 1 1 1)
+            :initform (3d-vectors:vec3 0.4 0.4 0.4)
             :accessor diffuse)
    (specular :glsl-type :vec3
              :type 3d-vectors:vec3
