@@ -17,7 +17,7 @@
                                        defuse-lighting specular-lighting
                                        material diffuse-map specular-map
                                        directional-light attenuation spot-light
-                                       spot-soft text instancing
+                                       spot-soft multiple-light text instancing
                                        instanced-arrays-demo instance-id-demo
                                        some-instance-demo
                                        some-instance-dynamics depth-testing
@@ -2637,6 +2637,252 @@
                             #.(3d-vectors:vec 1 0.3 0.5)
                             (fude-gl:radians (* 20 i))))
                   (fude-gl:draw 'spot-soft))))))
+
+;;;; MULTIPLE-LIGHTS.
+
+(fude-gl::define-glsl-structure <multiple-light> ()
+  ((position :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :position
+             :initform (3d-vectors:vec3 0 0 0)
+             :reader light-position)
+   (direction :glsl-type :vec3
+              :type 3d-vectors:vec3
+              :initarg :direction
+              :initform (3d-vectors:vec3 0 0 0)
+              :reader direction)
+   (cut-off :glsl-type :float
+            :type single-float
+            :initarg :cut-off
+            :initform (cos (fude-gl:radians 12.5))
+            :reader cut-off)
+   (outer-cut-off :glsl-type :float
+                  :type single-float
+                  :initarg :outer-cut-off
+                  :initform (cos (fude-gl:radians 15))
+                  :reader outer-cut-off)
+   (ambient :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :ambient
+            :initform (3d-vectors:vec3 0 0 0)
+            :accessor ambient)
+   (diffuse :glsl-type :vec3
+            :type 3d-vectors:vec3
+            :initarg :diffuse
+            :initform (3d-vectors:vec3 1 1 1)
+            :accessor diffuse)
+   (specular :glsl-type :vec3
+             :type 3d-vectors:vec3
+             :initarg :specular
+             :initform (3d-vectors:vec3 1 1 1)
+             :reader specular)
+   (constant :glsl-type :float
+             :type float
+             :initarg :constant
+             :initform 1.0
+             :reader constant)
+   (linear :glsl-type :float
+           :type float
+           :initarg :linear
+           :initform 0.09
+           :reader linear)
+   (quadratic :glsl-type :float
+              :type float
+              :initarg :quadratic
+              :initform 0.032
+              :reader quadratic)))
+
+(fude-gl:defshader multiple-light 330 (fude-gl:xyz normal fude-gl:st)
+  (:vertex ((norm :vec3) (frag-pos :vec3) (tex-coords :vec2) &uniform
+            (model :mat4) (view :mat4) (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf frag-pos (vec3 (* model (vec4 fude-gl:xyz 1.0)))
+            norm (* normal (mat3 (transpose (inverse model))))
+            tex-coords fude-gl:st
+            gl-position (* projection view (vec4 frag-pos 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (view-pos :vec3)
+              (dir-light <directional-light>)
+              (point-lights <attenuation> (defconstant +nr-point-lights+ 4))
+              (spot-light <multiple-light>) (material specular-map-material))
+    (declaim
+     (ftype (function (<directional-light> :vec3 :vec3) :vec3) calc-dir-light))
+    (defun calc-dir-light (light normal view-dir)
+      ;; calculates the color when using a directional light.
+      (let ((light-dir :vec3 (normalize (- (direction light)))))
+        (return
+         (+ (* (ambient light) (vec3 (texture (diffuse material) tex-coords)))
+            (* (diffuse light) (max 0.0 (dot normal light-dir))
+               (vec3 (texture (diffuse material) tex-coords)))
+            (* (specular light)
+               (pow (max 0.0 (dot view-dir (reflect (- light-dir) normal)))
+                (shininess material))
+               (vec3 (texture (specular material) tex-coords)))))))
+    (declaim
+     (ftype (function (<attenuation> :vec3 :vec3 :vec3) :vec3)
+            calc-point-light))
+    (defun calc-point-light (light normal frag-pos view-dir)
+      ;; calculates the color when using a point light.
+      (let ((light-dir :vec3 (normalize (- (light-position light) frag-pos)))
+            (distance :float (length (- (light-position light) frag-pos)))
+            (attenuation
+             :float
+             (/ 1.0
+                (+ (constant light) (* (linear light) distance)
+                   (* (quadratic light) distance distance)))))
+        (return
+         (+
+           (* attenuation (ambient light)
+              (vec3 (texture (diffuse material) tex-coords)))
+           (* attenuation (diffuse light) (max 0.0 (dot normal light-dir))
+              (vec3 (texture (diffuse material) tex-coords)))
+           (* attenuation (specular light)
+              (pow (max 0.0 (dot view-dir (reflect (- light-dir) normal)))
+               (shininess material))
+              (vec3 (texture (specular material) tex-coords)))))))
+    (declaim
+     (ftype (function (<multiple-light> :vec3 :vec3 :vec3) :vec3)
+            calc-spot-light))
+    (defun calc-spot-light (light normal frag-pos view-dir)
+      ;; calculates the color when using a spot light.
+      (let ((light-dir :vec3 (normalize (- (light-position light) frag-pos)))
+            (distance :float (length (- (light-position light) frag-pos)))
+            (attenuation
+             :float
+             (/ 1.0
+                (+ (constant light) (* (linear light) distance)
+                   (* (quadratic light) distance distance))))
+            (intensity
+             :float
+             (clamp
+              (/
+                (- (dot light-dir (normalize (- (direction light))))
+                   (outer-cut-off light))
+                (- (cut-off light) (outer-cut-off light)))
+              0.0 1.0)))
+        (return
+         (+
+           (* attenuation intensity (ambient light)
+              (vec3 (texture (diffuse material) tex-coords)))
+           (* attenuation intensity (diffuse light)
+              (max 0.0 (dot normal light-dir))
+              (vec3 (texture (diffuse material) tex-coords)))
+           (* attenuation intensity (specular light)
+              (pow (max 0.0 (dot view-dir (reflect (- light-dir) normal)))
+               (shininess material))
+              (vec3 (texture (specular material) tex-coords)))))))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((normal :vec3 (normalize norm))
+            (view-dir :vec3 (normalize (- view-pos frag-pos)))
+            ;; == =====================================================
+            ;; Our lighting is set up in 3 phases: directional, point lights and an optional flashlight
+            ;; For each phase, a calculate function is defined that calculates the corresponding color
+            ;; per lamp. In the main() function we take all the calculated colors and sum them up for
+            ;; this fragment's final color.
+            ;; == =====================================================
+            ;; phase 1: directional lighting
+            (result :vec3 (calc-dir-light dir-light normal view-dir)))
+        ;; phase 2: point lights
+        (dotimes (i +nr-point-lights+)
+          (incf result
+                (calc-point-light (aref point-lights i) normal frag-pos
+                 view-dir)))
+        ;; phase 3: spot light
+        (incf result (calc-spot-light spot-light normal frag-pos view-dir))
+        (setf frag-color (vec4 result 1.0))))))
+
+(fude-gl:defvertices multiple-light *diffuse-map-source*)
+
+(defvar *point-light-positions*
+  (list (3d-vectors:vec3 0.7 0.2 2.0) (3d-vectors:vec3 2.3 -3.3 -4.0)
+        (3d-vectors:vec3 -4.0 2.0 -12.0) (3d-vectors:vec3 0.0 0.0 -3.0)))
+
+(defun multiple-light ()
+  (uiop:nest
+    (sdl2:with-init (:everything))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Multiple lights."))
+    (sdl2:with-gl-context (context win))
+    (fude-gl:with-shader () (gl:enable :depth-test))
+    (let* ((camera
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
+           (time (fude-gl:make-delta-time))
+           (material
+            (fude-gl::make-object 'specular-map-material
+                                  :diffuse (fude-gl:find-texture 'container2
+                                                                 :if-does-not-exist :create)
+                                  :specular (fude-gl:find-texture
+                                              'container2-specular
+                                              :if-does-not-exist :create)))
+           (dir-light
+            (fude-gl::make-object '<directional-light>
+                                  :specular (3d-vectors:vec3 0.5 0.5 0.5)))
+           (point-lights
+            (mapcar
+              (lambda (position)
+                (fude-gl::make-object '<attenuation>
+                                      :position position
+                                      :ambient (3d-vectors:vec3 0.05 0.05 0.05)
+                                      :diffuse (3d-vectors:vec3 0.8 0.8 0.8)))
+              *point-light-positions*))
+           (spot-light
+            (fude-gl::make-object '<multiple-light>
+                                  :position (fude-gl:camera-position camera)
+                                  :direction (fude-gl:camera-front camera)))
+           (projection
+            (3d-matrices:mperspective (fude-gl:field-of-view camera)
+                                      (multiple-value-call #'/
+                                        (sdl2:get-window-size win))
+                                      0.1 100))
+           (model (3d-matrices:meye 4))))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:mousewheel (:y y)
+        (setf projection
+                (multiple-value-call #'fude-gl::zoom
+                  camera
+                  y
+                  (sdl2:get-window-size win))))
+      (:keydown (:keysym keysym)
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (let ((view (lookat-view camera))))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit)
+                             :color '(0.1 0.1 0.1 1.0))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection) (mat material)
+                              (dl dir-light) (sl spot-light))
+          'multiple-light
+        (setf v view
+              p projection
+              mat material
+              dl dir-light
+              sl spot-light)
+        (loop :for pos :in *cube-positions*
+              :for i :upfrom 0
+              :do (setf m (3d-matrices:nmrotate
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload model fude-gl:+meye4+) pos)
+                            #.(3d-vectors:vec 1 0.3 0.5)
+                            (fude-gl:radians (* 20 i))))
+                  (fude-gl:draw 'multiple-light))
+        (setf (fude-gl:uniform 'multiple-light "pointLights") point-lights))
+      (fude-gl:with-uniforms ((m model) (v view) (p projection))
+          'light-cube
+        (loop :for lamp :in point-lights
+              :for i :upfrom 0
+              :do (setf m (3d-matrices:nmscale
+                            (3d-matrices:nmtranslate
+                              (fude-gl:reload model fude-gl:+meye4+)
+                              (light-position lamp))
+                            #.(3d-vectors:vec3 0.2 0.2 0.2))
+                        v view
+                        p projection)
+                  (fude-gl:draw 'light-cube))))))
 
 ;;;; FONT
 ;;
