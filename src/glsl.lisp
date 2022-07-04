@@ -638,56 +638,55 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                            (eprot:function-information name
                                                        eprot:*environment*))
                 (error "DEFUN ~S needs ftype DECLAIMed." name)))
-           (ftype (assoc 'ftype info)))
-      (destructuring-bind
-          (arg-types return)
-          (cddr ftype)
-        (let* ((functions
-                (cons name
-                      (struct-readers
-                        (loop :for (nil type) :in arg-types
-                              :when (glsl-structure-name-p type)
-                                :collect type))))
-               (decls
-                `((ftype ,(cdr ftype) ,name)
-                  ,@(loop :for (var type) :in arg-types
+           (ftype (assoc 'ftype info))
+           (arg-types (caddr ftype))
+           (return (cadddr ftype))
+           (functions
+            (cons name
+                  (struct-readers
+                    (loop :for (nil type) :in arg-types
                           :when (glsl-structure-name-p type)
-                            :nconc (slot-reader-decls type var))
-                  (glsl-env:notation ,name ,(symbol-camel-case name))
-                  ,@(loop :for (var type) :in arg-types
-                          :collect `(type ,type ,var)
-                          :collect `(glsl-env:notation ,var
-                                     ,(symbol-camel-case var)))))
-               (eprot:*environment*
-                (eprot:augment-environment eprot:*environment*
-                                           :name name
-                                           :function functions
-                                           :variable lambda-list
-                                           :declare decls)))
-          (funcall
-            (formatter
-             #.(apply #'concatenate 'string
-                      (alexandria:flatten
-                        (list "~(~A~)~^ ~@_" ; return type
-                              "~A~^ ~@_" ; function name.
-                              (list "~:<" ; logical block for args.
-                                    "~@{~A~^ ~A~^, ~}" ; argbody.
-                                    "~:>~^ ~%")
-                              "~:<{~;~3I~:@_" ; function body.
-                              "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
-            stream
-            (if (equal '(values) return)
-                :void
-                return)
-            name
-            (loop :for (name type) :in arg-types
-                  :collect (if (glsl-structure-name-p type)
-                               (change-case:pascal-case (symbol-name type))
-                               (symbol-camel-case type))
-                  :collect (symbol-camel-case name))
-            body)
-          (when (every #'listp body)
-            (check-ref lambda-list)))))))
+                            :collect type))))
+           (decls
+            `((ftype ,(cdr ftype) ,name)
+              ,@(loop :for (var type) :in arg-types
+                      :when (glsl-structure-name-p type)
+                        :nconc (slot-reader-decls type var))
+              (glsl-env:notation ,name ,(symbol-camel-case name))
+              ,@(loop :for (var type) :in arg-types
+                      :collect `(type ,type ,var)
+                      :collect `(glsl-env:notation ,var
+                                 ,(symbol-camel-case var)))))
+           (eprot:*environment*
+            (eprot:augment-environment eprot:*environment*
+                                       :name name
+                                       :function functions
+                                       :variable lambda-list
+                                       :declare decls)))
+      (funcall
+        (formatter
+         #.(apply #'concatenate 'string
+                  (alexandria:flatten
+                    (list "~(~A~)~^ ~@_" ; return type
+                          "~A~^ ~@_" ; function name.
+                          (list "~:<" ; logical block for args.
+                                "~@{~A~^ ~A~^, ~}" ; argbody.
+                                "~:>~^ ~%")
+                          "~:<{~;~3I~:@_" ; function body.
+                          "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
+        stream
+        (if (equal '(values) return)
+            :void
+            return)
+        name
+        (loop :for (name type) :in arg-types
+              :collect (if (glsl-structure-name-p type)
+                           (change-case:pascal-case (symbol-name type))
+                           (symbol-camel-case type))
+              :collect (symbol-camel-case name))
+        body)
+      (when (every #'listp body)
+        (check-ref lambda-list)))))
 
 (defun glsl-struct-definition (stream structure-name &rest noise)
   (declare (ignore noise))
