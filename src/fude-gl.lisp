@@ -195,7 +195,12 @@
 (defun tex-image-2d (array)
   #+sbcl ; Due to the array dimensions are unknown in compile time.
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-  (let ((format (ecase (array-dimension array 2) (3 :rgb) (4 :rgba))))
+  (let ((format
+         (typecase (array-dimensions array)
+           ((cons * (cons * null)) :red)
+           ((cons * (cons * (cons (eql 3) null))) :rgb)
+           ((cons * (cons * (cons (eql 4) null))) :rgba)
+           (otherwise (error "NIY")))))
     (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
                      (the base-internal-format format)
                      (array-dimension array 0) ; width
@@ -300,6 +305,8 @@
 (define-vertex-attribute xyz ())
 
 (define-vertex-attribute st ())
+
+(define-vertex-attribute u ())
 
 (define-vertex-attribute rgb ())
 
@@ -456,6 +463,9 @@
           :uniform (format nil "~A.~A" uniform
                            (symbol-camel-case
                              (c2mop:slot-definition-name slot))))))
+
+(defgeneric constructed-p (vertices)
+  (:documentation "Is VERTICES constructed in GL?"))
 
 ;;;; DEFSHADER
 
@@ -1149,21 +1159,28 @@ NOTE: When ALIAS is a symbol, it will be filtered by symbol-camel-case to genera
 
 (defclass vertices ()
   ((shader :type symbol :reader shader)
-   (buffer :type buffer :reader buffer)
-   (attributes :type list :reader attributes)
-   (draw-mode :type draw-mode :reader draw-mode)
-   (vertex-array :type (unsigned-byte 32) :reader vertex-array)))
+   (attributes :type list :reader attributes)))
 
 (defmethod initialize-instance :after
-           ((o vertices)
-            &key name buffer array shader attributes (draw-mode :triangles))
+           ((o vertices) &key name shader attributes &allow-other-keys)
   (setf (slot-value o 'shader) (or shader name)
-        (slot-value o 'buffer)
-          (apply #'make-buffer :name :vertices :original array buffer)
-        (slot-value o 'draw-mode) draw-mode
         (slot-value o 'attributes)
           (or (mapcar #'find-class attributes)
               (c2mop:class-direct-superclasses (find-class (or shader name))))))
+
+(defclass array-vertices (vertices)
+  ((draw-mode :type draw-mode :reader draw-mode)
+   (buffer :type buffer :reader buffer)
+   (vertex-array :type (unsigned-byte 32) :reader vertex-array)))
+
+(defmethod initialize-instance :after
+           ((o array-vertices)
+            &key buffer array (draw-mode :triangles) &allow-other-keys)
+  (setf (slot-value o 'buffer)
+          (apply #'make-buffer :name :vertices :original array buffer)
+        (slot-value o 'draw-mode) draw-mode))
+
+(defmethod constructed-p ((o array-vertices)) (slot-boundp o 'vertex-array))
 
 ;; *VERTICES*
 
@@ -1182,7 +1199,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
           ((null (setf vertices (gethash name *vertices*)))
            (error 'missing-vertices :name name))
           ;; Vertices are already constructed in GL.
-          ((slot-boundp vertices 'vertex-array) vertices)
+          ((constructed-p vertices) vertices)
           ;; Vertices are not constrcuted in GL yet.
           (t
            (ecase if-does-not-exist
@@ -1281,23 +1298,23 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
         :do (in-buffer (construct (funcall instance-buffers (class-name c))))
             (link-attribute c i superclasses)))
 
-(defmethod create-vertex-array :around ((o vertices))
+(defmethod create-vertex-array :around ((o array-vertices))
   (let ((vao (gl:gen-vertex-array)))
     (in-vertex-array vao)
     (call-next-method)
     vao))
 
-(defmethod create-vertex-array ((o vertices))
+(defmethod create-vertex-array ((o array-vertices))
   (link-attributes (attributes o) (constantly (buffer o))))
 
-(defmethod construct ((o vertices))
+(defmethod construct ((o array-vertices))
   (with-slots (vertex-array shader)
       o
     (find-program shader :if-does-not-exist :create)
     (setf vertex-array (create-vertex-array o))
     o))
 
-(defmethod destruct ((o vertices))
+(defmethod destruct ((o array-vertices))
   (when (slot-boundp o 'vertex-array)
     (gl:delete-vertex-arrays (list (vertex-array o)))
     (slot-makunbound o 'vertex-array))
@@ -1310,23 +1327,24 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 (defmethod draw ((name symbol))
   (draw (find-vertices name :if-does-not-exist :create)))
 
-(defmethod draw :before ((o vertices)) (in-vertices o))
+(defmethod draw :before ((o array-vertices)) (in-vertices o))
 
-(defmethod draw ((o vertices))
+(defmethod draw ((o array-vertices))
   #+sbcl ; Due to out of our responsibility.
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (gl:draw-arrays (draw-mode o) 0 (vertex-length o)))
 
 ;; INDEXED
 
-(defclass indexed-vertices (vertices) ((indices :type buffer :reader indices)))
+(defclass indexed-vertices (array-vertices)
+  ((indices :type buffer :reader indices)))
 
 (defmethod initialize-instance :after
            ((o indexed-vertices) &key indices &allow-other-keys)
   (setf (slot-value o 'indices)
           (apply #'make-buffer :name :indices :original
                  (coerce (the list (car indices))
-                         '(array (unsigned-byte 8) (*)))
+                         '(array (unsigned-byte 16) (*)))
                  (append (cdr indices) (list :target :element-array-buffer)))))
 
 (defmethod create-vertex-array ((o indexed-vertices))
@@ -1362,7 +1380,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                           options))
              (table o))))
 
-(defclass instanced-vertices (vertices instanced) ())
+(defclass instanced-vertices (array-vertices instanced) ())
 
 (defmethod create-vertex-array ((o instanced-vertices))
   (loop :for (nil . buffer) :in (table o)
@@ -1387,9 +1405,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
         :do (destruct buffer)
             (call-next-method)))
 
-(defun vertex-length (vertices)
-  (/ (length (buffer-original (buffer vertices)))
-     (count-attributes (attributes vertices))))
+(defun vertex-length (array-vertices)
+  (/ (length (buffer-original (buffer array-vertices)))
+     (count-attributes (attributes array-vertices))))
 
 (defmethod draw ((o instanced-vertices))
   #+sbcl ; Out our responsibility.
@@ -1441,6 +1459,197 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   (let ((buffer (instances-buffer vertices-name o)))
     (send (buffer-source buffer) buffer :method method)))
 
+;; SCENE
+
+(defclass scene (vertices)
+  ((file :initarg :file :reader file)
+   (scene :initarg :object :reader scene)
+   (vertices :initform (make-hash-table :test #'eq) :reader vertices)
+   (textures :initform (make-hash-table :test #'equal) :reader textures)))
+
+(defmethod initialize-instance :after
+           ((o scene)
+            &key (file (error ":FILE is required.")) processing-flags
+            &allow-other-keys)
+  (setf (slot-value o 'scene)
+          (ai:import-into-lisp (uiop:native-namestring file)
+                               :processing-flags processing-flags)))
+
+(defun transform-point (vec mat)
+  (3d-vectors:v* (apply #'3d-vectors:vec3 (butlast (3d-matrices:mdiag mat)))
+                 (3d-vectors:v+ vec
+                                (3d-vectors:vxyz (3d-matrices:mcol mat 3)))))
+
+(defun scene-bounds (scene)
+  (let ((min (3d-vectors:vec3 1.0e10 1.0e10 1.0e10))
+        (max (3d-vectors:vec3 -1.0e10 -1.0e10 -1.0e10)))
+    (labels ((mesh-bounds (mesh xform)
+               #+sbcl ; due to upgraded element-type is unknown.
+               (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+               (loop :for vertex :across (ai:vertices mesh)
+                     :for transformed
+                          = (transform-point
+                              (3d-vectors:vec-from-vector vertex)
+                              (3d-matrices:mtranspose xform))
+                     :do (setf min (3d-vectors:vmin min transformed)
+                               max (3d-vectors:vmax max transformed))))
+             (node-bounds (node xform)
+               (let ((transform
+                      (3d-matrices:nm* (3d-matrices::%mat4 (ai:transform node))
+                                       xform)))
+                 #+sbcl ; due to upgraded element-type is unknown.
+                 (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+                 (loop :for i :across (ai:meshes node)
+                       :do (mesh-bounds (aref (ai:meshes scene) i) xform))
+                 (loop :for i :across (ai:children node)
+                       :do (node-bounds i transform)))))
+      (node-bounds (ai:root-node scene) (3d-matrices:meye 4)))
+    (values min max)))
+
+(defun model<-scene (scene &key (angle 0))
+  (multiple-value-bind (min max)
+      (scene-bounds (scene scene))
+    (let* ((diff (3d-vectors:v- max min))
+           (scale
+            (/ 1
+               (max (3d-vectors:vx diff) (3d-vectors:vy diff)
+                    (3d-vectors:vz diff))))
+           (c (3d-vectors:v/ (3d-vectors:v+ min max) 2)))
+      (3d-matrices:nmscale
+        (3d-matrices:nmrotate
+          (3d-matrices:mtranslation (3d-vectors:vapplyf c -)) 3d-vectors:+vz+
+          angle)
+        (3d-vectors:vec scale scale scale)))))
+
+(defun mesh-types (mesh)
+  ;; YAGNI style.
+  (case (classimp:primitive-types mesh)
+    (1 '(:points))
+    (2 '(:lines))
+    (4 '(:triangles))
+    (otherwise (error "NIY"))))
+
+(defmacro do-node ((var <scene> &optional <return>) &body body)
+  (let ((?rec (gensym "REC")))
+    (multiple-value-bind (forms decls)
+        (uiop:parse-body body)
+      `(block nil
+         (labels ((,?rec (,var)
+                    #+sbcl ; due to upgrade element type is unknown.
+                    (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+                    ,@decls
+                    (tagbody ,@forms)
+                    (map nil #',?rec (ai:children ,var))))
+           (,?rec (classimp:root-node ,<scene>))
+           (let ((,var))
+             (declare (ignorable ,var))
+             ,<return>))))))
+
+(defmacro do-mesh ((var <scene> &optional <return>) &body body)
+  (let ((?mesh-id (gensym "MESH-ID"))
+        (?node (gensym "NODE"))
+        (?scene (gensym "SCENE")))
+    `(let ((,?scene ,<scene>))
+       (do-node (,?node ,?scene)
+         #+sbcl ; due to upgrade element type is unknown.
+         (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+         (loop :for ,?mesh-id :across (classimp:meshes ,?node)
+               :for ,var = (aref (classimp:meshes ,?scene) ,?mesh-id)
+               :do (locally ,@body)))
+       (let ((,var))
+         (declare (ignore ,var))
+         ,<return>))))
+
+(defmacro do-material ((var <scene> &optional <return>) &body body)
+  `(locally
+    #+sbcl
+    (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+    (loop :for ,var :across (ai:materials (scene ,<scene>))
+          :do (locally ,@body)
+          :finally (return
+                    (let ((,var))
+                      (declare (ignorable ,var))
+                      ,<return>)))))
+
+(defmethod construct ((o scene))
+  (do-material (material o)
+    (loop :for (semantic tex-index file-name) :in (gethash "$tex.file" material)
+          :with counter = (make-hash-table)
+          :for uniform
+               = (change-case:camel-case
+                   (format nil "~A~D"
+                           (ecase semantic
+                             (:ai-texture-type-height :texture-height)
+                             (:ai-texture-type-specular :texture-specular)
+                             (:ai-texture-type-diffuse :texture-diffuse))
+                           (incf (gethash semantic counter 0))))
+          :when (find uniform (uniforms (shader o))
+                      :test #'equal
+                      :key #'uniform-name)
+            :do (setf (gethash uniform (textures o))
+                        (construct
+                          (make-texture :target :texture-2d
+                                        :initializer (lambda ()
+                                                       (tex-image-2d
+                                                         (load-image
+                                                           (merge-pathnames
+                                                             file-name
+                                                             (file o))
+                                                           :flip-y t)))
+                                        :params (list :texture-min-filter :linear
+                                                      :texture-mag-filter :linear))))))
+  (do-mesh (mesh (scene o) o)
+    (setf (gethash mesh (vertices o))
+            (construct
+              (make-instance 'indexed-vertices
+                             :array (coerce
+                                      (uiop:while-collecting (acc)
+                                        (map nil
+                                             (lambda
+                                                 (vertices normal
+                                                  texture-coords)
+                                               (map nil #'acc vertices)
+                                               (map nil #'acc normal)
+                                               (map nil #'acc texture-coords))
+                                             (ai:vertices mesh)
+                                             (ai:normals mesh)
+                                             (aref (ai:texture-coords mesh)
+                                                   0)))
+                                      '(simple-array single-float (*)))
+                             :draw-mode (car (mesh-types mesh))
+                             :attributes (mapcar #'class-name (attributes o))
+                             :shader (shader o)
+                             :indices (list
+                                        (uiop:while-collecting (acc)
+                                          (map nil
+                                               (lambda (indices)
+                                                 (map nil #'acc indices))
+                                               (ai:faces mesh)))))))))
+
+(defmethod constructed-p ((o scene))
+  (and (< 0 (hash-table-count (vertices o)))
+       (loop :for array-vertices :being :each :hash-value :of (vertices o)
+             :always (constructed-p array-vertices))))
+
+(defmethod destruct ((o scene))
+  (loop :for array-vertices :being :each :hash-value :of (vertices o)
+        :do (destruct array-vertices))
+  (loop :for texture :being :each :hash-value :of (textures o)
+        :do (destruct texture)))
+
+(defmethod draw ((o scene))
+  (maphash
+    (lambda (uniform texture)
+      (handler-case (send texture (shader o) :uniform uniform)
+        (missing-uniform ()
+          #|do-nothing|#)))
+    (textures o))
+  (do-node (n (scene o))
+    (map nil
+         (lambda (index)
+           (draw (gethash (aref (ai:meshes (scene o)) index) (vertices o))))
+         (ai:meshes n))))
+
 ;;;; DEFVERTICES
 
 (defmacro defvertices (&whole whole name array &rest options)
@@ -1449,7 +1658,10 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
     (((vertex-array array) check-bnf:expression))
     (((option* options) option-keys check-bnf:expression)
      (option-keys
-      (member :shader :draw-mode :indices :instances :buffer :attributes))))
+      (member :shader
+              :draw-mode :indices
+              :instances :buffer
+              :attributes :type))))
   (unless (getf options :shader)
     (assert (find-shader name)))
   (let ((draw-mode (getf options :draw-mode)))
@@ -1458,6 +1670,15 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (setf (gethash ',name *vertices*)
              ,(cond
+                ((let ((type (getf options :type))
+                       (?class-name (gensym "TYPE"))
+                       (?class-options (gensym "CLASS-OPTIONS")))
+                   (when type
+                     `(destructuring-bind
+                          (,?class-name . ,?class-options)
+                          ,type
+                        (apply #'make-instance ,?class-name :name ',name :file
+                               ,array ,@options ,?class-options)))))
                 ((getf options :indices)
                  `(make-instance 'indexed-vertices :name ',name :array ,array
                                  ,@options))
@@ -1465,7 +1686,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                  `(make-instance 'instanced-vertices :name ',name :array ,array
                                  ,@options))
                 (t
-                 `(make-instance 'vertices :name ',name :array ,array
+                 `(make-instance 'array-vertices :name ',name :array ,array
                                  ,@options))))
      ',name))
 
@@ -1524,7 +1745,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
          (when ,toplevelp
            (protect
             (loop :for shader :being :each :hash-value :of *vertices*
-                  :when (slot-boundp shader 'vertex-array)
+                  :when (constructed-p shader)
                     :do (destruct shader)))
            (protect
             (loop :for framebuffer :being :each :hash-value :of *framebuffers*
@@ -2103,10 +2324,14 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                  ',(loop :for c :in clause*
                          :append (car c))))))))
 
-(defun load-image (filename)
-  (efiletype-case (truename filename)
-    ((png) (opticl:vertical-flip-image (opticl:read-png-file filename)))
-    ((jpg jpeg) (opticl:vertical-flip-image (opticl:read-jpeg-file filename)))))
+(defun load-image (filename &key flip-y)
+  (flet ((may-flip (image)
+           (if flip-y
+               (opticl:vertical-flip-image image)
+               image)))
+    (efiletype-case (truename filename)
+      ((png) (may-flip (opticl:read-png-file filename)))
+      ((jpg jpeg) (may-flip (opticl:read-jpeg-file filename))))))
 
 ;; DEFIMAGE
 

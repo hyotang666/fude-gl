@@ -10,6 +10,7 @@
    "opticl" ; image loader.
    "3d-matrices" ; Matrix operations.
    "dexador" ; http client.
+   "classimp"   ; ASSet-IMPorter.
    )
   :pathname
   "examples/"
