@@ -214,82 +214,12 @@
 
 ;;;; GENERIC-FUNCTIONS
 
-(defgeneric vertex-shader (name)
-  (:documentation "Return vertex shader code string."))
-
-(defgeneric fragment-shader (name)
-  (:documentation "Return fragment shader code string."))
-
-(defgeneric (setf fragment-shader) (new name)
-  (:method ((new string) (name symbol))
-    (let* ((gf (c2mop:ensure-generic-function 'fragment-shader))
-           (method
-            (find-method gf nil (list (c2mop:intern-eql-specializer name)))))
-      (multiple-value-bind (lambda initargs)
-          (c2mop:make-method-lambda gf method
-                                    `(lambda ,(c2mop:method-lambda-list method)
-                                       ,new)
-                                    nil)
-        (add-method gf
-                    (apply #'make-instance
-                           (c2mop:generic-function-method-class gf)
-                           :lambda-list (c2mop:method-lambda-list method)
-                           :specializers (c2mop:method-specializers method)
-                           :function (compile nil lambda) initargs))))
-    new)
-  (:documentation "For debug use."))
-
-(defgeneric uniforms (name)
-  (:documentation "Return associated uniform name strings."))
-
-(define-condition missing-shader (fude-gl-error cell-error)
-  ((interface :initarg :interface :reader interface))
-  (:report
-   (lambda (this output)
-     (format output "Missing shader named ~S. ~:@_" (cell-error-name this))
-     (did-you-mean output (princ-to-string (cell-error-name this))
-                   (loop :for method
-                              :in (c2mop:generic-function-methods
-                                    (interface this))
-                         :for specializer
-                              := (car (c2mop:method-specializers method))
-                         :when (typep specializer 'c2mop:eql-specializer)
-                           :collect (c2mop:eql-specializer-object
-                                      specializer)))
-     (format output " ~:@_To see all known shaders, evaluate ~S."
-             `(c2mop:generic-function-methods
-                #',(c2mop:generic-function-name (interface this)))))))
-
-(defmethod no-applicable-method ((gf (eql #'vertex-shader)) &rest args)
-  (error 'missing-shader :name (car args) :interface gf))
-
-(defmethod no-applicable-method ((gf (eql #'fragment-shader)) &rest args)
-  (error 'missing-shader :name (car args) :interface gf))
-
-(defmethod no-applicable-method ((gf (eql #'uniforms)) &rest args)
-  (error 'missing-shader :name (car args) :interface gf))
-
-(defgeneric construct (thing)
-  (:documentation "Requesting openGL to construct objects."))
-
-(defgeneric destruct (thing)
-  ;; NOTE!
-  ;; When code fails while constructing,
-  ;; DESTRUCT may be called before bound slot.
-  (:documentation "Requesting openGL to destruct objects."))
-
-(defgeneric create-vertex-array (vertices))
-
 (define-compiler-macro draw (&whole whole thing)
   (when (constantp thing)
     (handler-case (find-vertices (eval thing) :if-does-not-exist nil)
       (missing-vertices (c)
         (warn 'missing-definition :condition c))))
   whole)
-
-(defgeneric draw (thing) (:documentation "Request openGL to draw THING."))
-
-(defgeneric send (object to &key))
 
 (define-compiler-macro shader (&whole whole o)
   (declare (notinline shader))
@@ -359,9 +289,6 @@
           :uniform (format nil "~A.~A" uniform
                            (symbol-camel-case
                              (c2mop:slot-definition-name slot))))))
-
-(defgeneric constructed-p (vertices)
-  (:documentation "Is VERTICES constructed in GL?"))
 
 ;;;; DEFSHADER
 
