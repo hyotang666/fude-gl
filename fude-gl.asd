@@ -2,7 +2,7 @@
 (in-package :asdf)
 (defsystem "fude-gl"
   :version
-  "5.21.2"
+  "5.21.3"
   :description
   "Fundamental Utility Definitions Especially for openGL."
   :license "MIT"
@@ -34,8 +34,8 @@
   :components
   ((:file "package")
    (:file "glsl" :depends-on ("package"))
-   (:file "attributes" :depends-on ("package"))
    (:file "generic-functions" :depends-on ("package" "glsl"))
+   (:file "attributes" :depends-on ("package" "generic-functions"))
    (:file "fude-gl" :depends-on ("glsl" "attributes" "generic-functions"))
    (:file "text" :depends-on ("fude-gl"))
    ))

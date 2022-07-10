@@ -94,4 +94,3 @@
 
 (defgeneric constructed-p (vertices)
   (:documentation "Is VERTICES constructed in GL?"))
-
