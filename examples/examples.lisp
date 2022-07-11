@@ -2939,6 +2939,7 @@
                            :title "Depth testing"))
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test)
+      (gl:depth-mask :false) ; <--- Disable writing.
       (gl:depth-func :less)) ; <---
     (fude-gl:with-shader ())
     (let* ((camera (make-instance 'fude-gl:camera))
@@ -2949,7 +2950,11 @@
                                       (multiple-value-call #'/
                                         (sdl2:get-window-size win))
                                       0.1 100))
-           (depth-test-funcs (list :less :always)))
+           (depth-test-funcs
+            (alexandria:circular-list :less :always
+                                      :never :equal
+                                      :lequal :greater
+                                      :notequal :gequal)))
       (fude-gl:with-uniforms (view projection)
           'depth-testing
         (setf view v
@@ -2958,7 +2963,11 @@
       (:quit ()
         t)
       (:keydown ()
-        (rotatef (car depth-test-funcs) (cadr depth-test-funcs))
+        (setf depth-test-funcs (cdr depth-test-funcs))
+        (sdl2:set-window-title win
+                               (format nil
+                                       "Depth testing with the function ~S."
+                                       (car depth-test-funcs)))
         (gl:depth-func (car depth-test-funcs))))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit))
