@@ -209,12 +209,6 @@
         (warn 'missing-definition :condition c))))
   whole)
 
-(define-compiler-macro shader (&whole whole o)
-  (declare (notinline shader))
-  (if (constantp o)
-      `',(shader (find-vertices (eval o) :if-does-not-exist nil))
-      whole))
-
 (defmethod send ((o glsl-structure-object) (to symbol) &key uniform)
   (dolist (slot (c2mop:class-slots (class-of o)))
     (send (slot-value o (c2mop:slot-definition-name slot)) to
@@ -290,7 +284,7 @@
 ;; VERTICES
 
 (defclass vertices ()
-  ((shader :type symbol :reader shader)
+  ((shader :type symbol :accessor shader)
    (attributes :type list :reader attributes)))
 
 (defmethod initialize-instance :after
@@ -353,6 +347,9 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 (defmethod shader ((o symbol))
   (shader (find-vertices o :if-does-not-exist :create)))
+
+(defmethod (setf shader) (new (o symbol))
+  (setf (shader (find-vertices o :if-does-not-exist :create)) new))
 
 ;; *VERTEX-ARRAY*
 
