@@ -260,6 +260,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (variable-information exp eprot:*environment*)
     (declare (ignore var-type))
     (cond
+      ((keywordp exp) ; KLUDGE: To handle glsl-keyword-command.
+       (write-string (symbol-camel-case exp) stream))
       (lexicalp
        (unless not-ref-p ; means refered-p
          (eprot:proclaim `(refered ,exp)))
@@ -748,22 +750,44 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
           (symbol-camel-case (caddr exp))))
 
 (defun glsl-cond (out exp &rest noise)
+  ;; FIXME: To better design especially for handling glsl-keyword-command e.g. discard.
+  ;; In other words, who control semi-colon, and how?
+  ;; HINT(?): The statements needs semicolon but the expressions does not need it.
   (declare (ignore noise))
-  (pprint-logical-block (out nil)
-    (write-string "if" out)
-    (loop :with body = (formatter " ~:@_{~4I~:@_~@{~W~^ ~:@_~} ~I~:@_} ~:@_")
-          :for (clause . rest) :on (cdr exp)
-          :do (funcall (formatter "(~W)") out (car clause))
-              (apply body out (cdr clause))
-          :if rest
-            :if (eq t (caar rest))
-              :do (funcall (formatter "else") out)
-                  (apply body out (cdar rest))
-                  (loop-finish)
+  (flet ((body (forms)
+           (write-char #\Space out)
+           (pprint-newline :mandatory out)
+           (write-char #\{ out)
+           (pprint-indent :block 4 out)
+           (pprint-newline :mandatory out)
+           (loop :for (form . rest) :on forms
+                 :do (write form :stream out)
+                     ;; KLUDGE: to handle glsl-keyword.
+                     (when (keywordp form)
+                       (write-char #\; out))
+                     (when rest
+                       (write-char #\Space out)
+                       (pprint-newline :mandatory out)))
+           (write-char #\Space out)
+           (pprint-indent :block 0 out)
+           (pprint-newline :mandatory out)
+           (write-char #\} out)
+           (write-char #\Space out)
+           (pprint-newline :mandatory out)))
+    (pprint-logical-block (out nil)
+      (write-string "if" out)
+      (loop :for (clause . rest) :on (cdr exp)
+            :do (funcall (formatter "(~W)") out (car clause))
+                (body (cdr clause))
+            :if rest
+              :if (eq t (caar rest))
+                :do (funcall (formatter "else") out)
+                    (body (cdar rest))
+                    (loop-finish)
+              :else
+                :do (funcall (formatter "else if") out)
             :else
-              :do (funcall (formatter "else if") out)
-          :else
-            :do (loop-finish))))
+              :do (loop-finish)))))
 
 (defun glsl-dotimes (out exp &rest noise)
   (declare (ignore noise))
