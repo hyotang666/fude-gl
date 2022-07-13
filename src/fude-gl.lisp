@@ -1199,7 +1199,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
                                           :do (setf (getf default k) v)
                                           :finally (return default))
                             :initializer (lambda ()
-                                           #+sbcl ; due to our responsibility.
+                                           #+sbcl ; due to not our responsibility.
                                            (declare
                                             (sb-ext:muffle-conditions
                                              sb-ext:compiler-note))
