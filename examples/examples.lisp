@@ -3289,13 +3289,7 @@
     (declaim (ftype (function nil (values)) main))
     (defun main () (setf color (vec4 (rgb (texture screen coord)) 1.0)))))
 
-(fude-gl:defvertices framebuffer-quad
-    (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
-                 #(-1.0 -1.0 0.0 0.0) #(1.0 -1.0 1.0 0.0) #(-1.0 1.0 0.0 1.0)
-                 #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
-  :shader 'framebuffer-screen)
-
-(fude-gl:defshader framebuffer-vertices 330 (fude-gl:xyz fude-gl:st)
+(fude-gl:defshader framebuffer 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((coord :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
     (declaim (ftype (function nil (values)) main))
@@ -3306,14 +3300,183 @@
     (declaim (ftype (function nil (values)) main))
     (defun main () (setf color (texture tex coord)))))
 
-(fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer-vertices)
+(fude-gl:defshader inversion 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf color (vec4 (vec3 (- 1.0 (texture screen coord))) 1.0)))))
+
+(fude-gl:defshader grayscale 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf color (texture screen coord))
+      (let ((average :float (/ (+ (r color) (g color) (b color)) 3.0)))
+        (setf color (vec4 average average average 1.0))))))
+
+(fude-gl:defshader grayscale-biassed 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf color (texture screen coord))
+      (let ((average
+             :float
+             (/
+               (+ (* 0.2126 (r color)) (* 0.7152 (g color))
+                  (* 0.0722 (b color)))
+               3.0)))
+        (setf color (vec4 average average average 1.0))))))
+
+(fude-gl:defshader sharpen 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (type :float offset))
+    (defconstant offset (/ 1.0 300.0))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((offsets
+             (vector :vec2 (9))
+             (make-array 9
+                         :element-type :vec2
+                         :initial-contents ((vec2 (- offset) offset) ; top-left
+                                            (vec2 0.0 offset) ; top-center
+                                            (vec2 offset offset) ; top-right
+                                            (vec2 (- offset) 0.0) ; center-left
+                                            (vec2 0.0 0.0) ; center-center
+                                            (vec2 offset 0.0) ; center-right
+                                            (vec2 (- offset) (- offset)) ; bottom-left
+                                            (vec2 0.0 (- offset)) ; bottom-center
+                                            (vec2 offset (- offset)) ; bottom-right
+                                            )))
+            (kernel
+             (vector :float (9))
+             (make-array 9
+                         :element-type :float
+                         :initial-contents (-1 -1 -1 ;
+                                            -1 9 -1 ;
+                                            -1 -1 -1))) ;
+            (sample-tex (vector :vec3 (9)) nil))
+        (dotimes (i 9)
+          (setf (aref sample-tex i)
+                  (vec3 (texture screen (+ (st coord) (aref offsets i))))))
+        (let ((col :vec3 (vec3 0.0)))
+          (dotimes (i 9) (incf col (* (aref sample-tex i) (aref kernel i))))
+          (setf color (vec4 col 1.0)))))))
+
+(fude-gl:defshader blur 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (type :float offset))
+    (defconstant offset (/ 1.0 300.0))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((offsets
+             (vector :vec2 (9))
+             (make-array 9
+                         :element-type :vec2
+                         :initial-contents ((vec2 (- offset) offset) ; top-left
+                                            (vec2 0.0 offset) ; top-center
+                                            (vec2 offset offset) ; top-right
+                                            (vec2 (- offset) 0.0) ; center-left
+                                            (vec2 0.0 0.0) ; center-center
+                                            (vec2 offset 0.0) ; center-right
+                                            (vec2 (- offset) (- offset)) ; bottom-left
+                                            (vec2 0.0 (- offset)) ; bottom-center
+                                            (vec2 offset (- offset)) ; bottom-right
+                                            )))
+            (kernel
+             (vector :float (9))
+             (make-array 9
+                         :element-type :float
+                         :initial-contents ((/ 1.0 16) (/ 2.0 16) (/ 1.0 16) ;
+                                            (/ 2.0 16) (/ 4.0 16) (/ 2.0 16) ;
+                                            (/ 1.0 16) (/ 2.0 16)
+                                            (/ 1.0 16))))
+            (sample-tex (vector :vec3 (9)) nil))
+        (dotimes (i 9)
+          (setf (aref sample-tex i)
+                  (vec3 (texture screen (+ (st coord) (aref offsets i))))))
+        (let ((col :vec3 (vec3 0.0)))
+          (dotimes (i 9) (incf col (* (aref sample-tex i) (aref kernel i))))
+          (setf color (vec4 col 1.0)))))))
+
+(fude-gl:defshader edge-detection 330 (fude-gl:xy fude-gl:st)
+  (:vertex ((coord :vec2))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf gl-position (vec4 fude-gl:xy 0.0 1.0)
+            coord fude-gl:st)))
+  (:fragment ((color :vec4) &uniform (screen :|sampler2D|))
+    (declaim (type :float offset))
+    (defconstant offset (/ 1.0 300.0))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (let ((offsets
+             (vector :vec2 (9))
+             (make-array 9
+                         :element-type :vec2
+                         :initial-contents ((vec2 (- offset) offset) ; top-left
+                                            (vec2 0.0 offset) ; top-center
+                                            (vec2 offset offset) ; top-right
+                                            (vec2 (- offset) 0.0) ; center-left
+                                            (vec2 0.0 0.0) ; center-center
+                                            (vec2 offset 0.0) ; center-right
+                                            (vec2 (- offset) (- offset)) ; bottom-left
+                                            (vec2 0.0 (- offset)) ; bottom-center
+                                            (vec2 offset (- offset)) ; bottom-right
+                                            )))
+            (kernel
+             (vector :float (9))
+             (make-array 9
+                         :element-type :float
+                         :initial-contents (1 1 1 ;
+                                            1 -8 1 ;
+                                            1 1 1)))
+            (sample-tex (vector :vec3 (9)) nil))
+        (dotimes (i 9)
+          (setf (aref sample-tex i)
+                  (vec3 (texture screen (+ (st coord) (aref offsets i))))))
+        (let ((col :vec3 (vec3 0.0)))
+          (dotimes (i 9) (incf col (* (aref sample-tex i) (aref kernel i))))
+          (setf color (vec4 col 1.0)))))))
+
+(fude-gl:defvertices fb-cube *depth-demo* :shader 'framebuffer)
 
 (fude-gl:defvertices plane-vertices
     (concatenate '(array single-float (*)) #(5.0 -0.5 5.0 2.0 0.0)
                  #(-5.0 -0.5 5.0 0.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0)
                  #(5.0 -0.5 5.0 2.0 0.0) #(-5.0 -0.5 -5.0 0.0 2.0)
                  #(5.0 -0.5 -5.0 2.0 2.0))
-  :shader 'framebuffer-vertices)
+  :shader 'framebuffer)
+
+(fude-gl:defvertices framebuffer-quad
+    (concatenate '(array single-float (*)) #(-1.0 1.0 0.0 1.0)
+                 #(-1.0 -1.0 0.0 0.0) #(1.0 -1.0 1.0 0.0) #(-1.0 1.0 0.0 1.0)
+                 #(1.0 -1.0 1.0 0.0) #(1.0 1.0 1.0 1.0))
+  :shader 'framebuffer-screen)
 
 ;; Macro DEFRAMEBUF defines framebuffer.
 ;;
@@ -3327,17 +3490,35 @@
     (sdl2:with-window (win :flags '(:shown :opengl)
                            :w 800
                            :h 600
-                           :title "Frame buffer Step1"))
-    (sdl2:with-gl-context (context win))
-    (fude-gl:with-shader () (gl:enable :depth-test))
+                           :title "Frame buffer Step1: Push p to see post process."))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test))
+    (fude-gl:with-shader ())
     (let* ((camera (make-instance 'fude-gl:camera))
            (matrix (3d-matrices:meye 4))
            (view (fude-gl:view camera))
-           (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100)))
+           (projection (3d-matrices:mperspective 45 (/ 800 600) 0.1 100))
+           (wireframep)
+           (processing
+            (alexandria:circular-list 'framebuffer-screen 'inversion 'grayscale
+                                      'grayscale-biassed 'sharpen 'blur
+                                      'edge-detection)))
       (setf (fude-gl:uniform 'framebuffer-screen "screen") 0))
     (sdl2:with-event-loop (:method :poll)
       (:quit ()
-        t))
+        t)
+      (:keydown (:keysym keysym)
+        (case (sdl2:scancode keysym)
+          (:scancode-p
+           (setf processing (cdr processing)
+                 (fude-gl:shader 'framebuffer-quad) (car processing))
+           (sdl2:set-window-title win
+                                  (format nil "Framebuffer: ~A"
+                                          (car processing))))
+          (:scancode-w
+           (if (setq wireframep (not wireframep))
+               (gl:polygon-mode :front-and-back :line)
+               (gl:polygon-mode :front-and-back :fill))))))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
       ;; bind to framebuffer and draw scene as we normally would to color texture
@@ -3354,31 +3535,26 @@
         ;; When a true name for uniform is a symbol like `projection` in the example,
         ;; FUDE-GL::SYMBOL-CAMEL-CASEd string is used for uniform name.
         (fude-gl:with-uniforms (tex (v "view") (p projection) model)
-            'framebuffer-vertices
+            'framebuffer
           ;;; Cubes
           (setf tex
                   (fude-gl:find-texture 'container :if-does-not-exist :create)
                 v view
-                p projection
-                model
-                  (3d-matrices:nmtranslate
-                    (fude-gl:reload matrix fude-gl:+meye4+)
-                    #.(3d-vectors:vec3 -1 0 -1)))
-          (fude-gl:draw 'fb-cube)
-          (setf model
-                  (3d-matrices:nmtranslate
-                    (fude-gl:reload matrix fude-gl:+meye4+)
-                    #.(3d-vectors:vec3 2 0 0)))
-          (fude-gl:draw 'fb-cube)
+                p projection)
+          (dolist
+              (position
+               '(#.(3d-vectors:vec3 -1 0 -1) #.(3d-vectors:vec3 2 0 0)))
+            (setf model
+                    (3d-matrices:nmtranslate
+                      (fude-gl:reload matrix fude-gl:+meye4+) position))
+            (fude-gl:draw 'fb-cube))
           ;;; floor
-          (fude-gl:in-vertices 'plane-vertices)
           (setf tex (fude-gl:find-texture 'metal :if-does-not-exist :create)
                 model (fude-gl:reload matrix fude-gl:+meye4+))
           (fude-gl:draw 'plane-vertices)))
       ;; draw a quad plane with the attached framebuffer color texture
       ;; disable depth test so screen-space quad isn't discarded due to depth test.
       (gl:disable :depth-test)
-      (fude-gl:in-vertices 'framebuffer-quad)
       (fude-gl:in-texture (fude-gl:framebuffer-texture 'step1))
       (fude-gl:draw 'framebuffer-quad))))
 
