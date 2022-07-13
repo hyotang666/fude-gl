@@ -858,6 +858,13 @@
 
 (fude-gl:defvertices cubes *depth-demo*)
 
+(defparameter *cube-positions*
+  (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
+        (3d-vectors:vec -1.5 -2.2 -2.5) (3d-vectors:vec -3.8 -2.0 -12.3)
+        (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
+        (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
+        (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
+
 (defun cubes ()
   (uiop:nest
     (sdl2:with-init (:everything))
@@ -868,14 +875,7 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test)) ; <--- When enable :depth-test...
     (fude-gl:with-shader ())
-    (let ((cube-positions
-           (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                 (3d-vectors:vec -1.5 -2.2 -2.5)
-                 (3d-vectors:vec -3.8 -2.0 -12.3)
-                 (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                 (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                 (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
-          (matrix (3d-matrices:meye 4))
+    (let ((matrix (3d-matrices:meye 4))
           (v (3d-matrices:mtranslation (3d-vectors:vec 0 0 -3)))
           (p
            (3d-matrices:mperspective 45
@@ -892,7 +892,7 @@
           'cubes
         (setf tex1 (fude-gl:find-texture 'container :if-does-not-exist :create)
               tex2 (fude-gl:find-texture 'face :if-does-not-exist :create))
-        (loop :for pos :in cube-positions
+        (loop :for pos :in *cube-positions*
               :for i :upfrom 0
               :do (setf model
                           (3d-matrices:nmrotate
@@ -919,14 +919,7 @@
     (sdl2:with-gl-context (context win)
       (gl:enable :depth-test))
     (fude-gl:with-shader ())
-    (let ((cube-positions
-           (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-                 (3d-vectors:vec -1.5 -2.2 -2.5)
-                 (3d-vectors:vec -3.8 -2.0 -12.3)
-                 (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-                 (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-                 (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
-          (camera (make-instance 'fude-gl:camera))
+    (let ((camera (make-instance 'fude-gl:camera))
           (matrix (3d-matrices:meye 4))
           (p
            (3d-matrices:mperspective 45
@@ -953,7 +946,7 @@
                ;; The first argument is a camera object.
                ;; The keyword parameter :LOOK-AT-TARGET specifies to look at CAMERA-TARGET.
                (v (fude-gl:view moved :look-at-target t)))
-          (loop :for pos :in cube-positions
+          (loop :for pos :in *cube-positions*
                 :for i :upfrom 0
                 :do (setf model
                             (3d-matrices:nmrotate
@@ -969,13 +962,6 @@
 ;;
 ;; One more camera example with handling cursor input.
 ;;
-
-(defparameter *cube-positions*
-  (list (3d-vectors:vec 0 0 0) (3d-vectors:vec 2 5 -15)
-        (3d-vectors:vec -1.5 -2.2 -2.5) (3d-vectors:vec -3.8 -2.0 -12.3)
-        (3d-vectors:vec 2.4 -0.4 -3.5) (3d-vectors:vec -1.7 3 -7.5)
-        (3d-vectors:vec 1.3 -2 -2.5) (3d-vectors:vec 1.5 2 -2.5)
-        (3d-vectors:vec 1.5 0.2 -1.5) (3d-vectors:vec -1.3 1 -1.5)))
 
 (defun move-camera
        (keysym camera &optional (delta internal-time-units-per-second))
