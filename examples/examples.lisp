@@ -3902,3 +3902,118 @@
         (fude-gl:draw 'shadow-quad)))))
 |#
 
+;;;; STENCIL-TESTING
+
+(fude-gl:defshader stencil-testing 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((tex-coords :vec2) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main ()
+      (setf tex-coords fude-gl:st
+            gl-position (* projection view model (vec4 fude-gl:xyz 1.0)))))
+  (:fragment ((frag-color :vec4) &uniform (texture1 :|sampler2D|))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () (setf frag-color (texture texture1 tex-coords)))))
+
+(fude-gl:defshader stencil-single-color 330 (fude-gl:xyz fude-gl:st)
+  (:vertex ((tex-coords :vec2) &uniform (model :mat4) (view :mat4)
+            (projection :mat4))
+    'stencil-testing)
+  (:fragment ((frag-color :vec4))
+    (declaim (ftype (function nil (values)) main))
+    (defun main () (setf frag-color (vec4 0.04 0.28 0.26 1.0)))))
+
+(fude-gl:defvertices stencil-cube *depth-demo* :shader 'stencil-testing)
+
+(fude-gl:defvertices stencil-plane
+    (fude-gl::buffer-original
+      (fude-gl:buffer
+        (fude-gl:find-vertices 'depth-testing-plane :if-does-not-exist nil)))
+  :shader 'stencil-testing)
+
+(defun stencil-testing ()
+  (uiop:nest
+    (sdl2:with-init (:everything)
+      ;; To enable stencil buffer with sdl2, you must call sdl2:gl-set-attr.
+      ;; And this setter must be called before making the window.
+      (sdl2:gl-set-attr :stencil-size 1))
+    (sdl2:with-window (win :flags '(:shown :opengl)
+                           :w 800
+                           :h 600
+                           :title "Stencil testing."))
+    (sdl2:with-gl-context (context win)
+      (gl:enable :depth-test :stencil-test)
+      (gl:depth-func :less)
+      (gl:stencil-func :notequal 1 #xFF)
+      (gl:stencil-op :keep :keep :replace))
+    (fude-gl:with-shader ())
+    (let* ((camera
+            (multiple-value-call #'make-looker (sdl2:get-global-mouse-state)))
+           (time (fude-gl:make-delta-time))
+           (model (3d-matrices:meye 4))
+           (cube-positions
+            '(#.(3d-vectors:vec3 -1 0 -1) #.(3d-vectors:vec3 2 0 0)))
+           (scale (3d-vectors:vec3 1.1 1.1 1.1))
+           (visiblep t)))
+    (sdl2:with-event-loop (:method :poll)
+      (:quit ()
+        t)
+      (:keydown (:keysym keysym)
+        (setf visiblep (not visiblep))
+        (move-camera keysym camera fude-gl:*delta*)))
+    (:idle nil)
+    (fude-gl:with-delta-time (time))
+    (fude-gl:with-clear (win (:color-buffer-bit :depth-buffer-bit :stencil-buffer-bit))
+      (let ((view (fude-gl:view camera))
+            (projection
+             (3d-matrices:mperspective (fude-gl:field-of-view camera)
+                                       (multiple-value-call #'/
+                                         (sdl2:get-window-size win))
+                                       0.1 100)))
+        (macrolet ((expand (shader)
+                     `(fude-gl:with-uniforms ((v view) (p projection))
+                          ,shader
+                        (setf v view
+                              p projection))))
+          (expand 'stencil-single-color)
+          (expand 'stencil-testing)))
+      ;; draw floor as normal, but don't write the floor to the stencil buffer,
+      ;; we only care about the containers. We set its mask to 0x00 to not write
+      ;; to the stencil buffer.
+      (gl:stencil-mask #x0)
+      (fude-gl:in-texture 'metal)
+      (setf (fude-gl:uniform 'stencil-testing "model") fude-gl:+meye4+)
+      (fude-gl:draw 'stencil-plane)
+      ;;
+      ;; 1st. render pass, draw objects as normal, writing to the stencil buffer
+      (gl:stencil-func :always 1 #xFF)
+      (gl:stencil-mask #xFF)
+      (fude-gl:in-texture 'cube-texture)
+      (setf (fude-gl:shader 'stencil-cube) 'stencil-testing)
+      (dolist (position cube-positions) ; two cubes
+        (setf (fude-gl:uniform 'stencil-testing "model")
+                (3d-matrices:nmtranslate (fude-gl:reload model fude-gl:+meye4+)
+                                         position))
+        (fude-gl:draw 'stencil-cube))
+      ;;
+      ;; 2nd. render pass: now draw slightly scaled versions of the objects,
+      ;; this time disabling stencil writing.
+      ;; Because the stencil buffer is now filled with several 1s.
+      ;; The parts of the buffer that are 1 are not drawn, thus only drawing
+      ;; the objects' size differences, making it look like borders.
+      (when visiblep
+        (gl:stencil-func :notequal 1 #xFF)
+        (gl:stencil-mask #x0)
+        (gl:disable :depth-test)
+        ;; two cubes
+        (setf (fude-gl:shader 'stencil-cube) 'stencil-single-color)
+        (dolist (position cube-positions)
+          (setf (fude-gl:uniform 'stencil-single-color "model")
+                  (3d-matrices:nmscale
+                    (3d-matrices:nmtranslate
+                      (fude-gl:reload model fude-gl:+meye4+) position)
+                    scale))
+          (fude-gl:draw 'stencil-cube)))
+      (gl:stencil-mask #xFF)
+      (gl:stencil-func :always 0 #xFF)
+      (gl:enable :depth-test))))
