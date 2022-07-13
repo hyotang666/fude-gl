@@ -393,14 +393,19 @@
       (setf out-color
               (mix (texture tex1 texcoord) (texture tex2 texcoord) weight)))))
 
-(defparameter *logo*
-  (opticl:read-png-file
-    (probe-file
-      (merge-pathnames "examples/lisplogo_warning2_128.png"
-                       (asdf:system-source-directory
-                         (asdf:find-system :fude-gl-examples))))))
+;; To management images, you can use a macro DEFIMAGE.
+;; The first argument (lisp-logo in the examples below.) is a symbol to name an image.
+;; The second argument is an expression to generate pathname.
 
-(fude-gl:deftexture lisp-logo :texture-2d (fude-gl:tex-image-2d *logo*))
+(fude-gl:defimage lisp-logo
+  (merge-pathnames "examples/lisplogo_warning2_128.png"
+                   (asdf:system-source-directory
+                     (asdf:find-system :fude-gl-examples))))
+
+;; To refer the images, you can use fude-gl:image.
+
+(fude-gl:deftexture lisp-logo :texture-2d
+  (fude-gl:tex-image-2d (fude-gl:image 'lisp-logo)))
 
 (fude-gl:defvertices mix-demo
     (concatenate '(array single-float (*))
@@ -455,23 +460,26 @@
 ;; In other words, these are 3d-matrices tutorials.
 ;;
 
-(defparameter *image*
+(fude-gl:defimage container
   (let ((pathname (merge-pathnames "container.jpg" (user-homedir-pathname))))
     (unless (probe-file pathname)
       (dex:fetch "https://learnopengl.com/img/textures/container.jpg"
                  pathname))
-    (opticl:read-jpeg-file pathname)))
+    (truename pathname)))
 
-(fude-gl:deftexture container :texture-2d (fude-gl:tex-image-2d *image*))
+(fude-gl:deftexture container :texture-2d
+  (fude-gl:tex-image-2d (fude-gl:image 'container)))
 
-(defparameter *face*
+(fude-gl:defimage face
   (let ((pathname (merge-pathnames "awesomeface.png" (user-homedir-pathname))))
     (unless (probe-file pathname)
       (dex:fetch "https://learnopengl.com/img/textures/awesomeface.png"
                  pathname))
-    (opticl:vertical-flip-image (opticl:read-png-file pathname))))
+    (truename pathname))
+  :flip-y t)
 
-(fude-gl:deftexture face :texture-2d (fude-gl:tex-image-2d *face*))
+(fude-gl:deftexture face :texture-2d
+  (fude-gl:tex-image-2d (fude-gl:image 'face)))
 
 (fude-gl:defshader transform-demo 330 (fude-gl:xy fude-gl:st)
   (:vertex ((coord :vec2) &uniform (transform :mat4))
@@ -2903,25 +2911,27 @@
     (declaim (ftype (function nil (values)) main))
     (defun main () (setf color (texture tex coord)))))
 
-(defparameter *marble*
+(fude-gl:defimage marble
   (let ((pathname (merge-pathnames "marble.jpg" (user-homedir-pathname))))
     (unless (probe-file pathname)
       (dex:fetch
         "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/marble.jpg"
         pathname))
-    (opticl:read-jpeg-file pathname)))
+    pathname))
 
-(fude-gl:deftexture cube-texture :texture-2d (fude-gl:tex-image-2d *marble*))
+(fude-gl:deftexture cube-texture :texture-2d
+  (fude-gl:tex-image-2d (fude-gl:image 'marble)))
 
-(defparameter *metal*
+(fude-gl:defimage metal
   (let ((pathname (merge-pathnames "metal.png" (user-homedir-pathname))))
     (unless (probe-file pathname)
       (dex:fetch
         "https://raw.githubusercontent.com/JoeyDeVries/LearnOpenGL/master/resources/textures/metal.png"
         pathname))
-    (opticl:read-png-file pathname)))
+    pathname))
 
-(fude-gl:deftexture metal :texture-2d (fude-gl:tex-image-2d *metal*))
+(fude-gl:deftexture metal :texture-2d
+  (fude-gl:tex-image-2d (fude-gl:image 'metal)))
 
 (fude-gl:defvertices depth-testing-cubes *depth-demo* :shader 'depth-testing)
 
