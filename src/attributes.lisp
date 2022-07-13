@@ -286,20 +286,21 @@
 (defun parse-main (main)
   "Canonicalize ftype (function (type) type) to (function ((var type)) type)."
   (let ((table (make-hash-table :test #'eq)))
-    (loop :for sexp :in main
-          :if (eq 'defun (car sexp))
-            :do (push sexp (gethash (cadr sexp) table))
-          :else :if (eq 'declaim (car sexp))
-            :do (loop :for (declaration type . names) :in (cdr sexp)
-                      :if (eq 'ftype declaration)
-                        :do (dolist (name names)
-                              (push type (gethash name table)))
-                      :else
-                        :do (error "NIY ~S." (list* declaration type names)))
-          :else
-            :do (error "NIY ~S." sexp))
     (multiple-value-call #'append
-      (uiop:while-collecting (ftypes defuns)
+      (uiop:while-collecting (constants ftypes defuns)
+        (dolist (sexp main)
+          (case (car sexp)
+            (defun (push sexp (gethash (cadr sexp) table)))
+            (defconstant (constants sexp))
+            (declaim
+             (dolist (declaration (cdr sexp))
+               (case (car declaration)
+                 (ftype
+                  (dolist (name (cddr declaration))
+                    (push (cadr declaration) (gethash name table))))
+                 (type (constants `(declaim ,declaration)))
+                 (otherwise (error "NIY ~S." declaration)))))
+            (otherwise (error "NIY ~S." sexp))))
         (maphash
           (lambda (name forms)
             (let ((defun (assoc 'defun forms)) (ftype (assoc 'function forms)))

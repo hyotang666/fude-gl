@@ -610,33 +610,44 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (setf stream (or stream *standard-output*))
   (funcall (formatter "#define ~{~A~^ ~}~%") stream (cdr exp)))
 
-(defvar *declaims* (make-hash-table :test #'eq))
-
 (defun glsl-declaim (stream exp)
-  (loop :for decl-form :in (cdr exp)
-        :do (eprot:proclaim decl-form)
-            (destructuring-bind
-                ((op args return) . names)
-                (cdr decl-form)
-              (declare (ignore op))
-              (dolist (name names)
-                (unless (string= 'main name)
-                  (funcall (formatter "~W~^ ~@_~W~:<~@{~A~^ ~@_~W~^, ~}~:>;")
-                           stream return name
-                           (loop :for (name type) :in args
-                                 :collect (if (glsl-structure-name-p type)
-                                              (change-case:pascal-case
-                                                (symbol-name type))
-                                              (symbol-camel-case type))
-                                 :collect name)))))))
+  (dolist (decl-form (cdr exp))
+    (eprot:proclaim decl-form)
+    (destructuring-bind
+        (declaration type . names)
+        decl-form
+      (case declaration
+        (ftype
+         (destructuring-bind
+             (op args return)
+             type
+           (declare (ignore op))
+           (dolist (name names)
+             (unless (string= 'main name)
+               (funcall (formatter "~W~^ ~@_~W~:<~@{~A~^ ~@_~W~^, ~}~:>;")
+                        stream return name
+                        (loop :for (name type) :in args
+                              :collect (if (glsl-structure-name-p type)
+                                           (change-case:pascal-case
+                                             (symbol-name type))
+                                           (symbol-camel-case type))
+                              :collect name))))))
+        (type) ; do noting.
+        (otherwise (error "GLSL-DECLAIM: NIY. ~S" decl-form))))))
 
 (defun glsl-defconstant (stream exp)
   (setf stream (or stream *standard-output*))
-  (unless (gethash (second exp) *declaims*)
-    (error "CONSTANT ~S needs type DECLAIMed." (second exp)))
-  (funcall (formatter "const ~A ~A = ~A;~%") stream
-           (symbol-camel-case (gethash (second exp) *declaims*))
-           (symbol-camel-case (second exp)) (third exp)))
+  (let ((info
+         (nth-value 2 (variable-information (cadr exp) eprot:*environment*))))
+    (unless info
+      (error "CONSTANT ~S needs type DECLAIMed." (second exp)))
+    (eprot:proclaim
+      `(glsl-env:notation ,(cadr exp) ,(symbol-camel-case (cadr exp))))
+    (funcall (formatter "const ~A ~A = ~A;~%") stream
+             (symbol-camel-case
+               (or (cdr (assoc 'type info))
+                   (error "Missing type info. ~S" info)))
+             (symbol-camel-case (second exp)) (third exp))))
 
 (defun struct-readers (struct-names)
   (delete-duplicates
