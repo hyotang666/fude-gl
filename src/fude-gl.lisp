@@ -180,7 +180,7 @@
         ((and cffi (subtypep cl-type '(signed-byte 64))) :long)
         (t (error "Not supported type. ~S" cl-type))))
 
-(defun tex-image-2d (array)
+(defun tex-image-2d (array &key (target :texture-2d))
   #+sbcl ; Due to the array dimensions are unknown in compile time.
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (let ((format
@@ -189,7 +189,7 @@
            ((cons * (cons * (cons (eql 3) null))) :rgb)
            ((cons * (cons * (cons (eql 4) null))) :rgba)
            (otherwise (error "NIY")))))
-    (gl:tex-image-2d (the texture-target :texture-2d) 0 ; mipmap level.
+    (gl:tex-image-2d target 0 ; mipmap level.
                      (the base-internal-format format)
                      (array-dimension array 0) ; width
                      (array-dimension array 1) ; height

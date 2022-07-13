@@ -158,7 +158,7 @@
         (:vec3 '(or 3d-vectors:vec3 (vector single-float 3)))
         (:mat4 '3d-matrices:mat4)
         (:float 'single-float)
-        (:|sampler2D| 'texture))))
+        ((:|sampler2D| :sampler-cube) 'texture))))
 
 (defparameter *converter* 'lisp-type<-glsl-type)
 
