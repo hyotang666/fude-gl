@@ -245,6 +245,12 @@
   ;; you must specify a shader to use.
   :shader 'colored-triangle
   ;; To enable indices.
+  ;; The first element of the list is indices itself.
+  ;; The rest elements of the list is key-value pair options.
+  ;; Currently :draw-mode is only supported.
+  ;; It values are type-of fude-gl::draw-mode.
+  ;; The default is :triangles.
+  ;; To see details about draw-mode, evaluate (describe 'fude-gl::draw-mode).
   :indices
   (list '(0 1 2 2 3 0)))
 
@@ -252,7 +258,7 @@
   (uiop:nest
     (sdl2:with-init (:everything))
     (sdl2:with-window (win :flags '(:shown :opengl)
-                           :title "Element buffer"
+                           :title "Element buffer. Push any key."
                            :w 800
                            :h 600))
     (sdl2:with-gl-context (context win))
@@ -423,7 +429,7 @@
         t))
     (:idle nil)
     (fude-gl:with-clear (win (:color-buffer-bit))
-      ;; To set texture to :sampler2D variables,
+      ;; To set texture to :|sampler2D| variables,
       ;; you can use SETF with UNIFORM.
       ;; Unit location is computed automatically unless explicitly specified.
       ;;
