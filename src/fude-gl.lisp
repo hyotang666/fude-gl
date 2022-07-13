@@ -1473,6 +1473,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
 
 (defun pprint-defimage (out exp &rest noise)
   (declare (ignore noise))
-  (funcall (formatter "~:<~W~^ ~1I~:_~W~^ ~:_~W~:>") out exp))
+  (funcall (formatter "~:<~W~^ ~1I~:_~W~^ ~:_~W~^~_~@{~W~^ ~@_~W~^ ~_~}~:>")
+           out exp))
 
 (set-pprint-dispatch '(cons (member defimage)) 'pprint-defimage)
