@@ -9,8 +9,21 @@
            ((s glsl-structure-class) (c standard-class))
   t)
 
+(defun glsl-vector-type-specifier-p (specifier)
+  (and (consp specifier)
+       (eq 'vector (car specifier))
+       (typep (cadr specifier) 'glsl-type)
+       (consp (caddr specifier))
+       (every (lambda (elt) (typep elt 'unsigned-byte)) (third specifier))
+       (null (cdddr specifier))))
+
 (deftype glsl-type ()
-  '(member :bool :int :uint :float :vec2 :vec3 :vec4 :uvec3 :mat4 :|sampler2D|))
+  '(or (member :bool :int
+               :uint :float
+               :vec2 :vec3
+               :vec4 :uvec3
+               :mat4 :|sampler2D|)
+       (satisfies glsl-vector-type-specifier-p)))
 
 (defclass glsl-slot-mixin ()
   ((glsl-type :type glsl-type :initarg :glsl-type :reader glsl-type))
@@ -283,11 +296,26 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
        (write-string (symbol-name exp) stream))
       (t (write-string (symbol-camel-case exp) stream)))))
 
+(defun glsl-setfable-place (out exp &rest noise)
+  (declare (ignore noise))
+  (typecase exp
+    (symbol (glsl-symbol out exp t))
+    ((cons (eql aref))
+     (funcall
+       (formatter
+        #.(concatenate 'string
+                       ;; variable
+                       "~:/fude-gl:glsl-symbol/"
+                       ;; vector spec.
+                       "~{[~W]~^~}"))
+       out (second exp) (cddr exp)))
+    (otherwise (error "GLSL-SETFABLE-PLACE: NIY. ~S" exp))))
+
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
   (let ((*var-check-p* t))
-    (funcall (formatter "~{~:/fude-gl::glsl-symbol/ = ~W;~:@_~}") stream
-             (cdr exp))))
+    (funcall (formatter "~{~:/fude-gl::glsl-setfable-place/ = ~W;~^~:@_~}")
+             stream (cdr exp))))
 
 (defun class-readers (class-name)
   (loop :for slot :in (c2mop:class-direct-slots (find-class class-name))
@@ -468,29 +496,35 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (labels ((rec (binds)
              (if (endp binds)
                  (let ((*var-check-p* t))
-                   (funcall
-                     (formatter
-                      #.(concatenate 'string
-                                     ;; type name, without var checking.
-                                     "~<~@{~/fude-gl:glsl-symbol/"
-                                     ;; SETFable place, with var checking.
-                                     "~^ ~:@/fude-gl:glsl-symbol/"
-                                     ;; Initform, with var checking.
-                                     "~^ = ~W;~:@_~}~:>"
-                                     ;; The body, with var checking.
-                                     "~{~W~^ ~_~}"))
-                     stream
-                     (loop :for bind :in (cadr exp)
-                           :do (unless (= 3 (length bind))
-                                 (error
-                                   "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
-                                   bind))
-                               (unless (typep (cadr bind) 'glsl-type)
-                                 (error "Unknown glsl type. ~S" (cadr bind)))
-                           :collect (cadr bind)
-                           :collect (car bind)
-                           :collect (caddr bind))
-                     (cddr exp))
+                   (dolist (bind (cadr exp))
+                     (unless (= 3 (length bind))
+                       (error
+                         "Syntax error in LET: wrong binding form. ~:@_Require (var glsl-type initform) ~:@_~S"
+                         bind))
+                     (unless (typep (cadr bind) 'glsl-type)
+                       (error "Unknown glsl type. ~S" (cadr bind)))
+                     (pprint-logical-block (stream nil)
+                       (destructuring-bind
+                           (var type init)
+                           bind
+                         ;; primitive type
+                         (if (glsl-vector-type-specifier-p type)
+                             (glsl-symbol stream (second type))
+                             (glsl-symbol stream type))
+                         ;; setfable place.
+                         (funcall (formatter " ~:@/fude-gl:glsl-symbol/")
+                                  stream var)
+                         ;; vector specifier?
+                         (when (glsl-vector-type-specifier-p type)
+                           (dolist (index (third type))
+                             (funcall (formatter "[~D]") stream index)))
+                         ;; Initform.
+                         (if init
+                             (funcall (formatter " = ~W;") stream init)
+                             (write-char #\; stream))
+                         ;; Common end process.
+                         (funcall (formatter "~I~:@_") stream))))
+                   (funcall (formatter "~{~W~^ ~_~}") stream (cddr exp))
                    (when (every #'listp (cddr exp))
                      (check-ref (mapcar #'car (cadr exp)))))
                  (let ((eprot:*environment*
@@ -805,10 +839,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
         ;; Var def.
         (funcall (formatter "for (int ~/fude-gl:glsl-symbol/") out var)
         ;; Terminal test.
-        (funcall
-          (formatter
-           " = 0; ~/fude-gl:glsl-symbol/ < ~:@/fude-gl:glsl-symbol/;")
-          out var times)
+        (funcall (formatter " = 0; ~/fude-gl:glsl-symbol/ < ~W;") out var
+                 times)
         ;; Update.
         (funcall (formatter " ~/fude-gl:glsl-symbol/++){ ~4I~:@_") out var)
         ;; The body.
@@ -828,6 +860,19 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (declare (ignore noise))
   (funcall (formatter "#define ~A ~A") out
            (change-case:constant-case (symbol-name (cadr exp))) (caddr exp)))
+
+(defun glsl-array-constructor (out exp &rest noise)
+  (declare (ignore noise))
+  (funcall
+    (formatter
+     #.(concatenate 'string
+                    ;; primitive-type.
+                    "~/fude-gl:glsl-symbol/"
+                    ;; array specifier.
+                    "[]"
+                    ;; constructor args.
+                    "(~4I~:@_~{~W~^, ~:@_~}~:@_)"))
+    out (getf exp :element-type) (getf exp :initial-contents)))
 
 (defun glsl-dispatch ()
   (let ((*print-pprint-dispatch* (copy-pprint-dispatch nil)))
@@ -849,6 +894,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
     (set-pprint-dispatch '(cons (member cond)) 'glsl-cond)
     (set-pprint-dispatch '(cons (member dotimes)) 'glsl-dotimes)
     (set-pprint-dispatch '(cons (member incf)) 'glsl-incf)
+    (set-pprint-dispatch '(cons (member make-array)) 'glsl-array-constructor)
     *print-pprint-dispatch*))
 
 (defun glsl-special-operator-p (symbol)
