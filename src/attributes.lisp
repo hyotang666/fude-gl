@@ -299,15 +299,15 @@
                   (dolist (name (cddr declaration))
                     (push (cadr declaration) (gethash name table))))
                  (type (constants `(declaim ,declaration)))
-                 (otherwise (error "NIY ~S." declaration)))))
-            (otherwise (error "NIY ~S." sexp))))
+                 (otherwise (error "PARSE-MAIN: NIY ~S." declaration)))))
+            (otherwise (error "PARSE-MAIN: NIY ~S." sexp))))
         (maphash
           (lambda (name forms)
             (let ((defun (assoc 'defun forms)) (ftype (assoc 'function forms)))
               (if (null defun)
                   (if ftype
                       (error "Missing definition. ~S" ftype)
-                      (error "NIY ~S" name))
+                      (error "PARSE-MAIN: NIY ~S" name))
                   (if (null ftype)
                       (error "FTYPE declaration is required. ~S" defun)
                       (progn

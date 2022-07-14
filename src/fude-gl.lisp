@@ -188,7 +188,9 @@
            ((cons * (cons * null)) :red)
            ((cons * (cons * (cons (eql 3) null))) :rgb)
            ((cons * (cons * (cons (eql 4) null))) :rgba)
-           (otherwise (error "NIY")))))
+           (otherwise
+            (error "TEX-IMAGE-2D NIY. array-dimensions ~S"
+                   (array-dimensions array))))))
     (gl:tex-image-2d target 0 ; mipmap level.
                      (the base-internal-format format)
                      (array-dimension array 0) ; width
@@ -656,7 +658,7 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
     (1 '(:points))
     (2 '(:lines))
     (4 '(:triangles))
-    (otherwise (error "NIY"))))
+    (otherwise (error "MESH-TYPES: NIY. ~S" mesh))))
 
 (defmacro do-node ((var <scene> &optional <return>) &body body)
   (let ((?rec (gensym "REC")))
