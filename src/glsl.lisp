@@ -239,7 +239,10 @@
                     bind*)
      ,@body))
 
-(defun symbol-camel-case (s) (change-case:camel-case (symbol-name s)))
+(defun symbol-camel-case (s)
+  (if (find-if #'lower-case-p (symbol-name s))
+      (symbol-name s)
+      (change-case:camel-case (symbol-name s))))
 
 (defvar *var-check-p*
   nil
