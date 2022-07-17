@@ -460,9 +460,13 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                              (= actual
                                                 (length
                                                   (cadr fun-specifier)))))))
-                (funcall
-                  (formatter "~/fude-gl:glsl-symbol/~:<~@{~W~^, ~@_~}~:>")
-                  stream (car exp) (cdr exp))
+                (funcall (formatter "~A~:<~@{~W~^, ~@_~}~:>") stream
+                         (or (cdr (assoc 'glsl-env:notation info))
+                             (with-cl-io-syntax
+                               (cerror "Anyway print it."
+                                       "Missing notation for ~S." (car exp)))
+                             (symbol-camel-case (car exp)))
+                         (cdr exp))
                 (with-hint (("Print function signatures."
                              (print
                                (remove-if-not
@@ -627,6 +631,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
            (declare (ignore op))
            (dolist (name names)
              (unless (string= 'main name)
+               (eprot:proclaim
+                 `(glsl-env:notation ,name ,(symbol-camel-case name)))
                (funcall (formatter "~W~^ ~@_~W~:<~@{~A~^ ~@_~W~^, ~}~:>;")
                         stream return name
                         (loop :for (name type) :in args
@@ -702,7 +708,6 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
               ,@(loop :for (var type) :in arg-types
                       :when (glsl-structure-name-p type)
                         :nconc (slot-reader-decls type var))
-              (glsl-env:notation ,name ,(symbol-camel-case name))
               ,@(loop :for (var type) :in arg-types
                       :collect `(type ,type ,var)
                       :collect `(glsl-env:notation ,var
