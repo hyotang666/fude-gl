@@ -60,7 +60,14 @@
 ;;;; UNIFORMS
 
 (defgeneric uniforms (name)
-  (:documentation "Return associated uniform name strings."))
+  ;; This method is used for
+  ;; * Compile time uniform existance cheking. (See CHECK-UNIFORM-ARGS.) [Priority: High]
+  ;; * Comile time type safe code generation. (See WITH-UNIFORMS.)
+  ;; * Fuzzy matching to print error message. (See MISSING-UNIFORM.)
+  ;; * Run time condition type detection. (See UNIFORM.) [Note: Can we query to openGL?]
+  ;; * Run time uniform existance checking. (See CONSTRUCT for SCENE.)
+  ;; * Texture unit calculation. (See UNIT.)
+  (:documentation "Return associated uniforms."))
 
 (defmethod no-applicable-method ((gf (eql #'uniforms)) &rest args)
   (error 'missing-shader :name (car args) :interface gf))
