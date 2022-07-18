@@ -10,14 +10,6 @@
            ((s glsl-structure-class) (c standard-class))
   t)
 
-(defun glsl-vector-type-specifier-p (specifier)
-  (and (consp specifier)
-       (eq 'vector (car specifier))
-       (typep (cadr specifier) 'glsl-type)
-       (consp (caddr specifier))
-       (every (lambda (elt) (typep elt 'unsigned-byte)) (third specifier))
-       (null (cdddr specifier))))
-
 (deftype glsl-type ()
   '(or (member :bool :int
                :uint :float
@@ -25,6 +17,14 @@
                :vec4 :uvec3
                :mat4 :|sampler2D|)
        (satisfies glsl-vector-type-specifier-p)))
+
+(defun glsl-vector-type-specifier-p (specifier)
+  (and (consp specifier)
+       (eq 'vector (car specifier))
+       (typep (cadr specifier) 'glsl-type)
+       (consp (caddr specifier))
+       (every (lambda (elt) (typep elt 'unsigned-byte)) (third specifier))
+       (null (cdddr specifier))))
 
 (defclass glsl-slot-mixin ()
   ((glsl-type :type glsl-type :initarg :glsl-type :reader glsl-type))
