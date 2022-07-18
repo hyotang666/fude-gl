@@ -2,7 +2,8 @@
 
 ;;;; GLSL-STRUCTURE
 
-(defclass glsl-structure-class (standard-class) ()
+(defclass glsl-structure-class (standard-class)
+  ()
   (:documentation "Meta class for glsl structure."))
 
 (defmethod c2mop:validate-superclass
@@ -29,7 +30,8 @@
   ((glsl-type :type glsl-type :initarg :glsl-type :reader glsl-type))
   (:documentation "Meta informations for the slot of the glsl structures."))
 
-(defclass glsl-direct-slot-definition (c2mop:standard-direct-slot-definition glsl-slot-mixin)
+(defclass glsl-direct-slot-definition
+    (c2mop:standard-direct-slot-definition glsl-slot-mixin)
   ())
 
 (defmethod c2mop:direct-slot-definition-class
@@ -37,7 +39,8 @@
   (declare (ignore initargs))
   (find-class 'glsl-direct-slot-definition))
 
-(defclass glsl-effective-slot (c2mop:standard-effective-slot-definition glsl-slot-mixin)
+(defclass glsl-effective-slot
+    (c2mop:standard-effective-slot-definition glsl-slot-mixin)
   ())
 
 (defmethod c2mop:effective-slot-definition-class
@@ -72,7 +75,8 @@
   ;; Trivial-error-check.
   (validate-slot-specs slot-spec*)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (defclass ,name (glsl-structure-object) ,slot-spec*
+     (defclass ,name (glsl-structure-object)
+       ,slot-spec*
        (:metaclass glsl-structure-class)
        ,@option*)))
 
