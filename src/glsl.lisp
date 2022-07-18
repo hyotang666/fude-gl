@@ -796,15 +796,23 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (declare (ignore noise))
   (unless (= 2 (length (cdr exp)))
     (error 'glsl-argument-mismatch :form exp))
-  (unless (glsl-structure-name-p (cadr exp))
-    (error 'unknown-glsl-structure :name (cadr exp)))
-  (unless (apply #'slot-exist-p (cdr exp))
-    (with-hint (("Print all supported slots."
-                 (c2mop:class-slots
-                   (c2mop:ensure-finalized (find-class (cadr exp))))))
-      (error 'missing-slot :name (caddr exp) :structure (cadr exp))))
-  (format stream "~A.~A" (symbol-camel-case (cadr exp))
-          (symbol-camel-case (caddr exp))))
+  (when (symbolp (cadr exp))
+    (unless (glsl-structure-name-p (cadr exp))
+      (error 'unknown-glsl-structure :name (cadr exp)))
+    (unless (apply #'slot-exist-p (cdr exp))
+      (with-hint (("Print all supported slots."
+                   (c2mop:class-slots
+                     (c2mop:ensure-finalized (find-class (cadr exp))))))
+        (error 'missing-slot :name (caddr exp) :structure (cadr exp)))))
+  (format stream "~W.~A" (cadr exp)
+          (let ((info
+                 (nth-value 2
+                            (variable-information (caddr exp)
+                                                  eprot:*environment*))))
+            (if info
+                (or (cdr (assoc 'glsl-env:notation info))
+                    (error "Missing notation declaration for ~S." (caddr exp)))
+                (symbol-camel-case (caddr exp))))))
 
 (defun glsl-cond (out exp &rest noise)
   ;; FIXME: To better design especially for handling glsl-keyword-command e.g. discard.
