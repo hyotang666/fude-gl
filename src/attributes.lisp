@@ -2,6 +2,19 @@
 
 (declaim (optimize speed))
 
+;;;; VERBOSE OPENGL
+
+(deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
+
+(deftype buffer-target ()
+  '(member :array-buffer :element-array-buffer
+           :copy-read-buffer :copy-write-buffer
+           :pixel-unpack-buffer :pixel-pack-buffer
+           :query-buffer :texture-buffer
+           :transform-feedback-buffer :uniform-buffer
+           :draw-indirect-buffer :atomic-counter-buffer
+           :dispatch-indirect-buffer :shader-storage-buffer))
+
 ;;;; PROTECT
 
 (defvar *cleaners* nil)
@@ -117,7 +130,224 @@
 
 (define-vertex-attribute a () (:instances t))
 
+;;;; BUFFER
+
+(defstruct buffer
+  name
+  ;; Lisp side vector as meta-buffer-object, i.e. used for cl:length,
+  ;; cl:array-rank, cl:array-dimensions etc...
+  (original (error "ORIGINAL is required.") :type array)
+  ;; GL side vector.
+  source
+  ;; Buffer ID.
+  buffer
+  (target :array-buffer :type buffer-target :read-only t)
+  (usage :static-draw :type buffer-usage :read-only t))
+
+(defmethod print-object ((o buffer) stream)
+  (if *print-escape*
+      (print-unreadable-object (o stream :type t)
+        (funcall (formatter "~S ~:[unconstructed~;~:*~A~] ~S ~S") stream
+                 (buffer-name o) (buffer-buffer o) (buffer-target o)
+                 (buffer-usage o)))
+      (call-next-method)))
+
+(defun make-gl-vector (initial-contents)
+  #+sbcl ; Due to unknown array rank at compile time.
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (let* ((length (array-total-size initial-contents))
+         (a
+          (gl:alloc-gl-array
+            (foreign-type (array-element-type initial-contents) :cffi t)
+            length)))
+    (dotimes (i length a)
+      (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
+
+(defvar *buffer*)
+
+(defun in-buffer (buffer)
+  (setf *buffer* buffer)
+  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
+
+;;;; UNIFORM-BUFFER-OBJECT
+
+(defvar *uniform-buffer-objects* (make-hash-table :test #'eq))
+
+(defclass uniform-buffer-object-class (standard-class)
+  ((related-shaders :type list :initform nil :accessor related-shaders)
+   (buffer :type (or null buffer) :initform nil :accessor buffer)
+   (layout :type keyword :initform :std140 :initarg :layout :reader layout)))
+
+(defmethod c2mop:validate-superclass
+           ((s uniform-buffer-object-class) (c standard-class))
+  t)
+
+(defclass uniform-buffer-object-slot-mixin ()
+  ((glsl-type :type glsl-type :initarg :glsl-type :reader glsl-type))
+  (:documentation
+   "Meta informations for the slot of the uniform buffer object."))
+
+(defclass uniform-buffer-object-direct-slot-definition
+    (c2mop:standard-direct-slot-definition uniform-buffer-object-slot-mixin)
+  ())
+
+(defmethod c2mop:direct-slot-definition-class
+           ((s uniform-buffer-object-class) &rest initargs)
+  (declare (ignore initargs))
+  (find-class 'uniform-buffer-object-direct-slot-definition))
+
+(defclass uniform-buffer-object-effective-slot
+    (c2mop:standard-effective-slot-definition uniform-buffer-object-slot-mixin)
+  ())
+
+(defmethod c2mop:effective-slot-definition-class
+           ((s uniform-buffer-object-class) &rest initargs)
+  (declare (ignore initargs))
+  (find-class 'uniform-buffer-object-effective-slot))
+
+(defmethod c2mop:compute-effective-slot-definition
+           ((o uniform-buffer-object-class) slot-name direct-slot-definitions)
+  (let ((effective-slot (call-next-method)))
+    (setf (slot-value effective-slot 'glsl-type)
+            (glsl-type
+              (or (find (the symbol slot-name)
+                        (the list direct-slot-definitions)
+                        :key #'c2mop:slot-definition-name)
+                  (error "Missing slot named ~S in ~S." slot-name
+                         direct-slot-definitions))))
+    effective-slot))
+
+(defclass uniform-buffer-object () ())
+
+(defmethod initialize-instance :after ((o uniform-buffer-object) &key layout)
+  (let ((c (class-of o)))
+    (setf (slot-value c 'layout) layout
+          (slot-value c 'related-shaders) nil
+          (slot-value c 'buffer)
+            (make-buffer :name (class-name (class-of o))
+                         :original (make-array 0 :element-type 'single-float)
+                         :target :uniform-buffer))))
+
+(defmacro defubo (name&options &body slot+)
+  (destructuring-bind
+      (name . options)
+      (uiop:ensure-list name&options)
+    `(eval-when (:compile-toplevel :execute)
+       ;; When shader is inherited, check-bnf in defshader needs this eval-when.
+       ;; Side-effect that sets related-shaders is done only in compile time so
+       ;; :load-toplevel is never required.
+       ;; MEMO: Should we make side-effect works in run-time?
+       (defclass ,name (uniform-buffer-object)
+         ,(mapcar
+            (lambda (slot)
+              `(,(car slot) :glsl-type ,(cadr slot) :initform nil))
+            slot+)
+         (:metaclass uniform-buffer-object-class)
+         (:default-initargs :layout
+          ,(or (cadr (assoc :layout options)) :std140)))
+       (setf (gethash ',name *uniform-buffer-objects*)
+               (make-instance ',name)))))
+
+(set-pprint-dispatch '(cons (member defubo)) (pprint-dispatch '(defstruct)))
+
+(defmethod construct ((o uniform-buffer-object))
+  (let* ((class (class-of o)) (slots (c2mop:class-slots class)))
+    ;; Initialize each slot.
+    (dolist (slot slots)
+      (unless (slot-value o (c2mop:slot-definition-name slot))
+        (setf (slot-value o (c2mop:slot-definition-name slot))
+                (gl:alloc-gl-array (foreign-type 'single-float :cffi t)
+                                   (case (glsl-type slot)
+                                     (:mat4 16)
+                                     (otherwise "NIY ~S" (glsl-type slot)))))))
+    (let ((uniform-name
+           (change-case:pascal-case (symbol-name (class-name class)))))
+      ;; Link each shader's uniform block to the uniform binding point.
+      (dolist (shader (related-shaders class))
+        (let ((shader-id (find-program shader :if-does-not-exist :create)))
+          (%gl:uniform-block-binding shader-id
+                                     (gl:get-uniform-block-index shader-id
+                                                                 uniform-name)
+                                     0))))
+    (let ((total-size
+           (reduce #'+ slots
+                   :key (lambda (slot)
+                          #+sbcl ; Not our responsebilities.
+                          (declare
+                           (sb-ext:muffle-conditions sb-ext:compiler-note))
+                          (gl:gl-array-byte-size
+                            (slot-value o
+                                        (c2mop:slot-definition-name slot))))))
+          (buffer (buffer class)))
+      ;; Now actually create the buffer.
+      (in-buffer (construct buffer))
+      (locally
+       #+sbcl ; Not our responsebilities.
+       (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+       (%gl:buffer-data (buffer-target buffer) total-size (cffi:null-pointer)
+                        (buffer-usage buffer)))
+      (gl:bind-buffer :uniform-buffer 0)
+      ;; Define the range of the buffer that links to a uniform binding point.
+      (%gl:bind-buffer-range (buffer-target buffer) 0 (buffer-buffer buffer) 0
+                             total-size)))
+  o)
+
+(defmethod destruct ((o uniform-buffer-object))
+  (dolist (slot (c2mop:class-slots (class-of o)))
+    (when (slot-value o (c2mop:slot-definition-name slot))
+      (gl:free-gl-array (slot-value o (c2mop:slot-definition-name slot)))
+      (setf (slot-value o (c2mop:slot-definition-name slot)) nil)))
+  (with-slots (buffer)
+      (class-of o)
+    (when buffer
+      (destruct buffer))))
+
+(define-condition missing-uniform-buffer-object (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this out)
+     (format out "Missing uniform buffer object named ~S."
+             (cell-error-name this)))))
+
+(defun find-uniform-buffer-object (name &key (if-does-not-exist :error))
+  (let ((ubo (gethash name *uniform-buffer-objects*)))
+    (cond
+      ((null ubo) ; Not defined yet.
+       (error 'missing-uniform-buffer-object :name name))
+      ((buffer-buffer (buffer (class-of ubo))) ; Defined and constructed.
+       ubo)
+      (t
+       (case if-does-not-exist
+         (:error
+          (cerror "Return uniform buffer object without constructing."
+                  "Uniform buffer object named ~S is not constructed in openGL yet."
+                  name)
+          ubo)
+         (:create (construct ubo))
+         ((nil) ubo))))))
+
+(defun uniform-buffer-object-name-p (thing)
+  (and (symbolp thing) (gethash thing *uniform-buffer-objects*)))
+
+(defun list-all-uniform-buffer-objects ()
+  (alexandria:hash-table-keys *uniform-buffer-objects*))
+
 ;;;; DEFSHADER
+
+(defvar *shaders*
+  (make-hash-table :test #'eq)
+  "Repository of the meta shader objects.")
+
+(define-condition missing-program (fude-gl-error cell-error)
+  ()
+  (:report
+   (lambda (this output)
+     (format output "Shader program named ~S is not created in GL yet."
+             (cell-error-name this)))))
+
+(defun find-shader (name &optional (errorp t))
+  (or (gethash name *shaders*)
+      (and errorp (error 'missing-program :name name))))
 
 (defun uniform-keywordp (thing) (and (symbolp thing) (string= '&uniform thing)))
 
@@ -187,30 +417,58 @@
                   (convert (type)
                     (funcall (coerce *converter* 'function) type)))
            (uiop:while-collecting (acc)
-             (loop :for (nil lambda-list) :in shader*
-                   :do (loop :for (var type . vector-size)
-                                  :in (nth-value 1
-                                                 (split-shader-lambda-list
-                                                   lambda-list))
-                             :do (acc
+             (loop :for (nil lambda-list . main) :in shader*
+                   :if (typep main
+                              '(cons (and symbol (satisfies find-shader)) null))
+                     :do (mapc #'acc (uniforms (car main)))
+                   :else
+                     :do (dolist
+                             (uniform-spec
+                              (nth-value 1
+                                         (split-shader-lambda-list
+                                           lambda-list)))
+                           (if (listp uniform-spec)
+                               (destructuring-bind
+                                   (var type . vector-size)
+                                   uniform-spec
+                                 (declare (ignore vector-size))
+                                 (acc
                                    (make-uniform :name (symbol-camel-case var)
                                                  :lisp-type (convert type)
                                                  :glsl-type type))
-                             :if (glsl-structure-name-p type)
-                               :do (dolist
+                                 (when (glsl-structure-name-p type)
+                                   (dolist
                                        (slot
                                         (c2mop:class-direct-slots
                                           (find-class type)))
-                                     (acc
-                                       (slot-reader-uniform var slot))))))))))
+                                     (acc (slot-reader-uniform var slot)))))
+                               ;; Uniform buffer object.
+                               (let ((ubo
+                                      (class-of
+                                        (find-uniform-buffer-object
+                                          uniform-spec
+                                          :if-does-not-exist nil))))
+                                 (dolist
+                                     (slot
+                                      (c2mop:class-slots
+                                        (c2mop:ensure-finalized ubo)))
+                                   (acc
+                                     (make-uniform :name (symbol-camel-case
+                                                           (c2mop:slot-definition-name
+                                                             slot))
+                                                   :lisp-type 'uniform-buffer-object
+                                                   :glsl-type (class-name
+                                                                ubo)))))))))))))
 
 (defun struct-defs (specs)
-  (loop :for (nil type) :in specs
+  (loop :for spec :in specs
+        :for (nil type) := (and (listp spec) spec)
         :when (glsl-structure-name-p type)
           :collect type))
 
 (defun constant-defs (specs)
-  (loop :for (nil nil . vector-size) :in specs
+  (loop :for spec :in specs
+        :for (nil nil . vector-size) := (and (listp spec) spec)
         :when (and vector-size (typep (car vector-size) 'constant-definition))
           :collect (car vector-size)))
 
@@ -283,6 +541,30 @@
         :collect `(glsl-env:notation ,name
                    ,(change-case:constant-case (symbol-name name)))))
 
+(defun canonicalize-uniform-specs (specs)
+  (loop :for spec :in specs
+        :if (listp spec) ; ignore uniform-buffer-object.
+          :collect (cons nil spec)))
+
+(defun glsl-ubo (out ubo &rest noise)
+  (declare (ignore noise))
+  (let ((ubo (class-of ubo)))
+    (pprint-logical-block (out nil)
+      ;; header
+      (funcall (formatter "layout (~(~A~)) uniform ~A~:@_") out (layout ubo)
+               (change-case:pascal-case (symbol-name (class-name ubo))))
+      ;; begin block.
+      (funcall (formatter "{~4I~:@_") out)
+      ;; Each slot.
+      (loop :for (slot . rest)
+                 :on (c2mop:class-slots (c2mop:ensure-finalized ubo))
+            :do (funcall
+                  (formatter "~/fude-gl:glsl-symbol/ ~/fude-gl:glsl-symbol/;")
+                  out (glsl-type slot) (c2mop:slot-definition-name slot))
+                (and rest (funcall (formatter " ~:@_") out)))
+      ;; end block.
+      (funcall (formatter "~I~:@_};") out))))
+
 (defun parse-main (main)
   "Canonicalize ftype (function (type) type) to (function ((var type)) type)."
   (let ((table (make-hash-table :test #'eq)))
@@ -326,6 +608,7 @@
            #.(concatenate 'string "#version ~A core~%" ; version
                           "~@[~{~/fude-gl:glsl-constant-definition/~%~}~]" ; define
                           "~{~/fude-gl:glsl-declaration/~%~}~&" ; in
+                          "~{~/fude-gl:glsl-ubo/~%~}~&" ; ubo
                           "~{~@/fude-gl:glsl-declaration/~%~}~&" ; out
                           "~@[~{~/fude-gl:glsl-struct-definition/~}~]" ; struct defs.
                           "~@[~{~:/fude-gl:glsl-declaration/~%~}~]~&" ; uniforms
@@ -345,65 +628,112 @@
                (destructuring-bind
                    (type shader-lambda-list &rest main)
                    shader
-                 (multiple-value-bind (out uniform varying%)
-                     (split-shader-lambda-list shader-lambda-list)
-                   (let* ((constant-defs (constant-defs uniform))
-                          (struct-defs (struct-defs uniform))
-                          (out (mapcar (lambda (out) (cons nil out)) out))
-                          (uniform
-                           (mapcar (lambda (out) (cons nil out)) uniform))
-                          (varying
-                           (mapcar (lambda (out) (cons nil out)) varying))
-                          (eprot:*environment*
-                           (eprot:augment-environment eprot:*environment*
-                                                      :variable (mapcar #'cadr
-                                                                        out)
-                                                      :declare (io-decl out))))
-                     (rec rest out (append varying varying%)
+                 (cond
+                   ((typep main
+                           '(cons (and symbol (satisfies find-shader)) null))
+                    (inherit rest varying acc type (car main)))
+                   ((every #'consp main)
+                    (own rest in varying acc type shader-lambda-list main))
+                   (t (error "<SHADER-FORMS>: NIY ~S." main)))))
+             (inherit (rest varying acc type source)
+               (multiple-value-bind (out uniform varying%)
+                   (split-shader-lambda-list (shader-lambda-list source type))
+                 (let* ((out (mapcar (lambda (out) (cons nil out)) out))
+                        (varying
+                         (mapcar (lambda (out) (cons nil out)) varying))
+                        (eprot:*environment*
+                         (eprot:augment-environment eprot:*environment*
+                                                    :variable (mapcar #'cadr
+                                                                      out)
+                                                    :declare (io-decl out))))
+                   (dolist (spec uniform) ; set related shaders.
+                     (let ((ubo (uniform-buffer-object-name-p spec)))
+                       (when ubo
+                         (push name (related-shaders (class-of ubo))))))
+                   (rec rest out (append varying varying%)
+                        (let ((method
+                               (intern (format nil "~A-SHADER" type) :fude-gl)))
                           (cons
-                            (let ((method
-                                   (intern (format nil "~A-SHADER" type)
-                                           :fude-gl))
-                                  (eprot:*environment*
-                                   (eprot:augment-environment
-                                     eprot:*environment*
-                                     :name type
-                                     :variable (mapcar #'cadr
-                                                       (append uniform varying%
-                                                               constant-defs))
-                                     :function (struct-readers struct-defs)
-                                     :declare (append (io-decl uniform)
-                                                      (io-decl varying%)
-                                                      (constant-decl
-                                                        constant-defs)))))
-                              `(defmethod ,method ((type (eql ',name)))
-                                 ,(if (typep main
-                                             '(cons
-                                                (cons (eql quote)
-                                                      (cons symbol null))
-                                                null))
-                                      `(,method ',(cadar main))
-                                      (format nil format version constant-defs
-                                              in out struct-defs uniform
-                                              (append varying varying%)
-                                              (parse-main main)))))
-                            acc)))))))
+                            `(defmethod ,method ((type (eql ',name)))
+                               (,method ',source))
+                            acc))))))
+             (own (rest in varying acc type shader-lambda-list main)
+               (multiple-value-bind (out uniform varying%)
+                   (split-shader-lambda-list shader-lambda-list)
+                 (let* ((constant-defs (constant-defs uniform))
+                        (struct-defs (struct-defs uniform))
+                        (out (mapcar (lambda (out) (cons nil out)) out))
+                        (ubo
+                         (mapcan
+                           (lambda (spec)
+                             (let ((ubo (uniform-buffer-object-name-p spec)))
+                               (when ubo
+                                 (push name (related-shaders (class-of ubo)))
+                                 (list ubo))))
+                           uniform))
+                        (ubos
+                         (loop :for instance :in ubo
+                               :nconc (mapcar
+                                        (lambda (slot)
+                                          (list nil
+                                                (c2mop:slot-definition-name
+                                                  slot)
+                                                (glsl-type slot)))
+                                        (c2mop:class-slots
+                                          (c2mop:ensure-finalized
+                                            (class-of instance))))))
+                        (uniform (canonicalize-uniform-specs uniform))
+                        (varying
+                         (mapcar (lambda (out) (cons nil out)) varying))
+                        (eprot:*environment*
+                         (eprot:augment-environment eprot:*environment*
+                                                    :variable (mapcar #'cadr
+                                                                      out)
+                                                    :declare (io-decl out))))
+                   (rec rest out (append varying varying%)
+                        (cons
+                          (let ((method
+                                 (intern (format nil "~A-SHADER" type)
+                                         :fude-gl))
+                                (eprot:*environment*
+                                 (eprot:augment-environment eprot:*environment*
+                                                            :name type
+                                                            :variable (mapcar
+                                                                        #'cadr
+                                                                        (append
+                                                                          uniform
+                                                                          ubos
+                                                                          varying%
+                                                                          constant-defs))
+                                                            :function (struct-readers
+                                                                        struct-defs)
+                                                            :declare (append
+                                                                       (io-decl
+                                                                         uniform)
+                                                                       (io-decl
+                                                                         ubos)
+                                                                       (io-decl
+                                                                         varying%)
+                                                                       (constant-decl
+                                                                         constant-defs)))))
+                            `(defmethod ,method ((type (eql ',name)))
+                               ,(format nil format version constant-defs in ubo
+                                        out struct-defs uniform
+                                        (append varying varying%)
+                                        (parse-main main))))
+                          acc))))))
       (rec shader-clause* (attribute-ins attribute-decls) nil nil))))
 
-(defvar *shaders*
-  (make-hash-table :test #'eq)
-  "Repository of the meta shader objects.")
-
-(define-condition missing-program (fude-gl-error cell-error)
-  ()
-  (:report
-   (lambda (this output)
-     (format output "Shader program named ~S is not created in GL yet."
-             (cell-error-name this)))))
-
-(defun find-shader (name &optional (errorp t))
-  (or (gethash name *shaders*)
-      (and errorp (error 'missing-program :name name))))
+(defun <shader-lambda-lists> (name shader*)
+  (loop :for (type lambda-list . main) :in shader*
+        :collect `(defmethod shader-lambda-list
+                             ((shader-name (eql ',name))
+                              (shader-type (eql ,type)))
+                    ,(if (typep main
+                                '(cons (and symbol (satisfies find-shader))
+                                       null))
+                         `(shader-lambda-list ',(car main) ,type)
+                         `',lambda-list))))
 
 (defmacro defshader
           (&whole whole name version (&rest attribute*) &body shader*)
@@ -422,7 +752,8 @@
        varying-spec*))
      (out-spec (var type-spec))
      (uniform-keyword (satisfies uniform-keywordp))
-     (uniform-spec (var type-spec vector-size?))
+     (uniform-spec (or (var type-spec vector-size?) ubo-spec))
+     (ubo-spec (satisfies uniform-buffer-object-name-p))
      (vector-size (or index constant-definition))
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
@@ -434,6 +765,7 @@
              (defclass ,name ,attribute* () (:metaclass vector-class)))
      ,@(<shader-forms> shader* attribute* name version)
      ,(<uniforms> name shader*)
+     ,@(<shader-lambda-lists> name shader*)
      ',name))
 
 (defmethod documentation ((this (eql 'defshader)) (type (eql 'function)))
@@ -681,17 +1013,29 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
              (gl:get-program (program-id (find-shader (shader this)))
                              :active-uniforms)))))
 
+(define-condition uniform-mismatch-ubo (uniform-error)
+  ()
+  (:report
+   (lambda (this out)
+     (format out
+             "Could not get uniform location for uniform buffer object. ~S ~S"
+             (cell-error-name this) (shader this)))))
+
 (defun uniform (shader name)
   "Return the uniform location of NAME in the SHADER."
   (let ((location
          (gl:get-uniform-location (program-id (find-shader shader)) name)))
     (declare ((signed-byte 32) location))
     (when (minusp location)
-      (if (find name (the list (uniforms shader))
-                :test #'equal
-                :key #'uniform-name)
-          (error 'non-active-uniform :name name :shader shader)
-          (error 'missing-uniform :name name :shader shader)))
+      (let ((uniform
+             (find name (the list (uniforms shader))
+                   :test #'equal
+                   :key #'uniform-name)))
+        (cond
+          ((not uniform) (error 'missing-uniform :name name :shader shader))
+          ((eq 'uniform-buffer-object (uniform-lisp-type uniform))
+           (error 'uniform-mismatch-ubo :name name :shader shader))
+          (t (error 'non-active-uniform :name name :shader shader)))))
     location))
 
 (define-setf-expander uniform (shader name &rest args)
@@ -779,6 +1123,33 @@ NOTE: When ALIAS is a symbol, it will be filtered by symbol-camel-case to genera
   (in-program to)
   (gl:uniform-matrix (uniform to uniform) 4 (vector (3d-matrices:marr o))))
 
+(defmethod send ((o 3d-matrices:mat4) (to uniform-buffer-object) &key uniform)
+  (let* ((buffer (buffer (class-of to)))
+         (slots (c2mop:class-slots (class-of to)))
+         (slot
+          (find uniform slots
+                :test #'equal
+                :key (alexandria:compose #'symbol-camel-case
+                                         #'c2mop:slot-definition-name)))
+         (gl-vector (slot-value to (c2mop:slot-definition-name slot))))
+    (declare (list slots))
+    #+sbcl ; Not our responsebilities
+    (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+    ;; Update gl-vector
+    (loop :for i :upfrom 0
+          :for elt :across (3d-matrices:marr o)
+          :do (setf (gl:glaref gl-vector i) elt))
+    (in-buffer buffer)
+    (gl:buffer-sub-data (buffer-target buffer) gl-vector
+                        :buffer-offset (reduce #'+ slots
+                                               :end (position slot slots
+                                                              :test #'eq)
+                                               :key (lambda (slot)
+                                                      (gl:gl-array-byte-size
+                                                        (slot-value to
+                                                                    (c2mop:slot-definition-name
+                                                                      slot))))))))
+
 (defmethod send
            ((o 3d-vectors:vec3) (to symbol)
             &key (uniform (alexandria:required-argument :uniform)))
@@ -809,3 +1180,30 @@ NOTE: When ALIAS is a symbol, it will be filtered by symbol-camel-case to genera
   (loop :for elt :in o
         :for i :of-type fixnum :upfrom 0
         :do (send elt to :uniform (format nil "~A[~D]" uniform i))))
+
+;;;; GENERIC FUNCTIONS
+
+(defmethod construct ((o buffer))
+  (with-slots (original source buffer)
+      o
+    (unless source
+      (setf source (make-gl-vector original)
+            buffer (gl:gen-buffer))
+      (send source o)))
+  o)
+
+(defmethod destruct ((o buffer))
+  (with-slots (source buffer)
+      o
+    (and source (gl:free-gl-array source))
+    (and buffer (gl:delete-buffers (list buffer)))
+    (setf source nil
+          buffer nil)))
+
+(defmethod send ((o gl:gl-array) (to buffer) &key (method #'gl:buffer-data))
+  (with-slots (target usage)
+      to
+    (in-buffer to)
+    (cond ((eq #'gl:buffer-data method) (funcall method target usage o))
+          ((eq #'gl:buffer-sub-data method) (funcall method target o))
+          (t (error "Unknown method ~S" method)))))

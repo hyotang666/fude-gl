@@ -101,3 +101,7 @@
 
 (defgeneric constructed-p (vertices)
   (:documentation "Is VERTICES constructed in GL?"))
+
+;;;; SHADER-LAMBDA-LIST
+
+(defgeneric shader-lambda-list (shader-name shader-type))

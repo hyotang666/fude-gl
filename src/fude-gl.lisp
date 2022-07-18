@@ -4,17 +4,6 @@
 
 ;;;; VERBOSE OPENGL
 
-(deftype buffer-usage () '(member :static-draw :stream-draw :dynamic-draw))
-
-(deftype buffer-target ()
-  '(member :array-buffer :element-array-buffer
-           :copy-read-buffer :copy-write-buffer
-           :pixel-unpack-buffer :pixel-pack-buffer
-           :query-buffer :texture-buffer
-           :transform-feedback-buffer :uniform-buffer
-           :draw-indirect-buffer :atomic-counter-buffer
-           :dispatch-indirect-buffer :shader-storage-buffer))
-
 (deftype texture-wrapping ()
   '(member :repeat :mirrored-repeat :clamp-to-edge :clamp-to-border))
 
@@ -217,70 +206,6 @@
           :uniform (format nil "~A.~A" uniform
                            (symbol-camel-case
                              (c2mop:slot-definition-name slot))))))
-
-;;;; BUFFER
-
-(defstruct buffer
-  name
-  ;; Lisp side vector as meta-buffer-object, i.e. used for cl:length,
-  ;; cl:array-rank, cl:array-dimensions etc...
-  (original (error "ORIGINAL is required.") :type array)
-  ;; GL side vector.
-  source
-  ;; Buffer ID.
-  buffer
-  (target :array-buffer :type buffer-target :read-only t)
-  (usage :static-draw :type buffer-usage :read-only t))
-
-(defmethod print-object ((o buffer) stream)
-  (if *print-escape*
-      (print-unreadable-object (o stream :type t)
-        (funcall (formatter "~S ~:[unconstructed~;~:*~A~] ~S ~S") stream
-                 (buffer-name o) (buffer-buffer o) (buffer-target o)
-                 (buffer-usage o)))
-      (call-next-method)))
-
-(defun make-gl-vector (initial-contents)
-  #+sbcl ; Due to unknown array rank at compile time.
-  (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-  (let* ((length (array-total-size initial-contents))
-         (a
-          (gl:alloc-gl-array
-            (foreign-type (array-element-type initial-contents) :cffi t)
-            length)))
-    (dotimes (i length a)
-      (setf (gl:glaref a i) (row-major-aref initial-contents i)))))
-
-(defvar *buffer*)
-
-(defun in-buffer (buffer)
-  (setf *buffer* buffer)
-  (gl:bind-buffer (buffer-target buffer) (buffer-buffer buffer)))
-
-(defmethod construct ((o buffer))
-  (with-slots (original source buffer)
-      o
-    (unless source
-      (setf source (make-gl-vector original)
-            buffer (gl:gen-buffer))
-      (send source o)))
-  o)
-
-(defmethod destruct ((o buffer))
-  (with-slots (source buffer)
-      o
-    (and source (gl:free-gl-array source))
-    (and buffer (gl:delete-buffers (list buffer)))
-    (setf source nil
-          buffer nil)))
-
-(defmethod send ((o gl:gl-array) (to buffer) &key (method #'gl:buffer-data))
-  (with-slots (target usage)
-      to
-    (in-buffer to)
-    (cond ((eq #'gl:buffer-data method) (funcall method target usage o))
-          ((eq #'gl:buffer-sub-data method) (funcall method target o))
-          (t (error "Unknown method ~S" method)))))
 
 ;;;; VERTICES
 ;; VERTICES
@@ -889,7 +814,10 @@ The behavior when vertices are not created by GL yet depends on IF-DOES-NOT-EXIS
             (loop :for name :being :each :hash-key :of *shaders* :using
                        (:hash-value shader)
                   :when (program-id shader)
-                    :do (destruct shader))))))))
+                    :do (destruct shader)))
+           (protect
+            (loop :for ubo :being :each :hash-value :of *uniform-buffer-objects*
+                  :do (destruct ubo))))))))
 
 (defun pprint-with-shader (stream exp)
   (funcall
