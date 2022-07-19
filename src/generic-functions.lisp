@@ -57,6 +57,12 @@
 (defmethod no-applicable-method ((gf (eql #'fragment-shader)) &rest args)
   (error 'missing-shader :name (car args) :interface gf))
 
+;;;; GEOMETRY-SHADER
+
+(defgeneric geometry-shader (name)
+  (:documentation "geometry shader code string if exists.")
+  (:method (default) nil))
+
 ;;;; UNIFORMS
 
 (defgeneric uniforms (name)

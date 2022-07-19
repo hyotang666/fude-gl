@@ -15,6 +15,12 @@
            :draw-indirect-buffer :atomic-counter-buffer
            :dispatch-indirect-buffer :shader-storage-buffer))
 
+(deftype layout-input-primitive ()
+  '(member :points :lines :lines-adjacency :triangles :triangles-adjacency))
+
+(deftype layout-output-primitive ()
+  '(member :points :line-strip :triangle-strip))
+
 ;;;; PROTECT
 
 (defvar *cleaners* nil)
@@ -735,17 +741,51 @@
                          `(shader-lambda-list ',(car main) ,type)
                          `',lambda-list))))
 
+(defun pprint-layout-output-spec (out spec &rest noise)
+  (declare (ignore noise))
+  (pprint-logical-block (out nil :prefix "(" :suffix ")")
+    (write-string (change-case:snake-case (symbol-name (car spec))) out)
+    (when (cdr spec)
+      (write-char #\, out)
+      (write-char #\Space out)
+      (loop :for ((key value) . rest) :on (cdr spec)
+            :do (funcall (formatter "~A = ~A") out
+                         (change-case:snake-case (symbol-name key)) value)
+            :when rest
+              :do (write-char #\, out)
+                  (write-char #\Space out)))))
+
+(defun <geometry-shader-forms> (geometry-clause version name)
+  (destructuring-bind
+      (key lambda-list . body)
+      geometry-clause
+    (declare (ignore key))
+    (let ((formatter
+           (formatter
+            #.(concatenate 'string "#version ~S core~%" ; version
+                           "layout (~A) in;~%" ; in
+                           "layout ~/fude-gl:pprint-layout-output-spec/ out;~%"
+                           "~{~/fude-gl:pprint-glsl/~^ ~_~}")))
+          (eprot:*environment*
+           (eprot:augment-environment (eprot:find-environment :fude-gl))))
+      `(defmethod geometry-shader ((type (eql ',name)))
+         ,(format nil formatter version
+                  (change-case:snake-case (symbol-name (car lambda-list)))
+                  (cadr lambda-list) body)))))
+
 (defmacro defshader
           (&whole whole name version (&rest attribute*) &body shader*)
   (check-bnf:check-bnf (:whole whole)
     ((name symbol))
     ((version (mod #.most-positive-fixnum)))
     ((attribute* (satisfies vertex-attribute-p)))
-    ((shader* (or vertex-clause fragment-clause))
+    ((shader* (or vertex-clause fragment-clause geometry-clause))
      ;;
      (vertex-clause ((eql :vertex) shader-lambda-list main*))
      ;;
      (fragment-clause ((eql :fragment) shader-lambda-list main*))
+     ;;
+     (geometry-clause ((eql :geometry) geometry-lambda-list main*))
      ;;
      (shader-lambda-list
       (out-spec* uniform-keyword? uniform-spec* varying-keyword?
@@ -758,14 +798,22 @@
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
+     (geometry-lambda-list (layout-input-primitive layout-spec))
+     (layout-spec (layout-output-primitive layout-output-option*))
+     (layout-output-option (symbol fixnum))
+     ;;
      (main check-bnf:expression)))
   ;; The body.
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (setf (gethash ',name *shaders*)
              (defclass ,name ,attribute* () (:metaclass vector-class)))
-     ,@(<shader-forms> shader* attribute* name version)
-     ,(<uniforms> name shader*)
-     ,@(<shader-lambda-lists> name shader*)
+     ,@(<shader-forms> (remove :geometry shader* :key #'car) attribute* name
+                       version)
+     ,@(let ((geometry-clause (assoc :geometry shader*)))
+         (when geometry-clause
+           (list (<geometry-shader-forms> geometry-clause version name))))
+     ,(<uniforms> name (remove :geometry shader* :key #'car))
+     ,@(<shader-lambda-lists> name (remove :geometry shader* :key #'car))
      ',name))
 
 (defmethod documentation ((this (eql 'defshader)) (type (eql 'function)))
@@ -883,10 +931,12 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                          :do (cl-ansi-text:with-color (:red :stream out)
                                (write-line line out)))))))))))
 
-(defun compile-shader (program-id vertex-shader fragment-shader)
+(defun compile-shader
+       (program-id vertex-shader fragment-shader geometry-shader)
   "Request openGL to compile and link shader programs. Return nil."
   (let ((vs (gl:create-shader :vertex-shader))
-        (fs (gl:create-shader :fragment-shader)))
+        (fs (gl:create-shader :fragment-shader))
+        (gs (and geometry-shader (gl:create-shader :geometry-shader))))
     (unwind-protect
         (labels ((compile-s (program-id id source)
                    (gl:shader-source id source)
@@ -903,10 +953,12 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
                          (warn log)))))
           (compile-s program-id vs vertex-shader)
           (compile-s program-id fs fragment-shader)
+          (and gs (compile-s program-id gs geometry-shader))
           (gl:link-program program-id)
           (may-warn (gl:get-program-info-log program-id) program-id))
       (protect (gl:delete-shader fs))
-      (protect (gl:delete-shader vs)))))
+      (protect (gl:delete-shader vs))
+      (and gs (protect (gl:delete-shader gs))))))
 
 (define-condition fail-to-create-program (fude-gl-error cell-error)
   ()
@@ -923,7 +975,8 @@ Vertex constructor makes a single-float vector that's length depends on its ATTR
       (error 'fail-to-create-program :name shader))
     (handler-bind ((glsl-compile-error
                     (lambda (c) (reinitialize-instance c :name shader))))
-      (compile-shader program (vertex-shader shader) (fragment-shader shader)))
+      (compile-shader program (vertex-shader shader) (fragment-shader shader)
+                      (geometry-shader shader)))
     program))
 
 (defmethod construct ((o vector-class))
