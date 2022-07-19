@@ -305,18 +305,28 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-setfable-place (out exp &rest noise)
   (declare (ignore noise))
-  (typecase exp
-    (symbol (glsl-symbol out exp t))
-    ((cons (eql aref))
-     (funcall
-       (formatter
-        #.(concatenate 'string
-                       ;; variable
-                       "~:/fude-gl:glsl-symbol/"
-                       ;; vector spec.
-                       "~{[~W]~^~}"))
-       out (second exp) (cddr exp)))
-    (otherwise (error "GLSL-SETFABLE-PLACE: NIY. ~S" exp))))
+  (cond ;; Variable?
+        ((symbolp exp) (glsl-symbol out exp t))
+        ;; AREF?
+        ((typep exp '(cons (eql aref)))
+         (funcall
+           (formatter
+            #.(concatenate 'string
+                           ;; variable
+                           "~:/fude-gl:glsl-symbol/"
+                           ;; vector spec.
+                           "~{[~W]~^~}"))
+           out (second exp) (cddr exp)))
+        ;; Slot accessor?
+        ((let ((info
+                (and (consp exp)
+                     (nth-value 2
+                                (function-information (car exp)
+                                                      eprot:*environment*)))))
+           (when (and info (eq :slot-reader (cdr (assoc 'attribute info))))
+             (write exp :stream out)
+             t)))
+        (t (error "GLSL-SETFABLE-PLACE: NIY. ~S" exp))))
 
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
