@@ -321,7 +321,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 (defun glsl-setf (stream exp)
   (setf stream (or stream *standard-output*))
   (let ((*var-check-p* t))
-    (funcall (formatter "~{~:/fude-gl::glsl-setfable-place/ = ~W;~^~:@_~}")
+    (funcall (formatter "~{~:/fude-gl::glsl-setfable-place/ = ~W~^;~:@_~}")
              stream (cdr exp))))
 
 (defun class-readers (class-name)
@@ -732,7 +732,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                 "~@{~A~^ ~A~^, ~}" ; argbody.
                                 "~:>~^ ~%")
                           "~:<{~;~3I~:@_" ; function body.
-                          "~@{~A~^ ~_~}~%" "~;}~:>~%"))))
+                          "~@{~A;~^ ~_~}~%" "~;}~:>~%"))))
         stream
         (if (equal '(values) return)
             :void
@@ -815,9 +815,6 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                 (symbol-camel-case (caddr exp))))))
 
 (defun glsl-cond (out exp &rest noise)
-  ;; FIXME: To better design especially for handling glsl-keyword-command e.g. discard.
-  ;; In other words, who control semi-colon, and how?
-  ;; HINT(?): The statements needs semicolon but the expressions does not need it.
   (declare (ignore noise))
   (flet ((body (forms)
            (write-char #\Space out)
@@ -827,9 +824,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
            (pprint-newline :mandatory out)
            (loop :for (form . rest) :on forms
                  :do (write form :stream out)
-                     ;; KLUDGE: to handle glsl-keyword.
-                     (when (keywordp form)
-                       (write-char #\; out))
+                     (write-char #\; out)
                      (when rest
                        (write-char #\Space out)
                        (pprint-newline :mandatory out)))
