@@ -771,7 +771,7 @@
       `(defmethod geometry-shader ((type (eql ',name)))
          ,(format nil formatter version
                   (change-case:snake-case (symbol-name (car lambda-list)))
-                  (cadr lambda-list) body)))))
+                  (cadr lambda-list) (parse-main body))))))
 
 (defmacro defshader
           (&whole whole name version (&rest attribute*) &body shader*)
