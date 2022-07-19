@@ -638,7 +638,11 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                (eprot:proclaim
                  `(glsl-env:notation ,name ,(symbol-camel-case name)))
                (funcall (formatter "~W~^ ~@_~W~:<~@{~A~^ ~@_~W~^, ~}~:>;")
-                        stream return name
+                        stream
+                        (if (equal '(values) return)
+                            :void
+                            return)
+                        name
                         (loop :for (name type) :in args
                               :collect (if (glsl-structure-name-p type)
                                            (change-case:pascal-case
