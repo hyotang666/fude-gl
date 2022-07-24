@@ -479,27 +479,58 @@
           :collect (car vector-size)))
 
 (defun glsl-declaration (out info &optional colonp atp)
-  (if colonp
-      (if atp
-          (write-string "varying " out)
-          (write-string "uniform " out))
-      (if atp
-          (write-string "out " out)
-          (funcall (formatter "~@[layout (location = ~D) ~]in ") out
-                   (first info))))
-  (funcall (formatter "~A ~A~@[[~A]~];") out
-           (let ((type (third info)))
-             (if (glsl-structure-name-p type)
-                 (change-case:pascal-case (symbol-name type))
-                 (symbol-camel-case type)))
-           (symbol-camel-case (second info))
-           (let ((vector-size (fourth info)))
-             (etypecase vector-size
-               (null nil)
-               (index vector-size)
-               (constant-definition
-                (change-case:constant-case
-                  (symbol-name (second vector-size))))))))
+  (pprint-logical-block (out nil)
+    (let ((style
+           (if colonp
+               (if atp
+                   :varying ; ~:@/.../
+                   :uniform) ; ~:/.../
+               (if atp
+                   :out ; ~@/.../
+                   :in)))) ; ~/.../
+      ;; Header.
+      (ecase style
+        (:varying (write-string "varying " out))
+        (:uniform (write-string "uniform " out))
+        (:out (write-string "out " out))
+        (:in
+         (funcall (formatter "~@[layout (location = ~D) ~]in ") out
+                  (first info))))
+      ;; Type.
+      (let ((type (third info)))
+        (if (not (glsl-structure-name-p type))
+            (glsl-symbol out type)
+            (ecase style
+              ((:in :out)
+               (funcall (formatter "~A {~4I~:@_") out
+                        (change-case:pascal-case (symbol-name type)))
+               (loop :for (slot . rest)
+                          :on (c2mop:class-slots
+                                (c2mop:ensure-finalized (find-class type)))
+                     :do (funcall
+                           (formatter
+                            "~/fude-gl:glsl-symbol/ ~/fude-gl:glsl-symbol/;")
+                           out (glsl-type slot)
+                           (c2mop:slot-definition-name slot))
+                         (if rest
+                             (funcall (formatter "~:@_") out)
+                             (funcall (formatter "~I~:@_}") out))))
+              ((:uniform :varying)
+               (write-string (change-case:pascal-case (symbol-name type))
+                             out)))))
+      ;;
+      (funcall (formatter " ~A~@[[~A]~];") out
+               ;; var
+               (symbol-camel-case (second info))
+               ;; array?
+               (let ((vector-size (fourth info)))
+                 (etypecase vector-size
+                   (null nil)
+                   ((eql t) "")
+                   (index vector-size)
+                   (constant-definition
+                    (change-case:constant-case
+                      (symbol-name (second vector-size))))))))))
 
 (defun attribute-decls (attributes)
   (loop :for class-name :in attributes
@@ -608,11 +639,38 @@
                        (defuns defun))))))
           table)))))
 
+(defun pprint-layout-output-spec (out spec &rest noise)
+  (declare (ignore noise))
+  (pprint-logical-block (out nil :prefix "(" :suffix ")")
+    (write-string (change-case:snake-case (symbol-name (car spec))) out)
+    (when (cdr spec)
+      (write-char #\, out)
+      (write-char #\Space out)
+      (loop :for ((key value) . rest) :on (cdr spec)
+            :do (funcall (formatter "~A = ~A") out
+                         (change-case:snake-case (symbol-name key)) value)
+            :when rest
+              :do (write-char #\, out)
+                  (write-char #\Space out)))))
+
+(defun geometry-io-declaration (out io &rest noise)
+  (declare (ignore noise))
+  (pprint-logical-block (out nil)
+    ;; in
+    (funcall (formatter "layout (~A) in;~:@_") out
+             (change-case:snake-case (symbol-name (car io))))
+    ;; out
+    (pprint-logical-block (out nil)
+      (funcall
+        (formatter "layout ~/fude-gl:pprint-layout-output-spec/ out;~:@_") out
+        (cadr io)))))
+
 (defun <shader-forms> (shader-clause* superclasses name version)
   (let* ((format
           (formatter
            #.(concatenate 'string "#version ~A core~%" ; version
                           "~@[~{~/fude-gl:glsl-constant-definition/~%~}~]" ; define
+                          "~@[~/fude-gl:geometry-io-declaration/~]" ; geometry-io
                           "~{~/fude-gl:glsl-declaration/~%~}~&" ; in
                           "~{~/fude-gl:glsl-ubo/~%~}~&" ; ubo
                           "~{~@/fude-gl:glsl-declaration/~%~}~&" ; out
@@ -664,8 +722,23 @@
                                (,method ',source))
                             acc))))))
              (own (rest in varying acc type shader-lambda-list main)
+               (declare (list shader-lambda-list))
+               (when (eq :geometry type)
+                 (setq in
+                         (mapcar
+                           (lambda (info)
+                             (destructuring-bind
+                                 (layout-loc var type)
+                                 info
+                               (if (glsl-structure-name-p type)
+                                   (list layout-loc var type t)
+                                   info)))
+                           in)))
                (multiple-value-bind (out uniform varying%)
-                   (split-shader-lambda-list shader-lambda-list)
+                   (split-shader-lambda-list
+                     (if (eq :geometry type)
+                         (cddr shader-lambda-list)
+                         shader-lambda-list))
                  (let* ((constant-defs (constant-defs uniform))
                         (struct-defs (struct-defs uniform))
                         (out (mapcar (lambda (out) (cons nil out)) out))
@@ -723,8 +796,10 @@
                                                                        (constant-decl
                                                                          constant-defs)))))
                             `(defmethod ,method ((type (eql ',name)))
-                               ,(format nil format version constant-defs in ubo
-                                        out struct-defs uniform
+                               ,(format nil format version constant-defs
+                                        (when (eq :geometry type)
+                                          (subseq shader-lambda-list 0 2))
+                                        in ubo out struct-defs uniform
                                         (append varying varying%)
                                         (parse-main main))))
                           acc))))))
@@ -740,38 +815,6 @@
                                        null))
                          `(shader-lambda-list ',(car main) ,type)
                          `',lambda-list))))
-
-(defun pprint-layout-output-spec (out spec &rest noise)
-  (declare (ignore noise))
-  (pprint-logical-block (out nil :prefix "(" :suffix ")")
-    (write-string (change-case:snake-case (symbol-name (car spec))) out)
-    (when (cdr spec)
-      (write-char #\, out)
-      (write-char #\Space out)
-      (loop :for ((key value) . rest) :on (cdr spec)
-            :do (funcall (formatter "~A = ~A") out
-                         (change-case:snake-case (symbol-name key)) value)
-            :when rest
-              :do (write-char #\, out)
-                  (write-char #\Space out)))))
-
-(defun <geometry-shader-forms> (geometry-clause version name)
-  (destructuring-bind
-      (key lambda-list . body)
-      geometry-clause
-    (declare (ignore key))
-    (let ((formatter
-           (formatter
-            #.(concatenate 'string "#version ~S core~%" ; version
-                           "layout (~A) in;~%" ; in
-                           "layout ~/fude-gl:pprint-layout-output-spec/ out;~%"
-                           "~{~/fude-gl:pprint-glsl/~^ ~_~}")))
-          (eprot:*environment*
-           (eprot:augment-environment (eprot:find-environment :fude-gl))))
-      `(defmethod geometry-shader ((type (eql ',name)))
-         ,(format nil formatter version
-                  (change-case:snake-case (symbol-name (car lambda-list)))
-                  (cadr lambda-list) (parse-main body))))))
 
 (defmacro defshader
           (&whole whole name version (&rest attribute*) &body shader*)
@@ -807,13 +850,9 @@
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (setf (gethash ',name *shaders*)
              (defclass ,name ,attribute* () (:metaclass vector-class)))
-     ,@(<shader-forms> (remove :geometry shader* :key #'car) attribute* name
-                       version)
-     ,@(let ((geometry-clause (assoc :geometry shader*)))
-         (when geometry-clause
-           (list (<geometry-shader-forms> geometry-clause version name))))
+     ,@(<shader-forms> shader* attribute* name version)
      ,(<uniforms> name (remove :geometry shader* :key #'car))
-     ,@(<shader-lambda-lists> name (remove :geometry shader* :key #'car))
+     ,@(<shader-lambda-lists> name shader*)
      ',name))
 
 (defmethod documentation ((this (eql 'defshader)) (type (eql 'function)))

@@ -427,15 +427,21 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                (error "Missing variable type. ~S" info)))))))
 
 (defun slot-notation (exp fun-info)
+  "Generate solot read notation."
   ;; FIXME: Should we use another better declaration?
-  (let ((structure-notation (form-type-notation (cadr exp))))
-    (or (some
-          (lambda (info)
-            (and (eq 'glsl-env:notation (car info))
-                 (uiop:string-prefix-p structure-notation (cdr info))
-                 (cdr info)))
-          fun-info)
-        (error "Could not detect slot notation. ~S ~S" exp fun-info))))
+  (typecase (cadr exp)
+    (symbol
+     (let ((structure-notation (form-type-notation (cadr exp))))
+       (or (some
+             (lambda (info)
+               (and (eq 'glsl-env:notation (car info))
+                    (uiop:string-prefix-p structure-notation (cdr info))
+                    (cdr info)))
+             fun-info)
+           (error "Could not detect slot notation. ~S ~S" exp fun-info))))
+    ((cons (eql aref))
+     (format nil "~W.~/fude-gl:glsl-symbol/" (cadr exp) (car exp)))
+    (otherwise (error "SLOT-NOTATION: NIY. ~S" exp))))
 
 (defun glsl-funcall (stream exp)
   (setf stream (or stream *standard-output*))
@@ -460,8 +466,9 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
             ;; Does match arg length?
             (if (= 1 (length (cdr exp)))
                 (progn
-                 (with-cl-io-syntax
-                   (eprot:proclaim `(refered ,(cadr exp))))
+                 (when (symbolp (cadr exp))
+                   (with-cl-io-syntax
+                     (eprot:proclaim `(refered ,(cadr exp)))))
                  (write-string (slot-notation exp info) stream))
                 (with-hint (("Print function informations." info))
                   (error 'glsl-argument-mismatch :form exp)))
