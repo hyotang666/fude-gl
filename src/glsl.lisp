@@ -545,7 +545,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                              (write-char #\; stream))
                          ;; Common end process.
                          (funcall (formatter "~I~:@_") stream))))
-                   (funcall (formatter "~{~W~^ ~_~}") stream (cddr exp))
+                   (funcall (formatter "~{~W;~^ ~_~}") stream (cddr exp))
                    (when (every #'listp (cddr exp))
                      (check-ref (mapcar #'car (cadr exp)))))
                  (let ((eprot:*environment*
@@ -884,7 +884,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
         ;; Update.
         (funcall (formatter " ~/fude-gl:glsl-symbol/++){ ~4I~:@_") out var)
         ;; The body.
-        (funcall (formatter "~{~W~^ ~:@_~}") out body)
+        (funcall (formatter "~{~W;~^ ~:@_~}") out body)
         (funcall (formatter "~I~:@_}") out)))))
 
 (defun glsl-incf (out exp &rest noise)
@@ -893,8 +893,8 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
       (place &optional num)
       (cdr exp)
     (if num
-        (funcall (formatter "~W += ~W;") out place num)
-        (funcall (formatter "~W++;") out place))))
+        (funcall (formatter "~W += ~W") out place num)
+        (funcall (formatter "~W++") out place))))
 
 (defun glsl-constant-definition (out exp &rest noise)
   (declare (ignore noise))
