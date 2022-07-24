@@ -123,7 +123,7 @@
 
 (fude-gl:defshader uniform-demo 330 (fude-gl:xy)
   ;; Re-use vertex-shader of HELLO-TRIANGLE.
-  (:vertex () 'hello-triangle)
+  (:vertex () hello-triangle)
   ;; To use uniform, you must specify uniform-spec.
   ;; Lambda-list-keyword &UNIFORM is used to specify uniform-spec in the shader-lambda-list.
   ;; The first element of the uniform-spec must be a symbol.
@@ -3918,7 +3918,7 @@
 (fude-gl:defshader stencil-single-color 330 (fude-gl:xyz fude-gl:st)
   (:vertex ((tex-coords :vec2) &uniform (model :mat4) (view :mat4)
             (projection :mat4))
-    'stencil-testing)
+    stencil-testing)
   (:fragment ((frag-color :vec4))
     (declaim (ftype (function nil (values)) main))
     (defun main () (setf frag-color (vec4 0.04 0.28 0.26 1.0)))))
