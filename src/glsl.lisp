@@ -695,6 +695,10 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
             (acc reader)))))))
 
 (defun slot-reader-decls (struct-name var)
+  "Make declarations for slot reader. FTYPE, NOTATION, and ATTRIBUTE."
+  ;; NOTE: Our glsl strucure has its own constraints, i.e. slot-reader need to
+  ;; avoid name confliction against common lisp functions.
+  ;; e.g. POSITION for slot reader name is hard to use.
   (uiop:while-collecting (acc)
     (dolist (slot (c2mop:class-direct-slots (find-class struct-name)))
       (dolist (reader (c2mop:slot-definition-readers slot))
