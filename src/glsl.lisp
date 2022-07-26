@@ -577,7 +577,7 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
   (setf stream (or stream *standard-output*))
   (unless (= 2 (length exp))
     (error 'glsl-argument-mismatch :form exp))
-  (apply (formatter "~/fude-gl:glsl-symbol/ ~W;") stream exp))
+  (apply (formatter "~/fude-gl:glsl-symbol/ ~W") stream exp))
 
 (defun parse-slot-spec (spec)
   (etypecase spec
