@@ -272,7 +272,7 @@ This is useful especially for enabling with ~W format control.")
   ;; a disgusting conditional branching code.
   "Print a symbol EXP to STREAM as GLSL code.
 If EXP is unknown for compiler and ERRORP is true, condition UNKNOWN-VARIABLE is signaled
-otherwise the condition is not signaled. The default is NIL.
+otherwise the condition is not signaled. The default is the value of *VAR-CHECK-P*.
 You can specify this by colon in format control.
 If EXP is known for compiler and NOT-REF-P is ture, compiler memos it is refered
 otherwise compiler do nothing. The default it NIL. You can specify this by at-sign in format control."
