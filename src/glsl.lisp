@@ -714,7 +714,6 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
 
 (defun glsl-defun (stream exp)
   ;; NOTE: PARSE-MAIN gualantees already declaimed.
-  (setf stream (or stream *standard-output*))
   (destructuring-bind
       (name lambda-list &body body)
       (cdr exp)
@@ -747,28 +746,29 @@ otherwise compiler do nothing. The default it NIL. You can specify this by at-si
                                        :function functions
                                        :variable lambda-list
                                        :declare decls)))
-      (funcall
-        (formatter
-         #.(apply #'concatenate 'string
-                  (alexandria:flatten
-                    (list "~(~A~)~^ ~@_" ; return type
-                          "~A~^ ~@_" ; function name.
-                          (list "~:<" ; logical block for args.
-                                "~@{~A~^ ~A~^, ~}" ; argbody.
-                                "~:>~^ ~%")
-                          "~:<{~;~3I~:@_" ; function body.
-                          "~@{~A;~^ ~_~}~%" "~;}~:>~%"))))
-        stream
-        (if (equal '(values) return)
-            :void
-            return)
-        name
-        (loop :for (name type) :in arg-types
-              :collect (if (glsl-structure-name-p type)
-                           (change-case:pascal-case (symbol-name type))
-                           (symbol-camel-case type))
-              :collect (symbol-camel-case name))
-        body)
+      (pprint-logical-block (stream nil)
+        (funcall
+          (formatter
+           #.(apply #'concatenate 'string
+                    (alexandria:flatten
+                      (list "~/fude-gl:glsl-symbol/~^ ~@_" ; return type
+                            "~/fude-gl:glsl-symbol/~^ ~@_" ; function name.
+                            (list "~:<" ; logical block for args.
+                                  "~@{~A~^ ~A~^, ~}" ; argbody.
+                                  "~:>~^ ~I~:@_")
+                            "~:<{~;~3I~:@_" ; function body.
+                            "~@{~A;~^ ~_~}~%" "~;}~:>~%"))))
+          stream
+          (if (equal '(values) return)
+              :void
+              return)
+          name
+          (loop :for (name type) :in arg-types
+                :collect (if (glsl-structure-name-p type)
+                             (change-case:pascal-case (symbol-name type))
+                             (symbol-camel-case type))
+                :collect (symbol-camel-case name))
+          body))
       (when (every #'listp body)
         (check-ref lambda-list)))))
 
