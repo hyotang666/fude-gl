@@ -85,3 +85,43 @@
 	    :declare '((glsl-env:notation known-var "This is printed.")))))
     (fude-gl::glsl-symbol nil 'known-var))
 :outputs "This is printed."
+
+(requirements-about GLSL-DECLAIM :doc-type function)
+
+;;;; Description:
+
+#+syntax (GLSL-DECLAIM STREAM EXP) ; => result
+
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (fude-gl::glsl-declaim *standard-output*
+			   '(declaim (ftype (function () (values)) new-fn))))
+:outputs ":VOID NEW-FN();"
+
+;;;; Arguments and Values:
+
+; stream := 
+
+; exp := 
+
+; result := 
+
+;;;; Affected By:
+
+;;;; Side-Effects:
+; eprot:*environment*.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (values (fude-gl::function-information 'no-such eprot:*environment*)
+	    (progn (fude-gl::glsl-declaim
+		     (make-broadcast-stream)
+		     '(declaim (ftype (function () (values)) no-such)))
+		   (fude-gl::function-information 'no-such eprot:*environment*))))
+:values (NIL :FUNCTION)
+
+;;;; Notes:
+
+;;;; Exceptional-Situations:
+
