@@ -841,7 +841,9 @@
      (varying-keyword? (satisfies varying-keywordp))
      (varying-spec (var type-spec))
      ;;
-     (geometry-lambda-list (layout-input-primitive layout-spec out-spec*))
+     (geometry-lambda-list
+      (layout-input-primitive layout-spec out-spec* uniform-keyword?
+       uniform-spec*))
      (layout-spec (layout-output-primitive layout-output-option*))
      (layout-output-option (symbol fixnum))
      ;;
