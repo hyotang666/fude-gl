@@ -168,7 +168,10 @@
           ((assoc 'ignorable info) nil)
           ((assoc 'ignore info)
            (uiop:style-warn "Use ~S but it is declared as ignore." var-name))
-          ((find-symbol (symbol-name var-name) :glsl-symbols.variables) nil)
+          ((eq :external (nth-value 1
+                                    (find-symbol (symbol-name var-name)
+                                                 :glsl-symbols.variables)))
+           nil)
           (t
            (setf (eprot:variable-information var-name env)
                    `(ignorable ,var-name))))))
