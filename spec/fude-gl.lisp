@@ -219,3 +219,65 @@ gl_Position = Known"
 			     (ignorable . t))
 			   :test #'equal))))
 
+(requirements-about GLSL-DEFUN :doc-type function)
+
+;;;; Description:
+
+#+syntax (GLSL-DEFUN STREAM EXP) ; => result
+
+;;;; Arguments and Values:
+
+; stream := 
+
+; exp := 
+
+; result := 
+
+;;;; Affected By:
+; eprot:*environment*
+; *print-pprint-dispatch*
+
+;;;; Side-Effects:
+
+;;;; Notes:
+
+;;;; Exceptional-Situations:
+; Declaim FTYPE is required.
+#?(fude-gl::glsl-defun nil '(defun main ())) :signals error
+
+;;;; Tests:
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (fude-gl::glsl-declaim (make-broadcast-stream)
+			   '(declaim (ftype (function () (values)) main)))
+    (fude-gl::glsl-defun nil
+			 '(defun main () (setf gl-position no-such-var))))
+:outputs "void main ()
+{
+    (SETF GL-POSITION NO-SUCH-VAR);
+}
+"
+
+; Achieving new environment.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (fude-gl::glsl-declaim (make-broadcast-stream)
+			   '(declaim (ftype (function () (values)) main)))
+    (fude-gl::print-glsl '(defun main () (setf gl-position no-such-var))))
+:signals fude-gl::unknown-variable
+
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (fude-gl::glsl-declaim (make-broadcast-stream)
+			   '(declaim (ftype (function ((position :vec4)) (values))
+					    main)))
+    (fude-gl::print-glsl '(defun main (position) (setf gl-position position))))
+:outputs "
+void main (vec4 position)
+{
+    gl_Position = position;
+}
+"
