@@ -125,3 +125,97 @@
 
 ;;;; Exceptional-Situations:
 
+(requirements-about GLSL-SETF :doc-type function)
+
+;;;; Description:
+
+#+syntax (GLSL-SETF STREAM EXP) ; => result
+
+;;;; Arguments and Values:
+
+; stream := 
+
+; exp := 
+
+; result := 
+
+;;;; Affected By:
+; *print-pprint-dispatch*
+; eprot:*environment*
+
+;;;; Side-Effects:
+; Modify eprot:*environment*
+
+;;;; Notes:
+
+;;;; Exceptional-Situations:
+; Case unknown var as place.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl))))
+    (fude-gl::print-glsl '(setf unknown-place 0)
+			 (make-broadcast-stream)))
+:signals fude-gl::unknown-variable
+
+; Case known var as place.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl)
+	    :variable '(known)
+	    :declare '((glsl-env:notation known "Known")))))
+    (fude-gl::print-glsl '(setf known 0)))
+:outputs "
+Known = 0"
+
+; Side effect: Setfable place is refered.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl)
+	    :variable '(known)
+	    :declare '((glsl-env:notation known "Known")))))
+    (fude-gl::print-glsl '(setf known 0) (make-broadcast-stream))
+    (fude-gl::variable-information 'known eprot:*environment*))
+:multiple-value-satisfies
+(lambda (type lexicalp info)
+  (& (eq :lexical type)
+     (eq t lexicalp)
+     (null (set-difference '((glsl-env:notation . "Known") (ignorable . t))
+			   info
+			   :test #'equal))))
+
+; Case unknown var in the right side.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl)
+	    :variable '(known)
+	    :declare '((glsl-env:notation known "Known")))))
+    (fude-gl::print-glsl '(setf known unknown)))
+:signals fude-gl::unknown-variable
+
+; Case known var in the right side.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl)
+	    :variable '(known)
+	    :declare '((glsl-env:notation known "Known")))))
+    (fude-gl::print-glsl '(setf gl-position known)))
+:outputs "
+gl_Position = Known"
+
+; Side-effect: Right side var is refered.
+#?(let ((eprot:*environment*
+	  (eprot:augment-environment
+	    (eprot:find-environment :fude-gl)
+	    :variable '(known)
+	    :declare '((glsl-env:notation known "Known")))))
+    (fude-gl::print-glsl '(setf gl-position known) (make-broadcast-stream))
+    (fude-gl::variable-information 'known eprot:*environment*))
+:multiple-value-satisfies
+(lambda (type lexicalp info)
+  (& (eq :lexical type)
+     (eq t lexicalp)
+     (null (set-difference info
+			   '((glsl-env:notation . "Known")
+			     (ignorable . t))
+			   :test #'equal))))
+
